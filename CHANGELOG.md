@@ -11322,3 +11322,20 @@ a scratch walk that is not kept.
 - Notes that named functions since renamed now name the current ones:
   `NotebookGateway.begin/4`, `SessionAuthority.signed_in/2`, `Code.record_pushes/4`,
   `Notebooks.restore/5`.
+
+## 2026-11-17 — Known limits of the notebook door's streamed answers
+
+- Since the door passes the hub's answer on as it arrives, in the request's own process
+  (the entry "A request waiting for a busy notebook hub is answered" above), a member
+  reading a large answer slowly keeps one of the 50 connections to that fleet's hub until
+  the answer ends. Many slow or stalled readers at once can take them all, and until they
+  finish that fleet's notebook requests, members' and agents', answer 502
+  `notebooks_unavailable`; letting someone in and background jobs use connections of
+  their own. A reader who stops reading is cut off once a send has waited 30 seconds
+  (ThousandIsland's `send_timeout`); one who keeps reading slowly holds the connection
+  until the answer ends. Before, the hub's answer was read as fast as the hub sent it and
+  waited in the request's memory, so the same readers cost the whole site's memory
+  instead. Accepted as it is.
+- An answer's status and headers reach the reader with the first part of its body, not
+  before: the door sends them when the hub's first part arrives, or with the whole answer
+  when it has no body. Accepted as it is.
