@@ -1,6 +1,6 @@
 # Keyfleet Privacy Policy
 
-**Effective date:** November 17, 2026  
+**Effective date:** November 11, 2026  
 **Version:** 1.3
 
 This Privacy Policy explains how **Regents Labs, Inc.** ("Regents Labs," "we," "us," or "our") collects, uses, discloses, and protects personal information when you use the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").

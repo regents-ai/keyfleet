@@ -11286,3 +11286,18 @@ a scratch walk that is not kept.
   `platform/priv/tool_manifest.json` name regents-cli 1.10.32 (tag commit `a972d344`), the
   newest release, published while the release before it was being checked. Its tag commit
   was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+
+## 2026-11-17: Notebook's link says Open; the privacy policy keeps its November 11 date
+
+- The Notebook row under the homepage's hero links its page with "Open" (was "Open the
+  page"), since a label is one or two words. Its ↗ and its description, the project's
+  title (`aria-describedby`), stay, so a screen reader still hears which page it opens.
+  Tests and walks find it by its id, so none changed.
+- `platform/priv/public/privacy.md` is effective November 11, 2026 again, still version
+  1.3. Renaming the homepage's button from Watch to Explore, in the entry for Sean's 34
+  above, is not a change of policy, and no test or written rule in the repository moves
+  the date with an edit.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed; homepage tests, 20 passed. The walks were run
+with the next commit, which builds on this one.

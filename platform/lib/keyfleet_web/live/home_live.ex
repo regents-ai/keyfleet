@@ -435,7 +435,7 @@ defmodule KeyfleetWeb.HomeLive do
             rel="noopener noreferrer"
             aria-describedby="home-notebook-name"
           >
-            Open the page
+            Open
           </a>
         </p>
       </section>
