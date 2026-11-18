@@ -4,7 +4,8 @@ Sean, 28 Oct 2026: "any action only a human can do on keyfleet.ai is a bug". An 
 may own a Privy account itself, so everything an account's owner, a fleet member, a Key
 holder or a fleet admin can do, an agent can do through each of five surfaces: the
 website in headless Chromium, WebMCP, hosted MCP at `/mcp` for a signed agent, the
-Claude connector (the same `/mcp` added to a person's or agent's Claude account), and
+connector (the same `/mcp` added to a person's or agent's Claude account, or to ChatGPT
+as a custom MCP server, since 18 Nov 2026), and
 the regents CLI (Sean, 29 Oct 2026: "web ui, webmcp, mcp, CLI, and claude 'connector'
 , so it is 5"). This file has one row per action.
 
@@ -33,8 +34,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   key, as it signs its `/api/v1/agent` requests, and sends no token. Once paired it gets
   the connector's tools as the paired agent, by the same names, without the identity
   tools (K8).
-- **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
-  only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
+- **Connector**: the same `/mcp` added to a Claude account as a custom connector, or to
+  ChatGPT as a custom MCP server, and only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is
+  on. ChatGPT pairs as `chatgpt` and Claude as `claude`, with the same tools. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, with the agent
   permission, lists 105 tools as the paired agent from the app's first request, the same
   list before and after pairing; until the app's identity is paired each of them answers

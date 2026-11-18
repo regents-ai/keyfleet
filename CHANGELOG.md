@@ -13092,3 +13092,43 @@ step's report).
   answered by `Keyfleet.BrowserCoinbase`: SOL-USD and ETH-USD beside USDC.
 - On the record, a product's name no longer breaks at its hyphen on a phone
   ("SOL-" over "USD"): the table's cells stay on one line, the picks under a row wrap.
+
+## 2026-11-18 — ChatGPT pairs through the connector as Claude does
+
+- The one connector now serves ChatGPT beside Claude, behind the same switch:
+  `pair_identity` takes the harness `chatgpt` (`Keyfleet.Agents.Connection`), the pair
+  request accepts it and the pairing box offers ChatGPT while the switch is on
+  (`config :regent_agents, hosted_pairing: [:claude, :chatgpt]` in config/runtime.exs),
+  with its own setup words ("add it in ChatGPT as a custom MCP server", in
+  `KeyfleetWeb.PairingBox`; the shared pairing message already names ChatGPT's plugin).
+  `/agents/chatgpt` (`platform/priv/public/agents/chatgpt.md`), its `skill.md` and its
+  places on `/agents` and the sitemap exist only while the switch is on
+  (`KeyfleetWeb.AgentGuides`). The `/mcp` refusal without a token, the MCP
+  instructions, the hosted MCP line in `/agents.md` and `/docs` and the identity
+  refusal's words ("in your app's settings") name both apps.
+- The guide, modelled on Claude's, gives only the steps OpenAI's own help pages show:
+  the Plugins page, Add custom MCP server with the address `/mcp`, the warning, Create
+  as a plugin, then `@` in a chat. It ends with Coinbase's own app in the same ChatGPT,
+  which follows the fleet's holding in the person's own Coinbase account with Coinbase
+  asking the person to confirm each order, and Coinbase's guide for agents as its one
+  link.
+- The switch keeps its name, `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: renaming it is a
+  production setting, the founder's. config/runtime.exs and platform/README.md say it
+  is named for Claude, its first app.
+- Found, not changed: ChatGPT's default sign-in names its client by its own published
+  identity (`https://chatgpt.com/oauth/client.json`), which declares
+  `token_endpoint_auth_method: private_key_jwt`. Keyfleet's sign-in library
+  (elixir-utils `regent_oauth`, `RegentOAuth.ClientDocuments.validate/2`) takes only a
+  published identity whose method is `none`, so that sign-in ends at consent with 400
+  `invalid_request`. A person who chooses registration in ChatGPT's settings registers
+  as Claude does; ChatGPT's registration body is unverified. The callbacks ChatGPT
+  uses, `resource`, S256 and its `ui_locales` all pass.
+- Tests: `McpConnectorTest` "ChatGPT registers, pairs as chatgpt and picks as its
+  person's Key" registers ChatGPT's two callbacks, calls `register_identity`, is
+  refused `agent_not_paired` before pairing, pairs as `chatgpt` through
+  `pair_identity` with the hosted signer signing and the sign-in server checking the
+  signature, and locks a season pick as Key 2 in the same chat. With ChatGPT left out
+  of the switch's apps it fails at the pairing.
+- Docs: `docs/agent-parity.md` (the Connector surface), `docs/agent-feature-map.md`,
+  platform/README.md (the switch) and `verification/features.yml`
+  (`chatgpt-connector`, with the sign-in gap).
