@@ -20,8 +20,9 @@ import {defineConfig, devices} from "@playwright/test"
 // member's Atlas as blocks, a member opening a kept notebook page, and a
 // page going live from a long address and keeping its live connection through
 // a proposal pasted past its fields' limits, a decision proposed past
-// another kind's fields left too long, and words and a link pasted after blank
-// lines or spaces past their boxes, in Chromium.
+// another kind's fields left too long, words and a link pasted after blank
+// lines or spaces past their boxes, and a browser agent's proposal with its own
+// Key while the form names another, in Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.

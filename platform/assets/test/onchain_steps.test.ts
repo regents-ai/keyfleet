@@ -265,3 +265,92 @@ describe("a press goes to the wallet open when it was pressed", () => {
     expect(other.sent).toEqual([])
   })
 })
+
+const proposeReview: Review = {
+  ...review,
+  id: "review-agent",
+  component_id: "propose-action",
+  steps: [{kind: "transaction", step: "propose", to: fleet, data: "0x5678", value: "0x0"}],
+  inputs: {kind: "decision", key: "7", text: "The agent's words"},
+}
+
+// The hook on the proposal group, offering its browser agent's tool, with the
+// person's form holding Key 8 and its Propose button held back for it, and
+// the server answering an agent's ask with `reply`.
+function proposalGroup(reply: () => unknown) {
+  const pushed: [string, unknown][] = []
+  const offered: ModelContextTool[] = []
+  vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
+  const button = {dataset: {onchainStep: "propose"}, disabled: true}
+  const fields = [
+    {dataset: {onchainInput: "kind"}, value: "decision"},
+    {dataset: {onchainInput: "key"}, value: "8"},
+    {dataset: {onchainInput: "text"}, value: "The person's words"},
+  ]
+  const el = {
+    id: "propose-action",
+    dataset: {webmcpTool: "proposals_create"},
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    hasAttribute: () => false,
+    querySelectorAll: (selector: string) => (selector.startsWith("button") ? [button] : fields),
+    querySelector: () => null,
+  }
+  const hook = {
+    el,
+    handleEvent: () => undefined,
+    pushEventTo: async (_target: unknown, event: string, payload: unknown) => {
+      pushed.push([event, payload])
+      return [{status: "fulfilled", value: {reply: event === "prepare_for_agent" ? reply() : {}}}]
+    },
+  }
+  OnchainSteps.mounted!.call(hook)
+
+  return {
+    pushed,
+    call: async (input: Record<string, string>) => {
+      await vi.waitFor(() => expect(offered).toHaveLength(1))
+      return offered[0].execute(input, {})
+    },
+    leave: () => OnchainSteps.destroyed!.call(hook),
+  }
+}
+
+// Invariant: the browser agent's press is built and judged from the agent's
+// values over the form's, by the server for that press alone, whatever the
+// person's own button shows: the person's form never becomes the agent's.
+describe("a browser agent's press is judged on its own values", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
+    vi.stubGlobal("HTMLInputElement", class {})
+  })
+
+  it("asks for steps built from its values while the person's button is held back, and sends them", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    const page = proposalGroup(() => ({review: proposeReview, send: "propose"}))
+
+    const answer = await page.call({kind: "decision", key: "7", text: "The agent's words"})
+
+    expect(answer).toMatchObject({ok: true, transaction_hash: hash})
+    expect(active.sent).toHaveLength(1)
+    expect(page.pushed).toContainEqual([
+      "prepare_for_agent",
+      {form: {kind: "decision", key: "7", text: "The agent's words"}, step: "propose", address: signer},
+    ])
+    expect(page.pushed.map(([event]) => event)).not.toContain("step_pressed")
+    page.leave()
+  })
+
+  it("answers the server's words for a press of its values the chain's state holds back, and asks no wallet", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    const page = proposalGroup(() => ({reason: "blocked", note: "Not your Key"}))
+
+    const answer = await page.call({kind: "decision", key: "9", text: "The agent's words"})
+
+    expect(answer).toMatchObject({ok: false, error: {code: "blocked", message: "Not your Key"}})
+    expect(active.sent).toEqual([])
+    page.leave()
+  })
+})

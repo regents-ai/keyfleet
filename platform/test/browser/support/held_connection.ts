@@ -7,11 +7,12 @@ import type {Page} from "@playwright/test"
  * `hold("recovery")` holds the server's answer to the forms LiveView sends back
  * when the page joins again, which it waits for before it draws the page and
  * runs the hooks' `reconnected`; `hold("ask")` holds the answer to the next
- * press that asks the server for its steps (`prepare_and_send`). Either way
- * everything the server sends after it is held too, and `release` sends it all
- * on, in order. `asks` counts the asks the page has sent; `unanswered` counts
- * the messages the page has sent on its open connection whose answer it has not
- * been given yet.
+ * press that asks the server for its steps (`prepare_and_send`, or
+ * `prepare_for_agent` for the browser agent's). Either way everything the
+ * server sends after it is held too, and `release` sends it all on, in order.
+ * `asks` counts the asks the page has sent; `unanswered` counts the messages
+ * the page has sent on its open connection whose answer it has not been given
+ * yet.
  */
 export async function holdConnection(page: Page) {
   let armed: "recovery" | "ask" | null = null
@@ -28,7 +29,7 @@ export async function holdConnection(page: Page) {
       if (typeof message === "string") {
         const [, ref, , kind, payload] = JSON.parse(message)
         if (ref) unanswered.add(ref)
-        const ask = kind === "event" && payload?.event === "prepare_and_send"
+        const ask = kind === "event" && ["prepare_and_send", "prepare_for_agent"].includes(payload?.event)
         if (ask) asks += 1
         if ((armed === "recovery" && kind === "event" && payload?.type === "form") || (armed === "ask" && ask)) watched.add(ref)
       }

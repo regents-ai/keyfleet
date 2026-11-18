@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   The component builds a `RegentChain.Review` for the eligible signer and hands
   it to `put_review/2`, which remembers it and pushes it to the page before
-  anyone presses. The page reports each press against the review it sent from.
+  anyone presses; steps built for one press alone are only remembered
+  (`remember/2`). The page reports each press against the review it sent from.
   Every sent step is then read at the latest block of the review's chain, every
   two seconds, until it lands or the page stops asking. Nothing is kept beyond
   the page. A step that lands asks every reader of its chain to read it again
@@ -58,16 +59,21 @@ defmodule KeyfleetWeb.OnchainSteps do
     if review_id(review) == review_id(socket.assigns.review) do
       socket
     else
-      presses =
-        if review,
-          do: Presses.remember(socket.assigns.presses, review),
-          else: socket.assigns.presses
+      socket = if review, do: remember(socket, review), else: socket
 
       socket
-      |> assign(review: review, presses: presses)
+      |> assign(review: review)
       |> push_event("onchain-steps:review", %{component_id: socket.assigns.id, review: review})
     end
   end
+
+  @doc """
+  Remembers `review` without putting it on the page, so a step sent from it
+  is followed as one sent from the page's own: the steps built for one press
+  alone, as a browser agent's.
+  """
+  def remember(socket, review),
+    do: assign(socket, presses: Presses.remember(socket.assigns.presses, review))
 
   @doc "The wallet sent a step; it is read from now on against the review it was sent from."
   def sent(socket, params) do

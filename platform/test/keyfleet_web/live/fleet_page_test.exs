@@ -800,7 +800,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # or for a step the chain's state holds back, gets no steps. The refusal
     # itself shows the note beside the buttons and counts the failure, and the
     # reply carries that same note, so the browser's own agent hears what the
-    # person reads with nothing more from the page.
+    # person reads with nothing more from the page. A held-back step's note is
+    # the words beside its button.
     test "a refused press shows the note it is answered with, and counts it once",
          %{conn: conn} do
       deploy!()
@@ -811,7 +812,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       open_buy_key(view)
       panel = with_target(view, "#buy-key-order")
 
-      notes =
+      replies =
         wallet_failures(view.pid, fn ->
           for wallet <- [@stranger, @owner] do
             render_hook(panel, "prepare_and_send", %{
@@ -821,14 +822,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
             })
 
             assert_reply(view, reply)
-            assert [:note] = Map.keys(reply)
             assert text(view, "#buy-key-order-press-note") == reply.note
-            reply.note
+            reply
           end
         end)
 
-      assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "step_unknown"}]} = notes
-      assert mismatch != blocked
+      assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "step_unknown"}]} = replies
+      assert %{reason: "step_unknown", note: "Your wallet is on " <> _} = mismatch
+      assert blocked == %{reason: "blocked", note: text(view, "#buy-key-button-why")}
     end
 
     # A press whose wallet stays on another network sends nothing, and the
@@ -994,6 +995,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
              )
 
       refute has_element?(view, "#fleet-get-key")
+
+      # A press made while the page still showed a Key left hears the same words.
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("prepare_and_send", %{"form" => %{}, "step" => "buy", "address" => @owner})
+
+      beside = text(view, "#buy-key-button-why")
+      assert_reply(view, %{reason: "blocked", note: ^beside})
+      assert text(view, "#buy-key-order-press-note") == beside
     end
 
     test "a fleet with keys left has no sold-out line and Buy can be pressed", %{conn: conn} do

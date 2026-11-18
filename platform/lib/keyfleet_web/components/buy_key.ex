@@ -304,14 +304,18 @@ defmodule KeyfleetWeb.Components.BuyKey do
           variant={if bought?(panel), do: "secondary", else: "primary"}
           data-onchain-step="buy"
           data-account-target={panel.signed_out && "sign-in"}
-          disabled={buy_blocked(panel) != nil}
-          aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
+          disabled={WalletPanel.blocked(panel, "buy") != nil}
+          aria-describedby={WalletPanel.blocked(panel, "buy") && "#{@id}-button-why"}
         >
           <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
           <span data-press-label>Buy Key</span>
         </Regent.Primitives.button>
-        <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
-          {WalletWords.blocked(buy_blocked(panel))}
+        <span
+          :if={WalletPanel.blocked(panel, "buy")}
+          id={"#{@id}-button-why"}
+          class="wallet-panel-why"
+        >
+          {WalletWords.blocked(WalletPanel.blocked(panel, "buy"))}
         </span>
         <%!-- Under the buttons, so nothing a person is about to press moves.
         Focus moves to its button as it appears, which scrolls the window to
@@ -338,11 +342,6 @@ defmodule KeyfleetWeb.Components.BuyKey do
   # A Key bought from this window has landed. Buy stays pressable for another.
   defp bought?(panel),
     do: Enum.any?(panel.presses.sent, &(&1.name == "buy" and &1.outcome == :confirmed))
-
-  # Why Buy is certain to fail now, as the chain read at the latest block
-  # says, or nil.
-  defp buy_blocked(%{built: %{problem: :sold_out}}), do: :sold_out
-  defp buy_blocked(panel), do: WalletPanel.blocked(panel, "buy")
 
   # Approve shows while the wallet the figures are for needs an approval, and
   # stays once an approval sent from here has landed, marked done.

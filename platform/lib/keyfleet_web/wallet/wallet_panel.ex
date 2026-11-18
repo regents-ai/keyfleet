@@ -18,11 +18,17 @@ defmodule KeyfleetWeb.WalletPanel do
   Nothing here disables, hides or holds back a button while anything is
   pending: every press reaches the wallet, and the contract decides. The one
   exception is a step the chain's own state, read at the latest block, makes
-  certain to fail (`figures.blocked`): `step_button/1` keeps it in view,
-  disabled, with a few words saying why, and for a signed-in person the steps
-  are built again every few seconds while any is blocked, so it comes back
-  when that state changes. A visitor's Buy follows the sale as a purchase
-  does, every few minutes.
+  certain to fail (`blocked/2`): `step_button/1` keeps it in view, disabled,
+  with a few words saying why, and for a signed-in person the steps are built
+  again every few seconds while any is blocked, so it comes back when that
+  state changes. A press that asks for its steps and finds it so is answered
+  with those same words. A visitor's Buy follows the sale as a purchase does,
+  every few minutes.
+
+  The browser's own agent presses with its values over the form's, and its
+  steps are built from those for that press alone and judged the same way,
+  so what the person typed, and the steps and figures shown, stay as they
+  are.
 
   The page renders it with `live_component`, giving:
 
@@ -88,10 +94,13 @@ defmodule KeyfleetWeb.WalletPanel do
   def figures(_panel), do: %{}
 
   @doc """
-  Why the chain's own state makes `step` certain to fail now, or nil. A step
-  that waits on an approval is pressable as soon as the approval is sent from
-  this group, before it lands: a pending transaction is never a reason.
+  Why the chain's own state makes `step` certain to fail now, or nil: a
+  fleet whose Keys are all sold holds Buy back. A step that waits on an
+  approval is pressable as soon as the approval is sent from this group,
+  before it lands: a pending transaction is never a reason.
   """
+  def blocked(%{built: %{problem: :sold_out}}, "buy"), do: :sold_out
+
   def blocked(panel, step) do
     reason = panel |> figures() |> Map.get(:blocked, %{}) |> Map.get(step)
 
@@ -209,54 +218,50 @@ defmodule KeyfleetWeb.WalletPanel do
   def handle_event("change", params, socket),
     do: {:noreply, socket |> take_inputs(params) |> sync()}
 
-  # A press made before its step reached the page, or before the steps caught
-  # up with the form: the form and the open wallet are taken as the page's own,
-  # and the reply carries the steps built from them, read now even where the
-  # chain is read, so the press never waits on steps still being read
-  # elsewhere. A page that has just joined again can ask before it reports the
-  # wallet. A step those steps find certain to fail is not handed over: the
-  # button was pressed while the page still showed figures built for another
-  # wallet or form, and it now shows why it can't be pressed.
+  # A press made before its step reached the page, before the steps caught up
+  # with the form, or of a button the chain's state holds back: the form and
+  # the open wallet are taken as the page's own, and the reply carries the
+  # steps built from them, read now even where the chain is read, so the press
+  # never waits on steps still being read elsewhere. A page that has just
+  # joined again can ask before it reports the wallet.
   def handle_event("prepare_and_send", %{"form" => form, "step" => step} = params, socket)
       when is_map(form) and is_binary(step) do
     socket = socket |> take_inputs(form) |> take_active(params) |> sync_now()
-    review = socket.assigns.review
 
-    if review && Review.find(review, step) && blocked(socket.assigns, step) == nil do
-      {:reply, %{review: review, send: step}, socket}
-    else
-      # Refused, and nothing reaches the wallet: the steps have none of this
-      # name, as when the form can't be built from, or it is certain to fail.
-      # The note beside the buttons is written here and the reply carries that
-      # same note, so the browser's own agent hears what the person reads. The
-      # page reports nothing more for this press.
-      note = refusal_note(socket)
-      KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
-      {:reply, %{note: note}, assign(socket, press_note: note)}
+    case refusal(socket, socket.assigns, step) do
+      nil -> {:reply, %{review: socket.assigns.review, send: step}, socket}
+      refused -> refuse(socket, refused)
     end
   end
 
-  # A proposal's words are saved as soon as the press is heard, before the
-  # wallet sends the proposal, from the same form the steps are built from, so
-  # the chain reader finds them when it lands. The page says so once the steps
-  # here are the ones built from that form, and the words are saved only when
-  # those steps found the wallet may vote the Key the form names: one that
-  # may not can't make the proposal. The press never waits on this, and a
-  # save that fails leaves the proposal without its words on the page.
-  def handle_event(
-        "step_pressed",
-        %{"step" => "propose", "form" => %{"text" => text}},
-        %{
-          assigns: %{
-            flow: :propose,
-            fleet: %{fleet_id: fleet_id},
-            actor: actor,
-            built: %{figures: %{governs?: true}}
-          }
-        } = socket
-      )
-      when is_binary(text) do
-    Proposals.save_words(fleet_id, text, actor)
+  # The browser's own agent's press, with its values over the form's: the
+  # steps are built from those, now, for this press alone, and judged as the
+  # page judges its own, while the form and the steps the page shows stay as
+  # they are. What is sent from them is followed as any other press, and a
+  # proposal's words are saved as its steps are handed over.
+  def handle_event("prepare_for_agent", %{"form" => form, "step" => step} = params, socket)
+      when is_map(form) and is_binary(step) do
+    {socket, wallet} = socket |> take_active(params) |> follow_signer()
+    inputs = over(socket.assigns.inputs, form)
+    built = if wallet, do: build_steps!(request(socket, wallet, inputs))
+    pressed = %{socket.assigns | inputs: inputs, built: built, review: sendable(built, socket)}
+
+    case refusal(socket, pressed, step) do
+      nil ->
+        save_words(pressed, step, inputs)
+
+        {:reply, %{review: pressed.review, send: step},
+         OnchainSteps.remember(socket, pressed.review)}
+
+      refused ->
+        refuse(socket, refused)
+    end
+  end
+
+  # The press is heard just before the wallet is asked to send it, with the
+  # form it was built from.
+  def handle_event("step_pressed", %{"step" => "propose", "form" => form}, socket) do
+    save_words(socket.assigns, "propose", form)
     {:noreply, socket}
   end
 
@@ -341,14 +346,16 @@ defmodule KeyfleetWeb.WalletPanel do
     assign(socket, active: active)
   end
 
-  defp take_inputs(socket, params) do
-    typed =
-      for {name, _first} <- socket.assigns.inputs,
-          is_binary(params[name]),
-          into: %{},
-          do: {name, params[name]}
+  defp take_inputs(socket, params),
+    do: assign(socket, inputs: over(socket.assigns.inputs, params))
 
-    assign(socket, inputs: socket.assigns.inputs |> Map.merge(typed) |> kept())
+  # `params` over `inputs`: each field the form has that `params` names, as
+  # its box keeps it.
+  defp over(inputs, params) do
+    typed =
+      for {name, _first} <- inputs, is_binary(params[name]), into: %{}, do: {name, params[name]}
+
+    inputs |> Map.merge(typed) |> kept()
   end
 
   @doc """
@@ -421,7 +428,7 @@ defmodule KeyfleetWeb.WalletPanel do
     if figures_wallet do
       socket
       |> assign(shown: figures_wallet)
-      |> show(build_steps!(request(socket, figures_wallet)))
+      |> show(build_steps!(request(socket, figures_wallet, socket.assigns.inputs)))
     else
       build(socket, nil)
     end
@@ -479,14 +486,14 @@ defmodule KeyfleetWeb.WalletPanel do
   # Every group reads the chain, so its steps are built away from the page's
   # own process.
   defp build(socket, wallet) do
-    request = request(socket, wallet)
+    request = request(socket, wallet, socket.assigns.inputs)
 
     socket
     |> assign(shown: wallet)
     |> start_async(:build, fn -> {wallet, build_steps!(request)} end)
   end
 
-  defp request(socket, wallet) do
+  defp request(socket, wallet, inputs) do
     %{assigns: assigns} = socket
 
     %{
@@ -496,7 +503,7 @@ defmodule KeyfleetWeb.WalletPanel do
       component_id: assigns.id,
       params: %{
         sending: wallet == assigns.signer,
-        inputs: assigns.inputs,
+        inputs: inputs,
         proposal: assigns.proposal,
         token_id: assigns.token_id,
         advance_id: assigns.advance_id
@@ -525,13 +532,15 @@ defmodule KeyfleetWeb.WalletPanel do
   end
 
   defp show(socket, built) do
-    review = if built.review && built.review.signer == socket.assigns.signer, do: built.review
-
     socket
     |> assign(built: built)
-    |> OnchainSteps.put_review(review)
+    |> OnchainSteps.put_review(sendable(built, socket))
     |> rebuild_later(built)
   end
+
+  # The review of `built` when it is for the wallet that may send it, or nil.
+  defp sendable(%{review: %{signer: signer} = review}, %{assigns: %{signer: signer}}), do: review
+  defp sendable(_built, _socket), do: nil
 
   defp rebuild_later(socket, %{problem: :unread}), do: rebuild_in(socket, @reread_ms)
 
@@ -564,10 +573,35 @@ defmodule KeyfleetWeb.WalletPanel do
     do:
       OnchainSteps.failure_note(reason, linked(socket), socket.assigns.active, chain_name(socket))
 
-  # Why a press is refused: what is wrong with the form, or else the note
-  # from the wallet the press named.
-  defp refusal_note(socket),
-    do: form_problem(socket.assigns) || failure_note(socket, "step_unknown")
+  # Why `step` is not handed over from `pressed`, the panel as the press was
+  # built, as `{reason, note}`, or nil when it is. No wallet here may send it:
+  # what is wrong with the form, or else the note for the wallet the press
+  # named. The chain's state makes it certain to fail: the words beside its
+  # button. The steps have none of that name, as when the form can't be built
+  # from: what is wrong with the form, or else that it can't be sent as it
+  # stands.
+  defp refusal(socket, pressed, step) do
+    reason = blocked(pressed, step)
+
+    cond do
+      pressed.review == nil -> {"step_unknown", refusal_note(socket, pressed)}
+      reason -> {"blocked", WalletWords.blocked(reason)}
+      Review.find(pressed.review, step) == nil -> {"step_unknown", refusal_note(socket, pressed)}
+      true -> nil
+    end
+  end
+
+  # Refused, and nothing reaches the wallet. The note beside the buttons is
+  # written here and the reply carries that same note, so the browser's own
+  # agent hears what the person reads. The page reports nothing more for this
+  # press.
+  defp refuse(socket, {reason, note}) do
+    KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
+    {:reply, %{reason: reason, note: note}, assign(socket, press_note: note)}
+  end
+
+  defp refusal_note(socket, pressed),
+    do: form_problem(pressed) || failure_note(socket, "step_unknown")
 
   # What is wrong with the form, in the words of the line above the buttons,
   # which names the field and what it takes; nil when the line says nothing
@@ -576,6 +610,23 @@ defmodule KeyfleetWeb.WalletPanel do
     do: line(assigns)
 
   defp form_problem(_assigns), do: nil
+
+  # A proposal's words are saved as soon as its press is heard, before the
+  # wallet sends it, from the form its steps are built from, so the chain
+  # reader finds them when it lands. They are saved only when those steps
+  # found the wallet may vote the Key the form names: one that may not can't
+  # make the proposal. A person's press never waits on this; an agent's words
+  # are saved once its steps are built, as they are handed over. A save that
+  # fails leaves the proposal without its words on the page.
+  defp save_words(
+         %{flow: :propose, built: %{figures: %{governs?: true}}} = panel,
+         "propose",
+         %{"text" => text}
+       )
+       when is_binary(text),
+       do: Proposals.save_words(panel.fleet.fleet_id, text, panel.actor)
+
+  defp save_words(_panel, _step, _form), do: :ok
 
   defp chain_name(%{assigns: %{fleet: %{chain_id: chain_id}}}) do
     case WalletSteps.chain(chain_id) do

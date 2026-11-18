@@ -1,6 +1,7 @@
 import {keccak_256} from "@noble/hashes/sha3.js"
 import {bytesToHex, utf8ToBytes} from "@noble/hashes/utils.js"
 import {expect, test, type Locator, type Page} from "@playwright/test"
+import {callTool, installModelContext} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {prepareFleet, sellKey} from "./support/fleet_chain"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
@@ -10,7 +11,8 @@ import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 // each field to its limit, and the site's own note says what is too long, for
 // the kind of proposal chosen alone. A message larger than the connection
 // reads closes it, and the page opens another, so each walk counts the page's
-// live connections.
+// live connections. A browser agent's proposal is judged on its own values,
+// leaving the person's form as it was.
 const fleet = "fibonacci_syndicate"
 // The wallet the "valid" account links (test/support/test_privy_verifier.ex).
 const me = "0x1111111111111111111111111111111111111111"
@@ -327,5 +329,59 @@ test("words and an image link pasted after blank lines or spaces past their box 
   expect(transaction.data.startsWith(proposeFor(key))).toBe(true)
   // The words' hash follows the Key in the call (VoteSteps.content_hash/1).
   expect(transaction.data.slice(10 + 64, 10 + 128)).toBe(bytesToHex(keccak_256(utf8ToBytes(longest))))
+  expect(errors).toEqual([])
+})
+
+// Costly failure: the person's form names a Key their wallet can't propose
+// with, so their Propose is held back, and the browser agent's proposal with
+// its own Key, which would go through, never reaches the wallet. The agent's
+// values are judged for its press alone: its proposal reaches the wallet, the
+// person's form and held-back button stay as they were, and the agent's own
+// Key that can't propose is answered with the words beside the button for it.
+test("a browser agent's proposal with its own Key reaches the wallet while the form holds one that can't, and the form stays", async ({
+  page,
+}) => {
+  await installModelContext(page)
+  const errors = pageErrors(page)
+  const key = sellKey(fleet, me)
+  const unsold = key + 3
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto("/syndicate/1/proposals")
+  await live(page)
+  await useStandInWallet(page, me)
+
+  const form = page.locator("#propose-action-form")
+  const keyBox = form.locator('[name="key"]')
+  const text = form.locator('[name="text"]')
+  const press = page.locator('#propose-action [data-onchain-step="propose"]')
+  const why = page.locator("#propose-button-why")
+  const theirs = "The person's own words."
+  const words = "The agent's words."
+
+  await keyBox.fill(String(unsold))
+  await text.fill(theirs)
+  await expect(press).toBeDisabled()
+  const beside = await why.innerText()
+
+  const sent = await callTool(page, "proposals_create", {kind: "decision", key: String(key), text: words})
+  expect(sent).toMatchObject({ok: true})
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [{transaction}] = await sentByStandIn(page)
+  expect(transaction.to.toLowerCase()).toBe(votesContract)
+  expect(transaction.data.startsWith(proposeFor(key))).toBe(true)
+  expect(transaction.data.slice(10 + 64, 10 + 128)).toBe(bytesToHex(keccak_256(utf8ToBytes(words))))
+  await expect(keyBox).toHaveValue(String(unsold))
+  await expect(text).toHaveValue(theirs)
+  await expect(press).toBeDisabled()
+  await expect(why).toHaveText(beside)
+
+  await keyBox.fill(String(key))
+  await expect(press).toBeEnabled()
+  const refused = await callTool(page, "proposals_create", {kind: "decision", key: String(unsold), text: words})
+  expect(refused).toMatchObject({ok: false, error: {code: "blocked", message: beside}})
+  await expect(page.locator("#propose-action-press-note")).toHaveText(beside)
+  await expect(keyBox).toHaveValue(String(key))
+  await expect(press).toBeEnabled()
+  expect(await sentByStandIn(page)).toHaveLength(1)
   expect(errors).toEqual([])
 })

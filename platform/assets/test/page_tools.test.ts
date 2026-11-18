@@ -107,3 +107,27 @@ it("answers a press the server refused to prepare with the note it sent", async 
   expect(await offered[0].execute({asset}, {})).toMatchObject({ok: false, error: {code: "step_unknown", message: note}})
   leaving.abort()
 })
+
+// Costly failure: the person's form names a Key the wallet may not use, so
+// their button is held back, and the agent's call with its own Key, which
+// would go through, is refused for the person's Key.
+it("presses a button held back for the person's form with the agent's values, and answers the server's reason", async () => {
+  const offered: ModelContextTool[] = []
+  vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
+  const {offerPageTool} = await import("../js/page_tools")
+
+  const button = {dataset: {onchainStep: "propose"}, disabled: true}
+  const root = {dataset: {webmcpTool: "proposals_create"}, querySelectorAll: () => [button]}
+  const press = vi.fn()
+  const leaving = offerPageTool(root as unknown as HTMLElement, press)!
+  const proposal = {kind: "decision", key: "7", text: "The agent's words"}
+
+  press.mockResolvedValueOnce({transaction_hash: hash})
+  expect(await offered[0].execute(proposal, {})).toMatchObject({ok: true, transaction_hash: hash})
+  expect(press).toHaveBeenCalledWith(button, proposal)
+
+  const words = "Not your Key"
+  press.mockResolvedValueOnce({reason: "blocked", note: words})
+  expect(await offered[0].execute({...proposal, key: "8"}, {})).toMatchObject({ok: false, error: {code: "blocked", message: words}})
+  leaving.abort()
+})

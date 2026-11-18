@@ -7527,7 +7527,7 @@
     {
       "name": "proposals_create",
       "title": "Propose",
-      "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows. This tool counts a field's length as the page's box does, an emoji as two; the site counts the words and a launch's fields in bytes, an emoji as four, and answers which is too long.",
+      "description": "Press Propose with these fields: opens a vote of every Key on what it does. Fields left out are taken from what the proposal form shows, and the form itself stays as the person left it. This tool counts a field's length as the page's box does, an emoji as two; the site counts the words and a launch's fields in bytes, an emoji as four, and answers which is too long.",
       "input_schema": {
         "type": "object",
         "properties": {

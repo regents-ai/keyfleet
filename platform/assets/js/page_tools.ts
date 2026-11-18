@@ -3,10 +3,11 @@
 //
 // A page's wallet buttons: a wallet group names its tool with
 // `data-webmcp-tool` and its fleet with `data-webmcp-fleet`, and calling the
-// tool is a press of that group's own button: the same steps, built on the
-// server for the signed-in account's wallet, and the wallet asks the person to
-// approve. A button the chain's state holds back answers why, as the page
-// shows it.
+// tool is a press of that group's own button with the agent's values over the
+// form's: the same steps, built on the server from those values for the
+// signed-in account's wallet, and the wallet asks the person to approve. The
+// person's form stays as it is. A press the chain's state makes certain to
+// fail answers why, in the words the page shows beside the button for it.
 //
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
@@ -32,9 +33,9 @@ export type PressButton = (button: HTMLElement, form: Record<string, string>) =>
 type Fields = Record<string, string>
 
 // The button each tool presses, from what the agent sent. Proposing and
-// turning USDC into REGENT fill the group's form with what the agent named;
-// the others press with the form as it is. Claiming for all your Keys names
-// the fleet, since the Account page has a group for each.
+// turning USDC into REGENT press with what the agent named over the group's
+// form; the others press with the form as it is. Claiming for all your Keys
+// names the fleet, since the Account page has a group for each.
 const presses: Record<string, (input: Fields) => {step: string; form?: Fields; fleet?: string}> = {
   keys_mark_present: () => ({step: "present"}),
   proposals_create: input => ({step: "propose", form: input}),
@@ -58,7 +59,9 @@ const offered = new Map<string, Offered>()
 // What the agent hears when a press sent nothing, or may have sent: what the
 // note the page shows the person says, in words for the agent. A press answers
 // at once and never waits for that note. A press the server refused to prepare
-// carries the server's note, and the agent hears that instead (onchain_steps.ts).
+// carries the server's note, and the agent hears that instead (onchain_steps.ts),
+// with the hint here; one the chain's state makes certain to fail, with
+// `blockedHint`.
 const failures: Record<Failure, {message: string; hint: string}> = {
   step_unknown: {
     message: "This can't be sent as it stands. Nothing was sent.",
@@ -94,6 +97,10 @@ const failures: Record<Failure, {message: string; hint: string}> = {
   },
 }
 
+// The chain's state, read for the values this call sent, makes the press
+// certain to fail.
+const blockedHint = "Nothing was sent: the chain's state makes this call certain to fail now. Call again once that changes."
+
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.
 const entries = manifest.tools as unknown as Entry[]
 
@@ -113,7 +120,9 @@ function answer(pressed: Pressed | "lost") {
     return {ok: true, transaction_hash: pressed.transaction_hash, note: "Sent from the wallet. The page shows when it lands."}
   }
   if ("signature" in pressed) return {ok: true, signature: pressed.signature}
-  if ("note" in pressed) return refusal(pressed.reason, pressed.note, failures[pressed.reason].hint)
+  if ("note" in pressed) {
+    return refusal(pressed.reason, pressed.note, pressed.reason === "blocked" ? blockedHint : failures[pressed.reason].hint)
+  }
   const {message, hint} = failures[pressed.reason]
   return refusal(pressed.reason, message, hint)
 }
@@ -147,11 +156,6 @@ function tool(entry: Entry, held: Offered): ModelContextTool {
           `This page shows no button for ${entry.name} now.`,
           "Sign in, and check what the page offers, then call again.",
         )
-      }
-      // A held-back button names, beside it, why the chain's state makes it certain to fail.
-      if (button.disabled) {
-        const why = document.getElementById(button.getAttribute("aria-describedby")!)!
-        return refusal("blocked", why.textContent!.trim(), "It comes back when that changes on the chain.")
       }
       return answer(await group.pressButton(button, form ?? {}))
     },

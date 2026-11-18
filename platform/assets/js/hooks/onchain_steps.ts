@@ -29,15 +29,22 @@ export type Review = {
 }
 
 /**
- * What the wallet answered one press: the hash or signature, or why nothing was
- * sent, or may have been. A press the server refused to prepare carries the
- * note the server shows the person for it.
+ * A press the server refused to prepare, with the note it shows the person for
+ * it: one the chain's state makes certain to fail ("blocked"), in the words
+ * beside its button, or any other ("step_unknown").
  */
-export type Pressed =
-  | {transaction_hash: Hash}
-  | {signature: Hex}
-  | {reason: Failure}
-  | {reason: "step_unknown"; note: string}
+type Refused = {reason: "step_unknown" | "blocked"; note: string}
+
+/**
+ * What the wallet answered one press: the hash or signature, or why nothing was
+ * sent, or may have been; or the server's refusal.
+ */
+export type Pressed = {transaction_hash: Hash} | {signature: Hex} | {reason: Failure} | Refused
+
+// The server event a press asks for its steps with: the person's takes the
+// form as the page's own, and the browser agent's builds the agent's values
+// for that press alone.
+type Ask = "prepare_and_send" | "prepare_for_agent"
 
 type Push = (event: string, payload: unknown) => void
 
@@ -78,14 +85,16 @@ export const OnchainSteps: Hook = {
     })
 
     // Every press runs on its own and reaches the wallet, even while an earlier
-    // one is still there. A press whose step isn't on the page yet, or whose
-    // review no longer matches the form, asks the server for the matching
-    // review and sends what comes back. The browser's own agent presses the
-    // same way, through the tool the group names (page_tools.ts).
-    this.pressButton = async (button, form) => {
+    // one is still there. A press whose step isn't on the page yet, whose
+    // review no longer matches the form, or whose button the chain's state
+    // holds back, asks the server for the matching review and sends what comes
+    // back. The browser's own agent presses the same way, through the tool the
+    // group names (page_tools.ts), with its values over the form's, and the
+    // server judges those values: the person's form stays as it is.
+    const pressWith = async (button: HTMLElement, form: Record<string, string>, ask: Ask): Promise<Pressed | "lost"> => {
       const name = button.dataset.onchainStep!
       const release = mark(button)
-      const asks = asksServer(this.review, name, form)
+      const asks = (button as HTMLButtonElement).disabled === true || asksServer(this.review, name, form)
       const wallet = activeEthereumWallet()
       lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
@@ -101,13 +110,15 @@ export const OnchainSteps: Hook = {
         // The ask names the open wallet: a page that has just joined again can ask
         // before the server has heard which wallet is open. The steps that come
         // back go to that same wallet.
-        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name, address: wallet.address})
+        const [result] = await this.pushEventTo(this.el, ask, {form, step: name, address: wallet.address})
         if (result?.status !== "fulfilled") return lostPress(this.el, name)
-        const reply = result.value.reply as {review: Review; send: string} | {note: string}
+        const reply = result.value.reply as {review: Review; send: string} | Refused
         // Refused: the server has already shown its note beside the buttons, and
         // the reply carries that note, so the browser's own agent hears it too.
-        if ("note" in reply) return {reason: "step_unknown", note: reply.note}
-        heard()
+        if ("note" in reply) return reply
+        // The agent's steps were built from the agent's values alone, and the
+        // server has already done what hearing that press does.
+        if (ask === "prepare_and_send") heard()
         return await press(reply.review, reply.send, wallet, push)
       } catch {
         return lostPress(this.el, name)
@@ -117,6 +128,7 @@ export const OnchainSteps: Hook = {
         this.refresh?.()
       }
     }
+    this.pressButton = (button, form) => pressWith(button, form, "prepare_and_send")
 
     // Signed out, a button carries the page's sign-in mark, and its press
     // opens sign-in instead (auth_lazy.ts).
@@ -146,7 +158,7 @@ export const OnchainSteps: Hook = {
     // Only a browser with its own agent loads the tools.
     if ("modelContext" in document) {
       this.tool = import("../page_tools").then(({offerPageTool}) =>
-        offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form})),
+        offerPageTool(this.el, (button, form) => pressWith(button, {...formInputs(this.el), ...form}, "prepare_for_agent")),
       )
     }
   },

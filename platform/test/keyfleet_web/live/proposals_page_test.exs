@@ -1273,8 +1273,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     # typed and joins again, as it does for an agent's press of the same form.
     # Each field is filled in the characters that cost the most: letters of
     # three bytes in the form's change, which writes each as %XX%XX%XX, and
-    # characters JSON writes as \u00XX in a press, which sends the page's
-    # fields with the agent's over them (assets/js/hooks/onchain_steps.ts).
+    # characters JSON writes as \u00XX in an agent's press, which sends the
+    # page's fields with the agent's over them (assets/js/hooks/onchain_steps.ts).
     test "the proposal form at every field's limit fits a live page's socket", %{conn: conn} do
       ChainViews.put!(list_views())
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
@@ -1318,7 +1318,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         }),
         event(view, %{
           "type" => "hook",
-          "event" => "prepare_and_send",
+          "event" => "prepare_for_agent",
           "value" => %{"step" => "propose", "form" => pressed, "address" => @holder}
         })
       ]
@@ -1410,6 +1410,98 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert Ash.read!(Keyfleet.Proposals.Words) == []
+
+      # A press that asks for its steps is answered with the words beside the
+      # button, and the note says them too.
+      beside = text(view, "#propose-button-why")
+
+      view
+      |> with_target("#propose-action")
+      |> render_hook("prepare_and_send", %{
+        "form" => %{"kind" => "decision", "key" => "7", "text" => "Hire a designer"},
+        "step" => "propose",
+        "address" => @holder
+      })
+
+      assert_reply(view, %{reason: "blocked", note: ^beside})
+      assert text(view, "#propose-action-press-note") == beside
+    end
+
+    # Costly failure: the browser's own agent proposes with its own Key while
+    # the person's form names one the wallet may not use, and a press that
+    # would go through is refused for the person's Key. The agent's values are
+    # built and judged for its press alone: the person's form and button stay
+    # as they were, and an agent's Key the wallet may not use is answered with
+    # the words that stand beside the button for it.
+    test "an agent's press is judged on its own values, and leaves the person's form as it was",
+         %{conn: conn} do
+      fleet = Fleets.get_fleet!(@fleet)
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+      ProposalHelpers.keys_sold!(@fleet, [8], @other)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}, {8, @other, 0}]) ++
+          [{@shards, "mayGovern(uint256,address)", [id(8), @holder], {"bool", [false]}}]
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      theirs = %{"kind" => "decision", "key" => "8", "text" => "The person's words"}
+      view |> form("#propose-action-form", theirs) |> render_change()
+      render_async(view, @async_wait)
+      assert has_element?(view, "#propose-button[disabled]")
+      beside = text(view, "#propose-button-why")
+
+      agent = fn key ->
+        view
+        |> with_target("#propose-action")
+        |> render_hook("prepare_for_agent", %{
+          "form" => %{theirs | "key" => key, "text" => "The agent's words"},
+          "step" => "propose",
+          "address" => @holder
+        })
+      end
+
+      agent.("7")
+      assert_reply(view, %{send: "propose", review: %{steps: [step]} = review})
+
+      assert step.data ==
+               BuilderCode.append(
+                 Call.encode(@propose, [
+                   id(7),
+                   keccak("The agent's words"),
+                   Actions.encode(:decision, fleet)
+                 ])
+               )
+
+      assert [%{text: "The agent's words"}] = Ash.read!(Keyfleet.Proposals.Words)
+      assert shown(view) == {["8"], "The person's words"}
+      assert has_element?(view, "#propose-button[disabled]")
+      assert text(view, "#propose-button-why") == beside
+
+      # What is sent from the agent's steps is followed as any other press.
+      hash = "0x" <> String.duplicate("4", 64)
+
+      view
+      |> with_target("#propose-action")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "propose",
+        "transaction_hash" => hash
+      })
+
+      assert has_element?(view, "#propose-action-sent-#{hash}")
+
+      view |> form("#propose-action-form", %{theirs | "key" => "7"}) |> render_change()
+      render_async(view, @async_wait)
+      refute has_element?(view, "#propose-button[disabled]")
+
+      agent.("8")
+      assert_reply(view, %{reason: "blocked", note: ^beside})
+      assert text(view, "#propose-action-press-note") == beside
+      assert shown(view) == {["7"], "The person's words"}
+      refute has_element?(view, "#propose-button[disabled]")
     end
 
     test "the split preview cuts long amounts to four decimal places", %{conn: conn} do
@@ -2081,6 +2173,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> text()
+  end
+
+  # What the proposal form's Key and words boxes hold, as the page draws them.
+  defp shown(view) do
+    form = view |> element("#propose-action-form") |> render() |> LazyHTML.from_fragment()
+
+    {form |> LazyHTML.query("#propose-key") |> LazyHTML.attribute("value"),
+     form |> LazyHTML.query("#propose-text") |> LazyHTML.text()}
   end
 
   # The usage an agent reads on the Treasury page.
