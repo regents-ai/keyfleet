@@ -4,8 +4,9 @@ defmodule KeyfleetWeb.BoxLimit do
 
   A browser counts a box's `maxlength` in UTF-16 units, one for most
   letters and two for an emoji or any other letter past U+FFFF, and cuts a
-  paste there without a word, never keeping half a letter, so what it keeps
-  of a paste longer than the box may be one unit short of it. A box
+  paste there without a word, never keeping half of a two-unit letter, so
+  what it keeps of a paste longer than the box may be one unit short of it.
+  An emoji joined from several letters may be cut between them. A box
   therefore takes two units more than the longest value the site takes from
   it (`maxlength/1`), room for one more letter of any kind.
 

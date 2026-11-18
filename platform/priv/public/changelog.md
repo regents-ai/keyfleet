@@ -5,8 +5,8 @@ Changes to Keyfleet, newest first.
 ## 18 November 2026
 
 - **Early access.** The email field takes 256 characters, and anything typed in it
-  counts toward the 254 an address can have at most, spaces, tabs and line ends before or
-  after the address included. More is refused with a note saying it is too long, so
+  counts toward the 254 an address can have at most, spaces and tabs before or after the
+  address included. More is refused with a note saying it is too long, so
   whatever is pasted into the field is answered by the form and an address the field cut
   short is never kept; a 254-character address with a space before or after it is refused
   too. An address with a character that shows as nothing, such as a zero-width space,
@@ -19,14 +19,14 @@ Changes to Keyfleet, newest first.
   box full, 49,738. The boxes of the wallet buttons' forms, a poll's choices, a pass,
   the Worldline filter, a post's numbers, a page's address and the early-access email now
   hold the longest value the site takes from them, an emoji counting as two there, and
-  two characters more. The site refuses anything longer than it takes with a note naming
-  what is too long, so text one of these boxes cut short is not taken as it was cut,
-  unless the cut fell in spaces or blank lines the site leaves out. A proposal's words
-  and a launch's fields are measured as the site keeps them, without the spaces and line
-  ends around them, and ten poll choices of 100 emoji each fit their box. Every other box
-  is unchanged for now. A page opened at an address whose part after `#` is over 256
-  characters drops that part, whatever the rest of the address, and goes live; so does a
-  page whose part after `#` can't be read as text.
+  two characters more. Everything typed in one of these boxes counts, spaces and line
+  ends included, and the site refuses anything longer than it takes with a note naming
+  what is too long, so text one of these boxes cut short is never taken as it was cut.
+  A value at the very most with a space or line end after it is refused as too long; a
+  line break typed inside it counts as one character. Ten poll choices of 100 emoji each
+  fit their box. Every other box is unchanged for now. A page opened at an address whose
+  part after `#` is over 256 characters drops that part, whatever the rest of the
+  address, and goes live; so does a page whose part after `#` can't be read as text.
   The boxes for a Key's number, a post's number and a pass now take digits as text, with
   the number keyboard on phones, and no longer have arrows; a post number below 1 or with
   decimals gets a note saying what is wrong with it. A browser on a network that blocks
@@ -63,21 +63,29 @@ Changes to Keyfleet, newest first.
   `Bearer`, as HTTP allows; any other case was asked to connect.
 - **Wallet buttons.** A press now goes to the wallet that was open when you pressed it,
   even if you open another one before your wallet asks you to approve. A proposal is
-  never held back by what is still in the boxes of a kind you didn't choose.
+  never held back by what is still in the boxes of a kind you didn't choose. A press
+  made just before its button showed why the network makes it certain to fail, such as
+  Sold out, now says so in those same words, where it said only that it couldn't be sent
+  as it stood.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears the note that appears beside the button. If you switch wallets at that
-  moment, the note may clear, but it never says something else. A proposal or an amount
-  the agent sends that is longer than the site takes from that field is refused, naming
-  the field and its most characters, counted as the page's box counts them, an emoji as
-  two, and nothing is sent. The site still counts a proposal's words and a launch's
-  fields in bytes, an emoji as four, and its note says which is too long. When a press
-  can't be sent because of what is in the form, the agent now hears the same words the
-  page shows above the buttons, naming the field and what it takes. A field holding half
-  an emoji is refused before anything is sent, saying it has a broken character, and the
-  page and what you typed stay as they were. The public reads offered to it refuse a
-  field longer than their description allows, or holding half an emoji, in the same way,
-  before asking the site.
+  moment, the note may clear, but it never says something else. What the agent sends is
+  judged on its own, with anything it leaves out taken from your form: a proposal it
+  makes with its own Key reaches your wallet even while your form names a Key you can't
+  propose with, and your form stays as you left it. When the network makes the agent's
+  press certain to fail, such as with a Key that isn't yours, it hears the few words the
+  page shows beside the button for that, and the note says them too. A proposal or an
+  amount the agent sends that is longer than the site takes from that field is refused,
+  naming the field and its most characters, counted as the page's box counts them, an
+  emoji as two, and nothing is sent. The site still counts a proposal's words and a
+  launch's fields in bytes, an emoji as four, and its note says which is too long. When
+  a press can't be sent because of what the agent sent, it now hears the words the page
+  would show above the buttons for that, naming the field and what it takes. A field
+  holding half an emoji is refused before anything is sent, saying it has a broken
+  character, and the page and what you typed stay as they were. The public reads
+  offered to it refuse a field longer than their description allows, or holding half an
+  emoji, in the same way, before asking the site.
 
 ## 17 November 2026
 

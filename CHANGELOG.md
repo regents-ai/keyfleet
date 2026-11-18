@@ -12677,3 +12677,161 @@ step's report).
   `Keyfleet.WalletSteps.Reads.at_head/0`), and those tests give the test chain
   (test/support/chain_stub_client.ex) no chain to read, so the task raises. The tests
   assert only the window. Left as it was.
+
+## 2026-11-18 — Every limited box counted as typed, a held-back press answered in its button's words, an agent's press built from its own values
+
+- Round ten (84945b134) found one medium fault and three low ones.
+  - Proofs R10 Q3 (test/keyfleet_web/adversarial_door_round10_test.exs :143, its control
+    :187, :498, :506 and :589; test/browser/adversarial_round10.spec.ts :85): since
+    b779e5884 the page measured a proposal's words, a launch's fields, a poll's choices
+    and the showcase's titles only once trimmed, so a paste its box cut after spaces or
+    blank lines was taken as cut. Words pasted after two blank lines lost their end and
+    the wallet was asked to sign the 4,000 letters left, with no note; an image link
+    pasted after two spaces was cut and sent; a poll started with its last choice cut; a
+    sample title was taken cut.
+  - Proof R10 Q2 (exs :390, browser :182): the notes said only that spaces before an
+    early-access address count; an address with a zero-width space, a word joiner, a
+    byte order mark or a filler letter before or inside it, or a no-break space inside
+    it, was stored with it; and the text box sends a host such as bücher.de as typed,
+    where the old email box sent its ASCII form (xn--bcher-kva.de).
+  - Proof R10 Q5 (exs :243): a press refused because the chain's state makes its step
+    certain to fail was answered, to the browser's agent and in the note above the
+    buttons, "This can't be sent as it stands. Check the details above, then press
+    again."; and assets/js/page_tools.ts read the person's held-back button before the
+    agent's values were used, so an agent's proposal with its own Key, while the form
+    named a Key the wallet can't propose with, was refused "blocked: Not your Key" with a
+    hint that it comes back when the chain changes, and never reached the wallet.
+- 6b3079ec1 One rule for every box `KeyfleetWeb.BoxLimit` limits: `too_long?/2` counts
+  what was typed, in UTF-16 units, before anything is trimmed, against the longest the
+  site takes, and more is refused with the too-long note. Each box's longest stays as
+  b779e5884 set it, the most its field's own rule takes written in units (a proposal's
+  words 4,000, a poll's choices 2,009, a title 160), and that rule still runs afterwards
+  and may refuse more. The wallet panel holds a proposal's words and a launch's fields
+  to it with every other field before any step is built (`longest/0`); `PollsLive`
+  refuses choices past it before the poll's rule is asked; `ShowcaseLive` does the same
+  for both title boxes before the sample action. The cost, the chief's ruling: a value
+  at exactly the longest with a space or line end after it is refused as too long.
+  3,999 letters and a typed line break, which Chromium sends as one character, reach the
+  wallet; the same words with `\r\n` are 4,001 units and refused, also the chief's
+  ruling.
+- b65bca3f0 The early-access address follows the same rule, as the chief ruled: anything
+  typed around a 254-character address, a space, a tab or a no-break space, makes it too
+  long. `Keyfleet.Early.Signup`'s `sign_up` refuses an address that, once trimmed, holds
+  any space, control character or default-ignorable character
+  (`~r/\A[^\s\p{Cc}\p{DI}]+\z/u`), answered with the ordinary "Enter an email address"
+  note. The comment in config/config.exs that lists the boxes held to the longest the
+  site takes names it. Storing the host in its ASCII form was not built (below).
+- ff6838ac9 A press the wallet panel refuses because `blocked/2` names its step is
+  answered `%{reason: "blocked", note: WalletWords.blocked(reason)}`, the words beside
+  its button, and the note above the buttons shows them; every other refusal is
+  `"step_unknown"` with the note as before (`refusal/3`). Buy's sold-out rule moved from
+  the Buy Key window into `blocked/2`. The browser agent's press goes through the hook
+  with its values over the form's (`pressWith/3`) and asks the server, with a new event
+  `prepare_for_agent`, whenever those differ from the steps the page holds or the button
+  is held back. That event builds the steps from those values for that press alone,
+  judges them with `refusal/3`, remembers the review so a step sent from it is followed
+  (`OnchainSteps.remember/2`), and saves a proposal's words as its steps are handed
+  over; the form, and the steps and figures the page shows, stay as they were.
+  page_tools.ts no longer reads the button, and its blocked hint is "Nothing was sent:
+  the chain's state makes this call certain to fail now. Call again once that changes."
+  Nothing new is blocked: the only steps refused are those `blocked/2` names, whose
+  buttons are disabled. The `proposals_create` tool's description says the press uses
+  its fields and the form stays as the person left it.
+- The public changelog's 18 November entry, edited in place: "Live pages" says
+  everything typed in a limited box counts, spaces and line ends included, and that the
+  most with a space or line end after it is refused, with the sentences about cuts in
+  spaces and words measured without their spaces gone; "Wallet buttons" says a press
+  refused for the network's reason says so in its button's words; "Browser agents" says
+  the agent's press is judged on its own values with the form left as it was, and a
+  blocked press hears its button's words. "Early access" was corrected in b65bca3f0,
+  and no longer names line ends among what counts: the field is one line, and Chromium
+  drops a line end from it before the site sees the address (proof R10 Q2 browser, "the
+  longest with a line end after" is joined).
+- `KeyfleetWeb.BoxLimit`'s moduledoc said a browser cuts a paste "never keeping half a
+  letter"; it now says never half of a two-unit letter, and that an emoji joined from
+  several letters may be cut between them, as round nine's correction found.
+- Corrected, in the entries above:
+  - Round nine's "Not covered" item "Where a field's rule trims first ..., a cut that
+    falls in the spaces or blank lines the rule leaves out leaves a value the rule
+    takes": fixed by 6b3079ec1.
+  - Round nine's "Every box with a limit" list: a proposal's words, a launch's fields, a
+    poll's choices and the showcase's title are counted as typed, in units, before their
+    rule's own count, not "once trimmed"; the early-access address counts everything
+    typed around it, not only the spaces before it.
+  - b779e5884's "A proposal's words and a launch's fields keep their boxes ... and are
+    refused by `VoteSteps`": the panel refuses them first, past their box's longest as
+    typed, and `VoteSteps` may refuse more.
+  - 92955d1f9's "the wallet note as before when they don't, or when the line says
+    nothing (Buy sold out)": a step certain to fail, Buy sold out included, is answered
+    with the words beside its button.
+- Tests, each failing with its fix undone:
+  - `ProposalsPageTest` "words and launch fields at their most are sent, and a space or
+    line end more is refused" (3,999 letters with a line end are sent), and "a link or
+    words a box cut are refused" extended to pastes after spaces and blank lines;
+    `PollsPageTest` "ten choices of 100 emoji each fit the box ..." extended to choices
+    cut after blank lines or spaces; `ShowcaseTest` "a title of 80 emoji fits the
+    sample's boxes and is taken whole; one a box cut is not";
+  - test/browser/live_limits.spec.ts "words and an image link pasted after blank lines
+    or spaces past their box ask no wallet; the longest words do";
+  - `EarlyControllerTest` "the longest address is kept, and with a space, tab or no-break
+    space around it refused" and "an address with a space or an unseen character inside
+    or before it is not an address" (the second fails with the old check back);
+  - `ProposalsPageTest` "an agent's press is judged on its own values, and leaves the
+    person's form as it was"; `ProposalsPageTest` "proposing with a key the wallet may
+    not use stays in view, saying why" and `FleetPageTest` "a refused press shows the
+    note ..." and "a sold-out fleet keeps Buy in view ...", extended to the press's
+    answer and note;
+  - assets/test/page_tools.test.ts "presses a button held back for the person's form
+    with the agent's values, and answers the server's reason";
+    assets/test/onchain_steps.test.ts "a browser agent's press is judged on its own
+    values" (two);
+  - test/browser/live_limits.spec.ts "a browser agent's proposal with its own Key
+    reaches the wallet while the form holds one that can't, and the form stays".
+- The round-ten proofs, run as the reviewer left them:
+  - test/keyfleet_web/adversarial_door_round10_test.exs: 8 of 9 pass, R10 Q5 among them.
+    "R10 Q2: addresses posted with no page, with spaces and other characters around
+    them" fails where it asks that the longest address with a space, tab or no-break
+    space around it be taken; the chief ruled it stays refused.
+  - test/browser/adversarial_round10.spec.ts: 2 of 4 pass, R10 Q3 and R10 Q4. In R10 Q3
+    the cut words and the cut image link are refused, naming the field, and ask no
+    wallet, and the 3,999 letters in ten paragraphs reach it once. "R10 Q2: the
+    early-access box" fails only where it asks that every honest address be taken: the
+    longest after a tab, a space or a no-break space, with a space after it, after three
+    spaces, and one typed after ten spaces are refused as too long, by the chief's
+    ruling; an address with a zero-width space or a line break inside is refused as not
+    an address, and r10@bücher.de is stored as typed. "R10 Q5" fails only on its check
+    that the agent hears what stands beside the person's button: the agent's press with
+    a Key that isn't its person's is answered "blocked", "Not your Key", the note above
+    the buttons says the same and no wallet is asked, but the person's form holds their
+    own Key, so their button is pressable and nothing stands beside it. The words the
+    agent hears are those its own press would show there, by design.
+- The round-eight and round-nine server proofs fail as they did before round ten: run
+  with lib/, config/ and assets/js/ as 84945b134 has them, the same four of 15 fail as
+  now. R8 Q2 (adversarial_door_round8_live_test.exs :153) reads a Keys list cut
+  mid-number with the list's own reader directly, not through the page; R8 Q4
+  (adversarial_door_round8_test.exs :102 and :136) is a caller that sends its body
+  without waiting to be asked, and an HTTP/1.0 or parametered `Expect`, both answered
+  as the public changelog's "Requests" item says; R9 Q2
+  (adversarial_door_round9_test.exs :224) asks for an empty line above the buttons where
+  the decision's summary shows, and since 6b3079ec1 its `\r\n` makes the words 4,001
+  units, refused as too long by the chief's ruling.
+- The round-eight and round-nine browser proofs: test/browser/adversarial_round8.spec.ts
+  3 of 3 pass; test/browser/adversarial_round9.spec.ts 13 of 14 pass, and "R9 Q7: a room
+  post pasted past its box" fails as before, a room's box being one this release does
+  not limit.
+- Not covered:
+  - Storing the early-access host in its ASCII form: the idna library needs a choice of
+    rules (UTS #46 with or without transitional processing, with or without STD3 rules,
+    or plain IDNA 2008), which name some hosts differently (faß.de is xn--fa-hia.de or
+    fass.de), and it exits rather than answering on a host it refuses. Left for the
+    chief.
+  - The telemetry counts every refused press as `step_unknown`, a blocked one too.
+  - The showcase's quantity box (5) still counts as before; the showcase is not a public
+    page.
+  - A proposal's words or a launch's fields padded with spaces past their box's longest
+    are refused on the page; the signed API trims them first and takes them.
+  - An agent's press with values that differ from the form's waits for its steps to be
+    built and, for a proposal, its words to be saved, before the wallet is asked.
+  - An agent's Buy REGENT press whose values match the form's uses the steps the page
+    holds, and clears the form's amount once the wallet has it, as the person's press
+    does.
