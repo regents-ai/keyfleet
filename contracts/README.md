@@ -2069,10 +2069,7 @@ completed purchase either made its random-number request or said it failed.
 
 ### On a fork of Base
 
-Historical figures from the three-phase contracts before Club minting was separated
-on 9 October; phase-step gas must be measured again before deployment.
-
-Measured on 8 October 2026 on a fork of Base at its latest block, against the
+Measured on 18 November 2026 on a fork of Base at its latest block, against the
 real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking, the
 Chainlink VRF coordinator and the real Regents Club Pass, with the collection a
 consumer of a funded subscription so a key that draws makes its real request.
@@ -2082,28 +2079,30 @@ included, every call run as a transaction of its own
 
 | Call | Gas |
 | --- | --- |
-| `createFoundingFleet`, fleet 1 | 11,804,071 |
-| `createFoundingFleet`, fleet 2 | 11,787,005 |
-| `createFoundingFleet`, fleet 3 | 11,809,183 |
-| `createFoundingFleet`, fleet 4 | 11,787,040 |
-| `createFoundingFleet`, fleet 5, the Regents Club | 11,787,108 |
-| `advancePhase`, to phase 1 | 70,130 |
-| `advancePhase`, to phase 3 | 30,908 |
-| `purchase`, Classic #1's first key, dealt by number | 500,971 |
-| `purchase`, a later key | 297,990 |
-| `purchase`, a key that draws, with its request | 390,684 |
-| `give`, the Regents Club's first 80 keys to the real Pass holders | 13,227,593 |
-| `convert(250000000)`, one piece through both pools | 717,111 |
-| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 12,204,507 |
+| `createFoundingFleet`, fleet 1 | 11,892,268 |
+| `createFoundingFleet`, fleet 2 | 11,892,846 |
+| `createFoundingFleet`, fleet 3 | 11,915,592 |
+| `createFoundingFleet`, fleet 4 | 11,894,063 |
+| `createFoundingFleet`, fleet 5, the Regents Club | 11,914,800 |
+| `advancePhase`, to phase 1 | 70,455 |
+| `advancePhase`, to phase 2 | 55,685 |
+| `advancePhase`, to phase 3 | 107,563 |
+| `advancePhase`, to phase 4 | 40,781 |
+| `purchase`, Classic #1's first key, dealt by number | 508,678 |
+| `purchase`, a later key | 305,697 |
+| `purchase`, a key that draws, with its request | 422,494 |
+| `give`, the Regents Club's first 80 keys to the real Pass holders | 13,236,393 |
+| `convert(250000000)`, one piece through both pools | 860,968 |
+| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 12,322,413 |
 | `present`, one key | 110,991 |
-| `propose`, one payment | 243,206 |
-| `castBallot`, one key | 118,977 |
-| `sendProtocolShare`, two sales owed | 142,972 |
-| `runDailySplit`, ETH, REGENT and USDC | 537,096 |
-| `claim`, one key in three assets | 274,456 |
-| `transferFrom`, a key with three assets waiting | 286,448 |
-| `execute`, a one-payment proposal | 93,893 |
-| `executeBatch`, one payment | 56,246 |
+| `propose`, one payment | 258,410 |
+| `castBallot`, one key | 146,760 |
+| `sendProtocolShare`, two sales owed | 178,715 |
+| `runDailySplit`, ETH, REGENT and USDC | 537,448 |
+| `claim`, one key in three assets | 334,222 |
+| `transferFrom`, a key with three assets waiting | 291,314 |
+| `execute`, a one-payment proposal | 94,003 |
+| `executeBatch`, one payment | 56,356 |
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. The five transactions that deploy the

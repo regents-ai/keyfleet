@@ -12002,3 +12002,20 @@ step's report).
   more Keys than that, that the first Key one of them sells past its deck stops the record step
   for every fleet until the Regents Safe owns the randomness subscription and it lists the
   collection, and that the phase-3 step does not check the subscription. Nothing else changes.
+
+## 2026-11-18 — The Base gas suite steps through the four phases
+
+- `contracts/test/fork/KeyfleetBaseGas.t.sol` stopped at the step to phase 2 (`FleetsMissing(2, 1)`)
+  since the Safe's steps began creating the founding fleets phase by phase: it created every
+  fleet at once and then advanced the phases. It now does as the Safe will, each phase's founding
+  fleets and then the next phase, the Regents Club in phase 0, Classic #1 in phase 1 and the
+  other three in phase 2, until phase 4 is open, and it passes again with `--isolate` against
+  Base's public endpoint.
+- The figures in `contracts/README.md` ("On a fork of Base") are measured again on 18 November
+  2026, and the note that they were historical figures from the three-phase contracts is gone.
+  The steps to phases 2 and 4 are measured for the first time (55,685 and 40,781 gas), and the
+  step to phase 3 now costs 107,563, from 30,908. Each founding fleet's creation rose by 88,197
+  to 127,692 gas, to about 11.9 million; `convert` rose by 143,857, `createFleet` by 117,906,
+  `claim` by 59,766, `sendProtocolShare` by 35,743, the drawing purchase by 31,810, `castBallot`
+  by 27,783, `propose` by 15,204, the Regents Club batch by 8,800, each plain purchase by 7,707
+  and `transferFrom` by 4,866; the others moved by 352 gas or less, and `present` did not move.

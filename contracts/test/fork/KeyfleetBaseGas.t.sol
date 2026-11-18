@@ -43,16 +43,19 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
             return;
         }
 
-        // The Safe's calls: the five founding fleets, each its own transaction, and phases 1 and 2.
-        KeyfleetSafeSteps.SafeCall[] memory founding = safeSteps.foundingFleetCalls(_manifest(), factory);
-        for (uint256 i = 0; i < founding.length; ++i) {
-            _asSafe(founding[i]);
-            _log(string.concat("createFoundingFleet, ", founding[i].name));
+        // The Safe's calls with the release's own Safe steps, each its own transaction: the founding
+        // fleets each phase needs, then the next phase, until the last is open. The Safe took the
+        // subscription and listed the collection in `setUp`, as the step to phase 4 requires.
+        while (keys.phase() < keys.FINAL_PHASE()) {
+            KeyfleetSafeSteps.SafeCall[] memory founding = safeSteps.foundingFleetCalls(_manifest(), factory);
+            for (uint256 i = 0; i < founding.length; ++i) {
+                _asSafe(founding[i]);
+                _log(string.concat("createFoundingFleet, ", founding[i].name));
+            }
+            string memory step = string.concat("advancePhase, to phase ", vm.toString(keys.phase() + 1));
+            _advancePhase();
+            _log(step);
         }
-        _advancePhase();
-        _log("advancePhase, to phase 1");
-        _advancePhase();
-        _log("advancePhase, to phase 2");
 
         // Purchases on Classic #1: its first sale, then a later one, each booking the treasury's
         // part. Both keys hold their deck's card of the same number and ask for no random word.
@@ -70,10 +73,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         factory.REGENT_BUYER().convert(FULL_PIECE);
         _log("convert, one piece through both pools");
 
-        // A creator's own fleet, once the collection reaches its last phase.
-        _advancePhase();
-        _advancePhase();
-        _log("advancePhase, to phase 4");
+        // A creator's own fleet, in the collection's last phase.
         KeyfleetManager created = _createFleet();
 
         // A key that draws: the keeper records the new fleet's deck, then its key 2 is bought and
