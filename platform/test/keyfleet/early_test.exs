@@ -40,6 +40,48 @@ defmodule Keyfleet.EarlyTest do
     assert list() == []
   end
 
+  # Costly failure: a character drawn as nothing or as a blank is kept inside
+  # an address, so one person is on the list twice and the kept address may
+  # never reach them.
+  test "an address holding anything but letters, marks, digits and address punctuation is refused" do
+    # A Braille blank, an interlinear anchor, an Egyptian joiner, a Hangul
+    # filler (a letter), a variation selector (a mark) and a bracket.
+    for cp <- [0x2800, 0xFFF9, 0x13430, 0x3164, 0xFE0F, ?[],
+        typed <- [
+          <<cp::utf8>> <> "ada@example.com",
+          "ada" <> <<cp::utf8>> <> "@example.com",
+          "ada@exa" <> <<cp::utf8>> <> "mple.com",
+          "ada@example.com" <> <<cp::utf8>>
+        ] do
+      assert {:error, %Ash.Error.Invalid{}} = Early.sign_up(typed), inspect(typed)
+    end
+
+    assert {:error, %Ash.Error.Invalid{}} = Early.sign_up("ada@[192.0.2.1]")
+    assert list() == []
+  end
+
+  test "an ordinary address in any script is kept, and so is every punctuation mark an address takes" do
+    typed = [
+      "first.last+tag@sub.example.co.uk",
+      "a!#$%&'*+-/=?^_`{|}~b@example.com",
+      "josé@exámple.es",
+      "иван@пример.испытание",
+      "مستخدم@مثال.إختبار",
+      "משתמש@דוגמה.ישראל",
+      "कुमार@उदाहरण.भारत",
+      "สมชาย@ตัวอย่าง.ไทย",
+      "用户@例子.中国",
+      "ユーザー@例え.テスト",
+      "사용자@예시.한국",
+      "jordi@col·legi.cat",
+      "ada@mail。example.com"
+    ]
+
+    for address <- typed, do: assert({:ok, _signup} = Early.sign_up(address), address)
+
+    assert length(list()) == length(typed)
+  end
+
   test "an address of exactly 254 bytes fits" do
     address = String.duplicate("a", 242) <> "@example.com"
     assert byte_size(address) == 254

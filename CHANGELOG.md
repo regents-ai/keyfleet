@@ -12903,3 +12903,70 @@ step's report).
 - Not covered: fly-sentinel's docs/metrics-contract.md lists the `reason` values of
   `health_wallet_send_failures_total` and does not yet name `blocked`; that file is in
   the fly-sentinel repository, not changed here.
+
+## 2026-11-18 — An early-access address holds only what an address may hold
+
+- Round eleven (a3ae4db06) found that the list of characters an address may not hold
+  could be chased for ever: proof R11 Q2 (test/keyfleet_web/adversarial_door_round11_test.exs
+  :53) stored addresses with a Braille blank (U+2800), an interlinear anchor (U+FFF9) or
+  an Egyptian hieroglyph joiner (U+13430) inside them, none a space, a control character
+  or default-ignorable.
+- `Keyfleet.Early.Signup`'s `sign_up` now takes only what an address may hold, once
+  trimmed, in place of that list. Allowed: letters (`\p{L}`), combining marks (`\p{M}`)
+  and decimal digits (`\p{Nd}`) in any script; RFC 5322's atext punctuation
+  ``!#$%&'*+-/=?^_`{|}~``, the dot and the @; the three other dots a host may be typed
+  with, which `StoredEmail` reads as the dot (U+3002, U+FF0E, U+FF61); and the nine
+  characters RFC 5892 takes in a host beyond letters, marks and digits, its exceptions
+  and contextual characters (U+00B7 for Catalan's l·l, U+0375, U+05F3, U+05F4, U+30FB,
+  U+0F0B, U+06FD, U+06FE, U+3007). Nothing default-ignorable (`\p{DI}`) among them, which
+  takes out the Hangul fillers (letters) and the variation selectors and combining
+  grapheme joiner (marks). Anything else is answered with the ordinary "Enter an email
+  address" note. The nine RFC 5892 characters go beyond the brief's list of classes:
+  without them jordi@col·legi.cat and the like, which the host rules take, would be
+  refused. A symbol or number the host rules write as letters or digits, such as ℡
+  (tel) or a superscript 2, was taken before and is now refused (proof R11 Q2 hosts:
+  r11h33@℡.com was stored as r11h33@tel.com).
+- The chief's ruling on hosts: one rule. Hosts are written in ASCII and checked as
+  before (UTS #46, non-transitional, with STD3 rules), and the real addresses this
+  refuses stay refused. `StoredEmail`'s moduledoc said browsers use these rules; it now
+  says they are the rules the site applies, which the URL standard browsers follow
+  leaves STD3 off, and names some of the hosts they refuse.
+- The public changelog's 18 November entry, "Early access", edited in place: what an
+  address may hold, and that an address whose part after the @ isn't an ordinary domain
+  name (an underscore or an emoji in it, or an IP address in brackets) can't join.
+- Tests (`Keyfleet.EarlyTest`): "an address holding anything but letters, marks, digits
+  and address punctuation is refused" (U+2800, U+FFF9, U+13430, a Hangul filler, a
+  variation selector and a bracket, before, inside the local part, inside the host and
+  after; and a bracketed IP), failing with the old check back; "an ordinary address in
+  any script is kept, and so is every punctuation mark an address takes" (Latin with
+  accents, Cyrillic, Arabic, Hebrew, Devanagari, Thai, Chinese, Japanese, Korean,
+  col·legi.cat, an ideographic dot in the host, and every atext mark).
+- Corrected, in the entries above:
+  - 6f02540b0's "store the host by the rules browsers use today, UTS #46,
+    non-transitional, with STD3 rules": those are the rules this site applies; browsers
+    leave STD3 off.
+  - 6f02540b0's "Not covered" list of addresses now refused gains: a host written as an
+    emoji's `xn--` name (xn--n3h.net, xn--i-7iq.ws, xn--e28h.com, refused as ☃.net,
+    i❤.ws and 😀.com are), a host with two hyphens third and fourth that is not a valid
+    `xn--` label (ab--cd.com), and a bracketed IP ([192.0.2.1]), which the old pattern
+    took.
+  - b65bca3f0's "refuses an address that, once trimmed, holds any space, control
+    character or default-ignorable character": replaced by the list of what it may hold.
+- The round-eleven address proofs, run as the reviewer left them: "R11 Q2: a character
+  drawn as nothing" passes. "R11 Q2: hosts in every spelling" fails where it asks that
+  xn--n3h.net, xn--i-7iq.ws, xn--e28h.com and mail_relay.example.com be taken; the chief
+  ruled they stay refused. "R11 Q2: two spellings of one address" fails where it asks
+  that a letter typed composed and the same letter typed as letter and accent be one
+  entry (below).
+- No table, column or row changed, and no migration.
+- Not covered:
+  - An address stored before 6f02540b0 with its host in Unicode (ada@bücher.de) is not
+    matched by its ASCII form: the same address left again is stored as
+    ada@xn--bcher-kva.de, a second entry.
+  - A letter typed composed (é, U+00E9) and the same letter typed as a letter and an
+    accent (e, U+0301) before the @ are two entries; in the host they are one, the host
+    rules composing them first.
+  - A letter or mark drawn as nothing that is not default-ignorable would still be taken;
+    none is known here.
+  - An address typed with only ideographic dots in its host (例え。テスト) is refused as
+    before: the attribute's rule wants an ASCII dot after the @ as typed.

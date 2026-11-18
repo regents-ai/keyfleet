@@ -9,8 +9,12 @@ Changes to Keyfleet, newest first.
   address included. More is refused with a note saying it is too long, so
   whatever is pasted into the field is answered by the form and an address the field cut
   short is never kept; a 254-character address with a space before or after it is refused
-  too. An address with a character that shows as nothing, such as a zero-width space,
-  before or inside it, or a space of any kind inside it, is refused as not an address. It
+  too. An address may hold letters, accents and digits in any script, the few signs some
+  languages write inside a domain name, such as the middle dot of Catalan's l·l, and the
+  dot, the @ and the punctuation email allows, such as + or '. Anything else, such as a
+  character that shows as nothing or a space of any kind inside the address, is refused
+  as not an address. An address whose part after the @ isn't an ordinary domain name
+  can't join: one with an underscore or an emoji in it, or an IP address in brackets. It
   still brings up the email keyboard on phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message

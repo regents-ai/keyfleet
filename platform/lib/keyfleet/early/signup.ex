@@ -4,9 +4,10 @@ defmodule Keyfleet.Early.Signup do
 
   An address is stored trimmed and lowercased, with its host in ASCII form
   (`Keyfleet.Early.Signup.StoredEmail`), so each one is on the list once
-  whatever its case or the spelling of its host, and one with a character
-  inside it that shows as nothing or as a space is refused. Leaving an address
-  that is already there changes nothing.
+  whatever its case or the spelling of its host. An address holds only
+  letters, marks and digits in any script and the punctuation an address
+  takes; anything else, a character drawn as nothing or a space among them,
+  is refused. Leaving an address that is already there changes nothing.
   """
   use Ash.Resource,
     domain: Keyfleet.Early,
@@ -24,10 +25,21 @@ defmodule Keyfleet.Early.Signup do
     create :sign_up do
       accept [:email]
 
-      # Nothing unseen inside the address once trimmed: no space of any kind,
-      # no control character and nothing drawn as nothing, such as a
-      # zero-width space.
-      validate match(:email, ~r/\A[^\s\p{Cc}\p{DI}]+\z/u)
+      # Only what an address may hold, once trimmed: letters, combining marks
+      # and decimal digits in any script; the punctuation the mail standard
+      # takes unquoted before the @ (RFC 5322's atext), the dot and the @; the
+      # three other dots a host may be typed with (`StoredEmail`); and the
+      # nine characters the host standard takes beyond letters, marks and
+      # digits (RFC 5892's exceptions and contextual rules: the middle dot of
+      # Catalan's l·l, the Greek lower numeral sign, the Hebrew geresh and
+      # gershayim, the katakana middle dot, the Tibetan tsheg, two Arabic
+      # signs and the ideographic zero). Nothing default-ignorable, which
+      # takes out the Hangul fillers and the variation selectors, letters and
+      # marks though they are.
+      validate match(
+                 :email,
+                 ~r/\A(?:(?!\p{DI})[\p{L}\p{M}\p{Nd}!#$%&'*+\-\/=?^_`{|}~.@\x{3002}\x{FF0E}\x{FF61}\x{B7}\x{375}\x{5F3}\x{5F4}\x{30FB}\x{F0B}\x{6FD}\x{6FE}\x{3007}])+\z/u
+               )
 
       change Keyfleet.Early.Signup.StoredEmail
 
