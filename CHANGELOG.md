@@ -11239,3 +11239,13 @@ a scratch walk that is not kept.
   `hub_run/2` hands it back as the request's `HubSilentError`, which the four callers
   leave as reported. The door's wait test counts two saved reports for the door's request
   and an agent's (three before), and letting someone in counts one (two before).
+
+## 2026-11-17 — Two more checks of how the notebook door streams an answer
+
+- A hub that goes quiet partway through its answer, past the door's wait for it, gets
+  the reader's connection dropped, so the answer never looks whole; with a wait longer
+  than the silence the same check fails, as the reader then gets a whole answer.
+- A compressed answer reaches its reader byte for byte with its `content-encoding`. Req
+  0.7.5 never unpacks an answer passed on through `into:`, nor one it isn't asked to
+  (`compressed:`), so this guards the header and any later change to how the door reads
+  the hub's answer.

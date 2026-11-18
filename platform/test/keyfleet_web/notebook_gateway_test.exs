@@ -1651,6 +1651,74 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
              )
   end
 
+  # Costly failure: a hub that goes quiet partway through its answer leaves the
+  # reader holding what came as if it were the whole answer.
+  @tag :capture_log
+  test "an answer whose hub goes quiet midway is cut off, never ended as if whole", c do
+    hub =
+      server(fn conn ->
+        case conn.request_path do
+          "/api/v1/projects/proj-fleet/notebooks/nb-quiet" ->
+            {:ok, conn} = conn |> send_chunked(200) |> chunk("first")
+            Process.sleep(1_000)
+            conn
+
+          _other ->
+            hub_answer(conn, c.holder)
+        end
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Notebooks.config()
+      |> Keyword.put(:fleets, %{@fleet => hub})
+      |> Keyword.put(:hub_timeout_ms, 200)
+    )
+
+    cookie = enter!(c.holder)
+
+    assert {:error, %Req.TransportError{}} =
+             Req.get(
+               SignedAgentHelpers.serve!(:site, @endpoint) <>
+                 "/api/v1/projects/proj-fleet/notebooks/nb-quiet",
+               headers: [{"host", @host}, {"cookie", "__Host-kf_notebooks=" <> cookie}],
+               retry: false
+             )
+  end
+
+  # Costly failure: a compressed answer is unpacked on its way, or loses the
+  # header saying how it is packed, and the reader can't read it.
+  test "a compressed answer reaches its reader byte for byte, still labelled compressed", c do
+    packed = :zlib.gzip("<p>orbit</p>")
+
+    hub =
+      server(fn conn ->
+        case conn.request_path do
+          "/api/v1/projects/proj-fleet/notebooks/nb-packed" ->
+            conn
+            |> put_resp_content_type("text/html")
+            |> put_resp_header("content-encoding", "gzip")
+            |> send_resp(200, packed)
+
+          _other ->
+            hub_answer(conn, c.holder)
+        end
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    answer =
+      get_notebook(@host, "/api/v1/projects/proj-fleet/notebooks/nb-packed", enter!(c.holder))
+
+    assert {answer.status, answer.resp_body} == {200, packed}
+    assert get_resp_header(answer, "content-encoding") == ["gzip"]
+  end
+
   # Costly failure: a saved page too large to keep is cut off, or handed out
   # with an address Keyfleet never kept it under.
   test "a saved page past what Keyfleet keeps streams back whole, with no address", c do
