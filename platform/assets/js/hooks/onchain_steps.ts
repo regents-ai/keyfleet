@@ -43,8 +43,6 @@ type OnchainStepsHook = Hook & {
   tool?: Promise<AbortController | undefined>
   refresh?: () => void
   walletChanged?: () => void
-  // Whether the component's lost line is showing.
-  shown: boolean
 }
 
 // How many of a button's presses the wallet still has. The mark comes off when
@@ -63,14 +61,6 @@ const presses = new WeakMap<HTMLElement, number>()
 export const OnchainSteps: Hook = {
   mounted(this: OnchainStepsHook) {
     const push: Push = (event, payload) => void this.pushEventTo(this.el, event, payload)
-    // A press that can't reach the server is said on the page itself. The
-    // wallet the server should act for is told again when the connection is
-    // back (`reconnected`).
-    this.shown = false
-    const say = (shown: boolean) => {
-      this.shown = shown
-      lost(this.el, shown)
-    }
 
     // Every hook on the page hears this event; keep only this component's review.
     // No review means none is built yet, or no wallet may send.
@@ -88,7 +78,7 @@ export const OnchainSteps: Hook = {
       const name = button.dataset.onchainStep!
       const release = mark(button)
       const asks = asksServer(this.review, name, form)
-      say(false)
+      lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
       // proposal's words are saved then. The press never waits on this.
@@ -100,7 +90,7 @@ export const OnchainSteps: Hook = {
           return await press(this.review, name, push)
         }
         const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
-        if (result?.status !== "fulfilled") return lostPress(say, name)
+        if (result?.status !== "fulfilled") return lostPress(this.el, name)
         const reply = result.value.reply as {review?: Review; send?: string}
         if (reply.review && reply.send) {
           heard()
@@ -109,7 +99,7 @@ export const OnchainSteps: Hook = {
         push("step_failed", {step: name, reason: "step_unknown"})
         return {reason: "step_unknown"}
       } catch {
-        return lostPress(say, name)
+        return lostPress(this.el, name)
       } finally {
         release()
         // The press may have spent funds or changed what the wallet allows.
@@ -153,13 +143,10 @@ export const OnchainSteps: Hook = {
   // A page that rejoins gets a fresh component on the server, which no longer
   // knows the active wallet or the review this hook holds. The review is let go
   // and the wallet told again, so the next press is sent from a review the
-  // server remembers.
-  //
-  // The rejoin redraws the component, which hides its lost line again; when
-  // this hook was showing it, it is put back. The next press clears it.
+  // server remembers. The rejoin redraws the component, which hides its lost
+  // line: that press was made before the page was back.
   reconnected(this: OnchainStepsHook) {
     this.review = undefined
-    lost(this.el, this.shown)
     this.walletChanged?.()
   },
 
@@ -252,8 +239,8 @@ function lost(root: HTMLElement, shown: boolean): void {
 // A press that could not reach the server: the page says so, and so does the answer.
 // The server never heard the press, so it cannot say why; the page does, and
 // reports it.
-function lostPress(say: (shown: boolean) => void, step: string): "lost" {
-  say(true)
+function lostPress(root: HTMLElement, step: string): "lost" {
+  lost(root, true)
   report({name: "press.unsent", where: step, outcome: "lost"})
   return "lost"
 }

@@ -11238,9 +11238,12 @@ launch, 22 passed; the whole chain project, 139 passed; the device walks, 72 pas
   transaction is not the one this page prepared"), and a press that asked the server for its
   steps sent nothing and said the wallet app had no wallet open, until a reload.
   `platform/assets/js/hooks/onchain_steps.ts` now has the template's `reconnected` callback
-  (a5c80d5a): it lets go of the review it holds, puts back its lost line if it was showing,
-  and tells the new server process the open wallet again. Keyfleet's component has only the
-  lost line, so the hook keeps whether that one is showing. `account_wallets.ts` and
+  (a5c80d5a): it lets go of the review it holds and tells the new server process the open
+  wallet again. Unlike the template's, it does not put back its lost line: the rejoin redraws
+  the component and hides the line, which spoke of a press made before the page was back. Put
+  back, the line was hidden again by the server's next render within milliseconds and
+  flashed at every later reconnect until the next press (the review's second round).
+  `account_wallets.ts` and
   `privy_showcase.ts`, which also report the open wallet on mount, report it again on
   `reconnected`. Two kept walks in `platform/test/browser/wallet_buttons.spec.ts` drop and
   restore the socket, then claim: one with the steps the page had, one that asks the server
