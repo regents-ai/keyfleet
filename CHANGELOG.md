@@ -12390,3 +12390,26 @@ step's report).
   says that on Base the keeper is the Regents Safe and a deck there is recorded by a Safe
   transaction; the list item also says the refresh comes from the keeper or the key's holder.
   Nothing else in that document changed. Documents only; no script or contract changed.
+
+## 2026-11-18 — The Safe-step suite checks the values the descriptions name and every late landing
+
+- `contracts/test/KeyfleetSafeSteps.t.sol` now reads each value a founding or phase description
+  names from its place in the text and checks it is the real one: the fleet and the factory a
+  founding call names and is made on, the chain to read, the collection, the phase a phase call
+  names, its opening and the phase to read, and for the founding calls for fleets 2 to 4 and the
+  calls to phases 3 and 4 the randomness subscription, its coordinator and, on Base, the Regents
+  Safe. A description naming another chain, or the collection where the factory or coordinator
+  goes, now fails the suite.
+- A new test lands each of the four phase files after other files have moved the collection on
+  from the phase it was written in, from every later phase, with the subscription by then neither
+  the Safe's nor listing the collection: up to phase 3 it moves the collection one more phase,
+  opening at the file's own time with the sales that phase opens (Classic #1, or Syndicate #1,
+  Accelerant #1 and Cascade #1); in phase 4 it is refused (`NoNextPhase`); from its own opening
+  time it is refused in every phase.
+- Two new tests, on Base and off it, show the founding step in phase 2 with fleets 2 to 4 all
+  created preparing nothing, without refusing, while the subscription is not ready.
+- Checked by mutation in a scratch copy: naming the collection as the factory, another chain in
+  either description, another opening, another subscription or the collection as the coordinator,
+  a phase call opening later than its file says, a collection that lets a phase call land in
+  phase 4, and a founding step that checks the subscription in phase 2 with nothing missing each
+  fail the suite. Tests only; no script or contract changed.

@@ -226,6 +226,104 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(coordinator.subscriptionOwner(subscriptionId), keeper, "With the subscription not the Safe's");
     }
 
+    /// @dev On Base, each phase file written by the step, landed once other files have moved the
+    /// collection on from the phase it was written in, moves the collection one more phase from each
+    /// phase up to phase 3, opening it at the file's own time with the sales that phase opens, though
+    /// by then the subscription is neither the Safe's nor lists the collection. In phase 4 it is
+    /// refused, and from its own opening time it is refused in every phase.
+    function test_aPhaseFileLandedAfterItsPhaseHasMovedOnMovesTheCollectionOneMorePhase() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory base = _deployListed(manifest);
+        _found(manifest, base);
+        for (uint256 file = 1; file <= base.KEYS().FINAL_PHASE(); ++file) {
+            uint256 start = vm.snapshotState();
+            _landAfterItsPhaseMovedOn(manifest, base, file);
+            vm.revertToState(start);
+        }
+    }
+
+    /// @dev Writes the file for phase `file` in phase `file - 1`, opening in 20 days, then moves the
+    /// collection on by files written as each phase comes, each opening in 10 days, and in every
+    /// phase it reaches lands the first file, and lands it again at its own opening time, putting the
+    /// chain back after each.
+    function _landAfterItsPhaseMovedOn(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, uint256 file)
+        private
+    {
+        KeyfleetKeys keys = factory.KEYS();
+        address signers = manifest.bindings.safe;
+        while (keys.phase() + 1 < file) {
+            _openPhase(manifest, factory);
+        }
+        uint64 late = uint64(vm.getBlockTimestamp() + 20 days);
+        uint64 sooner = uint64(vm.getBlockTimestamp() + 10 days);
+        KeyfleetSafeSteps.SafeCall[] memory stale = safeSteps.advancePhaseCalls(manifest, factory, late);
+        for (uint256 phase = file; phase <= keys.FINAL_PHASE(); ++phase) {
+            _make(safeSteps.advancePhaseCalls(manifest, factory, sooner), signers);
+            assertEq(keys.phase(), phase, "Moved on by another file");
+
+            uint256 moved = vm.snapshotState();
+            _unready(keys);
+            if (phase == keys.FINAL_PHASE()) {
+                vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
+                this.make(stale, signers);
+            } else {
+                _make(stale, signers);
+                assertEq(keys.phase(), phase + 1, "One more phase");
+                assertEq(keys.phaseOpensAt(), late, "Opening at the file's own time");
+                if (phase + 1 == 2) assertEq(keys.salesOpenAt(1), late, "Classic #1's sales");
+                if (phase + 1 == 3) {
+                    for (uint256 id = 2; id <= 4; ++id) {
+                        assertEq(keys.salesOpenAt(id), late, "Syndicate, Accelerant and Cascade #1's sales");
+                    }
+                }
+            }
+            vm.revertToState(moved);
+
+            moved = vm.snapshotState();
+            vm.warp(late);
+            if (phase == keys.FINAL_PHASE()) vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
+            else vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OpensAtInvalid.selector, late));
+            this.make(stale, signers);
+            vm.revertToState(moved);
+        }
+    }
+
+    /// @dev Leaves `keys`'s randomness subscription neither listing the collection nor owned by the
+    /// Regents Safe.
+    function _unready(KeyfleetKeys keys) private {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        MockVRFCoordinatorV2Plus standIn = MockVRFCoordinatorV2Plus(address(coordinator));
+        vm.prank(standIn.subscriptionOwner(subscriptionId));
+        standIn.removeConsumer(subscriptionId, address(keys));
+        standIn.openSubscription(subscriptionId, keeper);
+    }
+
+    /// @dev Off Base, in phase 2 with fleets 2 to 4 all created, the founding step prepares nothing
+    /// and does not refuse, though the subscription no longer lists the collection.
+    function test_withNoFoundingFleetMissingTheStepInPhaseTwoPreparesNothingWhateverTheSubscription() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        _found(manifest, deployed);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
+        assertEq(collection.phase(), 2);
+        _unready(collection);
+        assertEq(safeSteps.foundingFleetCalls(manifest, deployed).length, 0, "Nothing to prepare");
+    }
+
+    /// @dev The same on Base, with the subscription another account's.
+    function test_onBaseWithNoFoundingFleetMissingTheStepInPhaseTwoPreparesNothingWhateverTheSubscription() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory base = _deployListed(manifest);
+        _found(manifest, base);
+        _openPhase(manifest, base);
+        _openPhase(manifest, base);
+        assertEq(base.KEYS().phase(), 2);
+        _unready(base.KEYS());
+        assertEq(safeSteps.foundingFleetCalls(manifest, base).length, 0, "Nothing to prepare");
+    }
+
     /// @dev Off Base the founding step in phase 2, which founds Syndicate, Accelerant and Cascade,
     /// is refused while the subscription does not list the collection, since phase 3 cannot open
     /// without them, and prepared once it does, whoever owns it. The Regents Club and Classic are
@@ -289,7 +387,9 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
 
     /// @dev `calls`, the founding step in phase 2, creates fleets 2, 3 and 4 in order, and each
     /// call's description names the collection and phase 2, then exactly what the phase-3 call's
-    /// asks the signers to read of the subscription, its owner included when `namesOwner`.
+    /// asks the signers to read of the subscription, its owner included when `namesOwner`. Each
+    /// value it names is the real one: the fleet, the factory it calls, the chain, the collection,
+    /// the subscription and its coordinator, and on Base the Regents Safe.
     function _assertFoundingReads(
         KeyfleetManifest.Manifest memory manifest,
         KeyfleetFactory factory,
@@ -311,7 +411,39 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
                 "The subscription, read as for phase 3"
             );
             assertEq(_names(description, "Regents Safe"), namesOwner, "Its owner, on Base");
+            assertEq(vm.parseUint(_named(description, "Creates founding fleet ")), index + 2, "The fleet it creates");
+            assertEq(calls[index].to, address(factory), "Called on the factory");
+            assertEq(vm.parseAddress(_named(description, " through the factory ")), address(factory), "The factory");
+            assertEq(vm.parseUint(_named(description, " on chain ")), block.chainid, "The chain to read");
+            assertEq(
+                vm.parseAddress(_named(description, " the collection ")), address(factory.KEYS()), "The collection"
+            );
+            _assertSubscriptionNamed(description, factory.KEYS(), namesOwner);
         }
+    }
+
+    /// @dev That `description` names `keys`'s randomness subscription and its coordinator as the
+    /// collection names them, and, when `namesOwner`, the Regents Safe as the owner to read.
+    function _assertSubscriptionNamed(string memory description, KeyfleetKeys keys, bool namesOwner) private view {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        assertEq(vm.parseUint(_named(description, "randomness subscription ")), subscriptionId, "The subscription");
+        assertEq(vm.parseAddress(_named(description, " on the coordinator ")), address(coordinator), "Its coordinator");
+        if (namesOwner) {
+            assertEq(
+                vm.parseAddress(_named(description, "that the Regents Safe ")),
+                safeSteps.BASE_REGENTS_SAFE(),
+                "The owner to read"
+            );
+        }
+    }
+
+    /// @dev The value `text` names right after the first `marker`, without the comma or full stop
+    /// that follows it.
+    function _named(string memory text, string memory marker) private pure returns (string memory value) {
+        string[] memory parts = vm.split(text, marker);
+        require(parts.length > 1, string.concat("Nothing named after: ", marker));
+        value = vm.split(parts[1], " ")[0];
+        value = vm.replace(vm.replace(value, ",", ""), ".", "");
     }
 
     /// @dev Both steps check the manifest first.
@@ -366,7 +498,9 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     /// opening time, says what the file does once the collection has left the phase it was written
     /// in (checked by landing it so), and only for the calls to phases 3 and 4 names the
     /// subscription the signers read first, by its id and its coordinator, the balance it must
-    /// hold, and the Safe as its owner when `namesOwner`.
+    /// hold, and the Safe as its owner when `namesOwner`. Each value it names is the real one: the
+    /// collection, the phase, the opening, the chain, the phase to read and, for phases 3 and 4,
+    /// the subscription, its coordinator and on Base the Regents Safe.
     function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
         private
     {
@@ -382,9 +516,15 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             assertEq(calls[0].name, string.concat("phase-", vm.toString(phase)), "Its phase");
             string memory description = vm.parseJsonString(file, ".meta.description");
             assertEq(description, calls[0].description, "The call's own description");
-            assertTrue(_names(description, vm.toString(address(keys))), "The collection");
-            assertTrue(_names(description, vm.toString(uint256(opensAt))), "The opening");
+            assertEq(vm.parseAddress(_named(description, "Moves the collection ")), address(keys), "The collection");
+            assertEq(vm.parseUint(_named(description, " to phase ")), phase, "The phase it names");
+            assertEq(vm.parseUint(_named(description, "opening at Unix time ")), opensAt, "The opening");
+            assertEq(vm.parseUint(_named(description, " on chain ")), manifest.chainId, "The chain to read");
+            assertEq(
+                vm.parseUint(_named(description, "that the collection is in phase ")), phase - 1, "The phase to read"
+            );
             bool reads = phase >= safeSteps.FIRST_DRAWING_PHASE();
+            if (reads) _assertSubscriptionNamed(description, keys, namesOwner);
             _assertLandedAfterAnother(calls, description, keys, signers, phase);
             assertEq(
                 _names(description, string.concat("subscription ", vm.toString(subscriptionId))),
@@ -424,12 +564,8 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         uint256 phase
     ) private {
         uint256 before = vm.snapshotState();
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
-        MockVRFCoordinatorV2Plus standIn = MockVRFCoordinatorV2Plus(address(coordinator));
         _make(calls, signers);
-        vm.prank(standIn.subscriptionOwner(subscriptionId));
-        standIn.removeConsumer(subscriptionId, address(keys));
-        standIn.openSubscription(subscriptionId, keeper);
+        _unready(keys);
 
         for (uint256 landed = phase; landed < keys.FINAL_PHASE(); ++landed) {
             assertTrue(
