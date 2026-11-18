@@ -619,7 +619,14 @@ subscription ready for those fleets: it stops, before anything is sent, on
 Base while anyone but the Regents Safe owns the subscription
 (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the
 subscription does not list the collection
-(`CollectionNotVrfConsumer(collection)`). The script never makes the call on
+(`CollectionNotVrfConsumer(collection)`). The deployment and that call are one
+run, and Forge runs a script in full before it sends anything, so before the
+handover the run refuses whole and deploys nothing: run it only after the Safe
+owns the subscription and has listed the collection. When it refuses, the
+first line Forge prints, `Error: Failed to decode return value: 0x…`, is that
+refusal undecoded and not the error to read; read the last line,
+`Error: script failed:` and the error's name, such as
+`VrfSubscriptionNotOwnedByRegentsSafe(<owner>)`. The script never makes the call on
 the chain. It runs it once from the Safe's address against its own copy of the
 chain, so a call that would revert stops it with the collection's
 own error, then prints it, as its target (the collection), value (0) and data
@@ -650,9 +657,10 @@ past the five founding ones, so while the subscription does not list the
 collection or, on Base, the Regents Safe does not own it, a single Trading
 Fleet stops the record step for every fleet, the founding ones included. The
 order on Base is therefore: the subscription's owner asks to hand it to the
-Safe (step 1), the Safe accepts it and lists the collection (step 3), and only
-then do the signers open phase 4 and sign the trading factory's `addFactory`
-call. Neither the phase step nor the script prepares its call before.
+Safe (step 1), the Safe accepts it and lists the collection (step 3), before
+phase 3 is opened (step 6), and only after that handover does the trading
+factory's deployment run and do the signers sign its `addFactory` call.
+Neither the phase-4 step nor this script prepares its call before.
 
 ## The trait table
 

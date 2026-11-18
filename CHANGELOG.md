@@ -12064,3 +12064,13 @@ step's report).
 - `docs/deployment.md` says, in step 6 and in "Rehearsing", that a file under
   `contracts/rehearsal/` is never loaded into the Safe, and gives the signers the reads that show
   those facts on Base. `contracts/README.md` says so too.
+
+## 2026-11-18 — The trading factory's run comes after the handover
+
+- `docs/deployment.md`, under "Trading Fleets", now says that the trading factory's deployment
+  and its `addFactory` call are one run, which refuses whole and deploys nothing before the
+  Regents Safe owns the randomness subscription and has listed the collection, so it is run only
+  after that handover. It also says which line of a refusal to read: Forge first prints
+  `Error: Failed to decode return value: 0x…`, the same refusal undecoded, and names the error
+  only on its last line, `Error: script failed:` and the error's name. The order it gives puts
+  the handover before phase 3. The script is unchanged.
