@@ -12264,3 +12264,37 @@ step's report).
   same, and the guide's phase-4 deck paragraph says the keeper records a deck (on Base, a Safe
   transaction) rather than a separate keeper wallet.
 - The guide and README only; no script or contract changed.
+
+## 2026-11-18 — The founding step for fleets 2 to 4 waits for the subscription; phase files say what a later landing opens
+
+- `foundingFleetCalls` in `contracts/script/KeyfleetSafeSteps.s.sol`, in phase 2, where it
+  prepares Syndicate, Accelerant and Cascade, now refuses unless `requireSubscriptionReady`
+  passes, with the same errors as the step to phase 3: on Base
+  `VrfSubscriptionNotOwnedByRegentsSafe(owner)`, on every chain
+  `CollectionNotVrfConsumer(collection)`. Phase 3 cannot open without those fleets
+  (`FleetsMissing`), so every path the scripts make to phase 3 has a subscription check when its
+  files are written. The Regents Club and Classic calls check nothing of it.
+- Each of those three founding calls now carries a description asking the signers to read on the
+  chain what the phase-3 call's asks: that the collection is in phase 2, that the subscription
+  lists the collection, on Base that the Regents Safe owns it, and that its native ETH balance is
+  at least `SUBSCRIPTION_FUNDING`.
+- Every phase file's description now says that the phase moves when any file for it lands, not
+  when it opens: once any other file for its phase has landed, the file is dangerous and must be
+  thrown away, since landed after that and before its own opening time it can move the
+  collection on one more phase, with no check of the subscription; it names, for each phase it
+  could land in, the phase that landing opens and what that phase opens (a phase-1 or phase-2
+  file landed in phase 3 opens phase 4, public creation). A phase-4 file landed after another is
+  refused. It also says that a copy already carrying Safe signatures is cancelled by using up its
+  Safe transaction number with another transaction. The balance is named as the second value
+  `getSubscription` returns, the first being the LINK balance.
+- `docs/deployment.md` and `contracts/README.md` state the same, and the order everywhere it is
+  given: the handover, the listing and the funding come before the founding batches for fleets
+  2 to 4, and so before phase 3. The funding statement is now one: fund it with 0.5 ETH before
+  the founding batches for fleets 2 to 4.
+- Tests: the Safe-step suite proves the founding step for fleets 2 to 4 refused while the
+  subscription is not ready (on Base not the Safe's, off Base not listing the collection, whoever
+  owns it there), prepared once it is, with the phase-3 call's reads, and the Regents Club and
+  Classic prepared either way; every phase file's later landings are made and match its
+  description; a second phase-2 file landed before phase 2 opens opens phase 3 as it warns. The
+  record suite and the release fork suite found fleets 2 to 4 once the Safe holds the
+  subscription. No contract changed.

@@ -500,11 +500,13 @@ The site draws traits with this rule in `platform/lib/keyfleet/traits.ex`, and
 The table's file format is in [../docs/deployment.md](../docs/deployment.md).
 
 The operator writes a known VRF subscription id into the manifest before deployment.
-Consumer setup and Safe ownership follow the deployment and are required before
-phase 3, the first phase in which a Key can be minted past its founding deck:
-the Safe's steps to phases 3 and 4 refuse until the Regents Safe owns the
-subscription and the subscription lists the collection, and recording drawn
-Keys requires both. Fund it before then too. A key minted while the collection
+Consumer setup, funding and Safe ownership follow the deployment and are
+required before the Safe's founding step prepares fleets 2 to 4, and so before
+phase 3, the first phase in which a Key can be minted past its founding deck,
+which cannot open without those fleets: that founding step and the Safe's
+steps to phases 3 and 4 refuse until the Regents Safe owns the subscription
+and the subscription lists the collection, and recording drawn Keys requires
+both. A key minted while the collection
 is not listed has its request refused and can ask again once it is added.
 The deploy-day checklist is under Deployment scripts.
 The three Chainlink files the collection uses are copied unchanged into
@@ -1849,11 +1851,13 @@ latest broadcast there.
   step reverts with `UnknownStep`. Phase 3 lets anyone buy a founding Key past
   its deck and phase 4 create a fleet, and one Key that draws stops the record
   for every fleet while the randomness subscription is not ready, so
-  `advance-phase` prepares phases 3 and 4 (`FIRST_DRAWING_PHASE` on) only once
-  the chain shows it is, with the record step's own errors otherwise: on Base, a
-  subscription anyone but the Regents Safe owns
+  `advance-phase` prepares phases 3 and 4 (`FIRST_DRAWING_PHASE` on), and
+  `founding-fleets` in phase 2 prepares fleets 2 to 4, without which phase 3
+  cannot open, only once the chain shows it is, with the record step's own
+  errors otherwise: on Base, a subscription anyone but the Regents Safe owns
   (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
   that does not list the collection (`CollectionNotVrfConsumer(collection)`).
+  The Regents Club's and Classic's founding calls check nothing of it.
   It takes the factory from `readDeployment`:
   on Base the first release's pinned factory, elsewhere the deployment step's
   latest broadcast on the chain. On Base it runs every call from the Safe's address
@@ -1865,14 +1869,27 @@ latest broadcast there.
   check and sign. A phase file's own description (`meta.description`) says
   what the signers read on the chain before signing, since `advancePhase` names
   no phase and opens whichever is next: the collection's phase now and, for
-  phases 3 and 4, what the step checks on that chain, that the subscription lists the
-  collection and, on Base only, that the Regents Safe owns it, and that it holds
-  at least `SUBSCRIPTION_FUNDING` (0.5 ETH, as "Keeping the subscription funded"
-  in [../docs/deployment.md](../docs/deployment.md) asks), which the step does
-  not read. It also says to
-  throw the file away once its phase has opened, and the files to phases 1 and
-  2 that, landed once phase 2 has opened, either opens phase 3 with no check of
-  the subscription. A rehearsal's files carry the same description.
+  phases 3 and 4, what the step checks on that chain, that the subscription
+  lists the collection (on every chain) and, on Base, that the Regents Safe owns
+  it, and, on every chain, that its native ETH balance, the second value
+  `getSubscription` returns (the first is its LINK balance), is at least
+  `SUBSCRIPTION_FUNDING` (0.5 ETH, as "Keeping the subscription funded" in
+  [../docs/deployment.md](../docs/deployment.md) asks), which no step reads.
+  The founding files for fleets 2 to 4 ask for the same reads of the
+  subscription, with the collection in phase 2. The phase number moves when a
+  phase file lands, not when the phase opens, so once any file for a phase has
+  landed every other file written for it is dangerous and must be thrown away:
+  landed after that, before its own opening time, it can move the collection
+  on one more phase, with no check of the subscription. A phase-1 file landed
+  in phase 1 opens phase 2 (Classic #1's sales), in phase 2 phase 3
+  (Syndicate #1, Accelerant #1 and Cascade #1, whose Keys past their decks
+  draw) and in phase 3 phase 4 (anyone may create a fleet); a phase-2 file
+  landed in phase 2 opens phase 3 and in phase 3 phase 4; a phase-3 file
+  landed in phase 3 opens phase 4; a phase-4 file landed in phase 4 is
+  refused. Each description says so for its own phase. A file that already
+  carries Safe signatures cannot simply be thrown away: it is cancelled by
+  using up its Safe transaction number with another transaction. A rehearsal's
+  files carry the same description.
   Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
   has unlocked. `run` is `runInto("deployments/safe")`; a rehearsal or a test
@@ -2020,8 +2037,9 @@ Nothing below can be fixed after the fact unless it says so.
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
 5. **VRF subscription id.** Sean's subscription id is set in `vrf.subscriptionId`.
-   Before phase 3, from which a Key can need randomness, fund it with 0.5 ETH,
-   add the collection as consumer and transfer ownership to the Regents Safe. The
+   Before the founding batches for fleets 2 to 4, and so before phase 3, from
+   which a Key can need randomness, fund it with 0.5 ETH, add the collection as
+   consumer and transfer ownership to the Regents Safe. The
    placeholder `"0"` is refused. The balance is checked by hand: top it up
    back to 0.5 ETH when it is below 0.3 ETH, and never leave it below
    0.25 ETH. One answer can cost up to about 0.001 ETH at the
@@ -2030,8 +2048,10 @@ Nothing below can be fixed after the fact unless it says so.
    [../docs/deployment.md](../docs/deployment.md)). The Safe can move the
    collection to another subscription or gas lane later with `setRandomness`,
    and to another coordinator once no key waits for its answer.
-6. **Add the collection as a VRF consumer.** Required before phase 3, with the
-   Safe's ownership: the steps to phases 3 and 4 refuse until both hold, and
+6. **Add the collection as a VRF consumer.** Required before the founding
+   batches for fleets 2 to 4, and so before phase 3, with the Safe's ownership:
+   the founding step for fleets 2 to 4 and the steps to phases 3 and 4 refuse
+   until both hold, and
    recording drawn Keys requires both. A key minted while the collection is not
    listed has its draw refused and asks again later.
 7. **REGENT staking is unpaused.** The 10% protocol share goes to REGENT revenue
@@ -2322,12 +2342,14 @@ themselves unless `BASE_RPC_URL` is set:
   the record written has the pinned factory and deployment block and is the
   record `record` gives for them, and the founding-fleets step writes one Safe
   batch per founding fleet still missing, each a call to the pinned factory.
-  Last, it steps the live collection to phase 2 and creates every founding
-  fleet from the Safe's address with the Safe steps, whoever owns the
-  subscription; then for phase 3 and again for phase 4, with the subscription
-  handed to another account the step stops with
-  `VrfSubscriptionNotOwnedByRegentsSafe` naming that account, and once the Safe
-  owns it and lists the collection the step's call opens the phase.
+  Last, it steps the live collection to phase 2 from the Safe's address with
+  the Safe steps, whoever owns the subscription; in phase 2, with the
+  subscription handed to another account, the founding step for fleets 2 to 4
+  stops with `VrfSubscriptionNotOwnedByRegentsSafe` naming that account, and
+  once the Safe owns it and lists the collection the step creates them; then
+  for phase 3 and again for phase 4 the phase step stops the same way while
+  another account holds it, and once the Safe holds it again the step's call
+  opens the phase.
   Each run goes through `runInto`, the function `run` calls with the real
   folder, into a folder of the test's own under `rehearsal/`, which git
   ignores, and the test removes that folder. No test opens

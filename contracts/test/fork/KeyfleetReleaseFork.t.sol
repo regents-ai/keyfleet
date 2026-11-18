@@ -109,12 +109,14 @@ contract KeyfleetReleaseForkTest is LiveSubscriptionFork {
     }
 
     /// @dev The Safe steps' run writes one batch per founding fleet still missing (fleets 2 to 4
-    /// while the collection is in phase 2), each the Safe's call to the pinned factory, after
-    /// running it from the Safe's address on the fork.
+    /// while the collection is in phase 2, once the Regents Safe holds the randomness subscription
+    /// and it lists the collection), each the Safe's call to the pinned factory, after running it
+    /// from the Safe's address on the fork.
     function test_theSafeStepsRunOnBaseFromThePinnedRelease() public {
         KeyfleetSafeSteps steps = new KeyfleetSafeSteps();
         KeyfleetManifest.Manifest memory manifest = steps.readManifest("base");
         KeyfleetFactory factory = KeyfleetFactory(steps.BASE_KEYFLEET_FACTORY());
+        _subscriptionToTheSafe();
         KeyfleetSafeSteps.SafeCall[] memory calls = steps.foundingFleetCalls(manifest, factory);
         vm.setEnv("KEYFLEET_MANIFEST", "base");
         vm.setEnv("KEYFLEET_STEP", "founding-fleets");
@@ -136,11 +138,12 @@ contract KeyfleetReleaseForkTest is LiveSubscriptionFork {
         assertEq(steps.foundingFleetCalls(manifest, factory).length, 0, "the run made every call on the fork");
     }
 
-    /// @dev The release's steps on the fork, from the Safe's address, up to phase 2 and every
-    /// founding fleet created, whoever owns the randomness subscription. Then, for phase 3 and again
-    /// for phase 4, with the subscription handed to another account, the step stops with that
-    /// account's address; once the Regents Safe holds the subscription and lists the collection, the
-    /// step's call opens the phase.
+    /// @dev The release's steps on the fork, from the Safe's address, up to phase 2, whoever owns
+    /// the randomness subscription. In phase 2, with the subscription handed to another account,
+    /// the founding step for fleets 2 to 4 stops with that account's address; once the Regents Safe
+    /// holds the subscription and lists the collection, it creates them. Then, for phase 3 and
+    /// again for phase 4, with the subscription handed to another account, the phase step stops the
+    /// same way; once the Safe holds it again, the step's call opens the phase.
     function test_theDrawingPhaseStepsOnBaseWaitForTheSafesSubscription() public {
         KeyfleetSafeSteps steps = new KeyfleetSafeSteps();
         KeyfleetManifest.Manifest memory manifest = steps.readManifest("base");
@@ -152,6 +155,11 @@ contract KeyfleetReleaseForkTest is LiveSubscriptionFork {
             _asSafe(steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1)));
             vm.warp(block.timestamp + 1);
         }
+        vm.expectRevert(
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
+        );
+        steps.foundingFleetCalls(manifest, factory);
+        _subscriptionToTheSafe();
         _asSafe(steps.foundingFleetCalls(manifest, factory));
 
         while (collection.phase() < collection.FINAL_PHASE()) {

@@ -20,14 +20,18 @@ The release runs in seven steps, in this order:
    The deployment wallet is `0x9b2C414614aEE294202c1219520955EF3B596031`.
 2. **Deploy.** `DeployKeyfleets` deploys the shared system in five transactions
    from that wallet. It creates no fleet.
-3. **Randomness setup, before phase 3.** Consumer setup, funding and Safe
-   ownership follow the deploy, and are required before phase 3: from then any
-   buyer can buy a Key past its deck, which needs a random draw. The phase-3
-   step refuses until the Regents Safe owns the subscription and the
-   subscription lists the collection.
+3. **Randomness setup, before the founding batches for fleets 2 to 4.**
+   Consumer setup, funding and Safe ownership follow the deploy, and are
+   required before the founding step prepares Syndicate, Accelerant and
+   Cascade in phase 2, and so before phase 3, which cannot open without them:
+   from phase 3 any buyer can buy a Key past its deck, which needs a random
+   draw. That founding step and the steps to phases 3 and 4 refuse until the
+   Regents Safe owns the subscription and the subscription lists the
+   collection.
 4. **Club fleet.** In phase 0, `founding-fleets` prepares only Club fleet 5.
    After Club testing, the same step in phase 1 prepares Classic fleet 1.
-   In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets.
+   In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets,
+   once the randomness setup is done.
 5. **Record.** Verify and record only fleets that exist, then load the record
    into the site. Absent founding slots are retained for later creation.
 6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
@@ -35,8 +39,8 @@ The release runs in seven steps, in this order:
    opens the other three, and from then any buyer's purchase of a Key past
    its deck stops the record while the Regents Safe does not own the
    randomness subscription or the subscription does not list the collection.
-   The steps to phases 3 and 4 therefore refuse until both hold. Phase 4
-   permits public fleet creation.
+   The steps to phases 3 and 4 therefore refuse until both hold, as does the
+   founding step for fleets 2 to 4. Phase 4 permits public fleet creation.
 7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
    24 batches of 80 and one of 78. Route failed receivers to claims and verify
    every final destination. Do not create the other four fleets at this launch.
@@ -45,8 +49,9 @@ Before step 1, go through the deploy-day checklist in the
 [contracts README](../contracts/README.md#deploy-day-checklist): the keeper,
 the keeper's job list of public buttons (pieces, daily splits and the protocol
 share), the REGENT pool hook's fee that pieces rely on, the collection metadata
-address, the subscription id (consumer setup and the Safe's ownership follow
-the deploy and are required before phase 3),
+address, the subscription id (consumer setup, funding and the Safe's ownership
+follow the deploy and are required before the founding batches for fleets 2 to
+4),
 REGENT staking unpaused, and
 factories that can never be removed.
 
@@ -126,8 +131,9 @@ steps 5% per key. The Regents Club is never sold: its 1,998 keys are given.
 founding decks below, profiles named "Classic #1", "Syndicate #1",
 "Accelerant #1", "Cascade #1" and "Regents Club #1" with an empty description
 and image link, the Regents Safe as `keeper`, and Sean's verified Base
-subscription id as a decimal string. The subscription's consumer setup and
-Safe ownership follow the deploy and are required before phase 3 (step 1).
+subscription id as a decimal string. The subscription's consumer setup,
+funding and Safe ownership follow the deploy and are required before the
+founding batches for fleets 2 to 4, and so before phase 3 (step 1).
 
 | Founding fleet | `deckHash` | `deckSize` |
 | --- | --- | --- |
@@ -160,12 +166,14 @@ Sean supplied subscription
 `58953026474889286452657611148401201221788353993662160123850640810329610213433`,
 now written as a decimal string in `base.json`. A read-only Base check confirmed
 it exists and belongs to his wallet. Sean transfers ownership to the Regents
-Safe, the Safe accepts it and lists the collection as a consumer, and all of
-this is required before phase 3, since from then any buyer can buy a Key
-beyond its founding deck: the phase-3 step refuses until the Safe owns the
-subscription and it lists the collection. Recording checks ownership and
-consumer setup once a recorded Key needs randomness. Its native ETH balance must be
-funded before randomness requests begin. Club cards use the fixed founding deck
+Safe, the Safe accepts it and lists the collection as a consumer, and the
+subscription is funded with 0.5 ETH (see "Keeping the subscription funded").
+All of this is required before the founding batches for fleets 2 to 4, and so
+before phase 3, which cannot open without those fleets: from phase 3 any buyer
+can buy a Key beyond its founding deck. The founding step in phase 2 and the
+phase-3 step refuse until the Safe owns the subscription and it lists the
+collection. Recording checks ownership and consumer setup once a recorded Key
+needs randomness. Club cards use the fixed founding deck
 and make no VRF request, but the shared system's deployment still requires a
 valid subscription.
 
@@ -182,10 +190,11 @@ pays for every fleet's randomness requests in ETH. Setup order:
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-   This and the consumer setup are required before phase 3, from which any
-   buyer can make the first random draw; recording drawn Keys requires it, and
-   the phase-3 step refuses until both are done. The `keeper` is already set to
-   the Regents Safe.
+   This and the consumer setup are required before the founding batches for
+   fleets 2 to 4, and so before phase 3, from which any buyer can make the
+   first random draw; recording drawn Keys requires it, and the founding step
+   in phase 2 and the phase-3 step refuse until both are done. The `keeper` is
+   already set to the Regents Safe.
 
 ### Keeping the subscription funded
 
@@ -208,15 +217,17 @@ without a seed, refuses late answers and releases that request's lock on replaci
 the coordinator. It never permits a second request. Expiry requires this call;
 time passing alone does not release the lock.
 
-- **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
-  at once at the cap, and about 100,000 answers at today's prices. The phase-3
-  and phase-4 files ask the signers to read that it holds at least that,
+- **Fund it with 0.5 ETH before the founding batches for fleets 2 to 4**, with
+  the handover and the listing (step 1), and so before phase 3. That covers
+  500 keys waiting at once at the cap, and about 100,000 answers at today's
+  prices. The founding files for fleets 2 to 4 and the phase-3 and phase-4
+  files ask the signers to read that it holds at least that,
   500000000000000000 wei, before signing them.
 - **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at
   the cap.
 - **Check it by hand.** Nothing watches the balance for you. When it is
-  below 0.3 ETH, top it up back to 0.5 ETH. The balance is the second value
-  `getSubscription` returns:
+  below 0.3 ETH, top it up back to 0.5 ETH. The native ETH balance is the
+  second value `getSubscription` returns; the first is its LINK balance:
 
   ```sh
   cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
@@ -293,8 +304,9 @@ the caller's business.
 The Safe adds the collection to the subscription with
 `addConsumer(subId, <collection address>)`, in the Chainlink app or as a Safe
 transaction. The collection's address is `KEYS()` on the factory. This is
-required before phase 3, whose step refuses until the subscription lists the
-collection. A Key that draws while the collection is not listed, should it
+required before the founding batches for fleets 2 to 4, and so before phase 3:
+the founding step in phase 2 and the phase-3 step refuse until the
+subscription lists the collection. A Key that draws while the collection is not listed, should it
 ever be removed, is still sold; its request is refused, and anyone can ask
 again with `requestReveal(tokenId)` once the collection is added again. The
 record step requires this setup only once a recorded Key needs randomness.
@@ -320,7 +332,18 @@ its own Safe Transaction Builder file:
 
 The Safe's signers load each file in the Safe's Transaction Builder, check it
 and sign it. Initially only `base.founding-fleet-5.json` is prepared. Classic's
-file follows in phase 1; the other three follow in phase 2. Each creation uses about 11.9
+file follows in phase 1; the other three follow in phase 2, and only once the
+randomness setup is done (steps 1 and 3), since phase 3 cannot open without
+them: in phase 2 the step stops, before anything is written, on Base while
+anyone but the Regents Safe owns the subscription
+(`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the
+subscription does not list the collection
+(`CollectionNotVrfConsumer(collection)`). Each of those three files'
+description (`meta.description`) asks the signers to read on Base what the
+phase-3 file's does: that the collection is in phase 2, that the Regents Safe
+owns the subscription, that it lists the collection, and that its native ETH
+balance is at least 0.5 ETH (see "Before signing a phase file" for the reads).
+The Regents Club's and Classic's files ask nothing of the subscription. Each creation uses about 11.9
 million gas, so each is its own transaction. Run the step again after some have
 landed and it writes files only for the fleets still missing. Each founding
 fleet is created with its deck and no joining requirements, and its sales stay
@@ -374,9 +397,10 @@ fleets created since: it lists every fleet in the collection's registry.
   4, the collection's last, anyone can create such a fleet, through the
   factory or through a trading factory the Safe has approved. So on Base the
   subscription's owner hands it to the Safe and the Safe accepts it and lists
-  the collection, as is required before phase 3. The steps to phases 3 and 4
-  and the trading factory's script refuse, with these two errors, to prepare
-  their calls before.
+  the collection, as is required before the founding batches for fleets 2 to
+  4, and so before phase 3. The founding step for fleets 2 to 4, the steps to
+  phases 3 and 4 and the trading factory's script refuse, with these two
+  errors, to prepare their calls before.
 
 ### What the record step writes
 
@@ -473,17 +497,20 @@ subscription or the subscription does not list the collection. Phase 4 lets
 anyone create a fleet from its opening, each such fleet selling from the moment
 it is created, with the same effect.
 
-The handover is therefore required before phase 3: the subscription's owner
-hands it to the Safe, and the Safe accepts it and lists the collection (steps 1
-and 3). The steps to phases 3 and 4 prepare nothing until the chain shows both,
-and stop, before anything is written, on Base while anyone but the Regents Safe
-owns the subscription (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on
-every chain while the subscription does not list the collection
-(`CollectionNotVrfConsumer(collection)`). The steps to phases 1 and 2 do not
-check it, since no Key sold before phase 3 draws, yet a file either writes,
-landed once phase 2 has opened, opens phase 3 with no check of the
-subscription (see "Before signing a phase file"). There is no step back, and
-nothing else moves a phase.
+The handover is therefore required before the founding batches for fleets 2
+to 4, and so before phase 3, which cannot open without those fleets: the
+subscription's owner hands it to the Safe, the Safe accepts it and lists the
+collection, and the subscription is funded (steps 1 and 3). The founding step
+in phase 2 (step 4) and the steps to phases 3 and 4 prepare nothing until the
+chain shows the Safe's ownership and the listing, and stop, before anything is
+written, on Base while anyone but the Regents Safe owns the subscription
+(`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the
+subscription does not list the collection
+(`CollectionNotVrfConsumer(collection)`); no step reads the balance. The steps
+to phases 1 and 2 do not check the subscription, since no Key sold before
+phase 3 draws, yet a file either writes can open phase 3 or phase 4 once
+another file for its phase has landed (see "Before signing a phase file").
+There is no step back, and nothing else moves a phase.
 
 Should the subscription stop being ready once phase 3 has opened, the Safe
 handing it on or removing the collection, then from the next Key that draws:
@@ -499,35 +526,55 @@ handing it on or removing the collection, then from the next Key that draws:
 
 ### Before signing a phase file
 
-The call in a phase file is `advancePhase(<opening>)`. It names no phase, so
-landed at any time before its opening it moves the collection on from
-whatever phase it is in then: a `base.phase-2.json` that lands after phase 2
-has opened opens phase 3 with no check of the subscription, since the step to
-phase 2 checks none, and so does a `base.phase-1.json` landed then; a
-`base.phase-3.json` that lands after phase 3 has opened opens phase 4, checked
-only as the subscription stood when the phase-3 file was written. A file
-written for a phase already open must therefore be thrown away, never signed.
-Each file's own description (`meta.description`) says so, and says what the
-signers read on Base before signing: the phase the collection is in now, and
-in `base.phase-3.json` and `base.phase-4.json` also that the Regents Safe owns
-the randomness subscription, that the subscription lists the collection, and
-that it holds at least the 0.5 ETH asked for under "Keeping the subscription
-funded". The description says what the step saw when it wrote the file, and
-the step reads no balance. Read the facts on Base yourselves, not from the
-file:
+The call in a phase file is `advancePhase(<opening>)`. It names no phase, and
+the phase number moves when the call lands, not when the phase opens at its
+named time: landed at any time before its own opening, it moves the collection
+on from whatever phase it is in then. So once any file for a phase has landed,
+every other file written for that phase is dangerous and must be thrown away,
+whether or not that phase has opened yet. Landed after that and before its own
+opening time, such a file can move the collection on one more phase, with no
+check of the randomness subscription when it lands:
+
+- a `base.phase-1.json` landed in phase 1 opens phase 2 (Classic #1's sales);
+  landed in phase 2, phase 3 (Syndicate #1, Accelerant #1 and Cascade #1,
+  whose Keys past their decks draw); landed in phase 3, phase 4 (anyone may
+  create a fleet);
+- a `base.phase-2.json` landed in phase 2 opens phase 3; landed in phase 3,
+  phase 4;
+- a `base.phase-3.json` landed in phase 3 opens phase 4, checked only as the
+  subscription stood when it was written;
+- a `base.phase-4.json` landed in phase 4 is refused (`NoNextPhase`).
+
+Phase 3 cannot open without fleets 2 to 4, and the founding step writes their
+files only while the subscription is ready, so a phase-1 or phase-2 file can
+open phase 3 only after a check made when those files were written; nothing
+checks it when the phase file lands. A file that already carries Safe
+signatures cannot simply be thrown away: it is cancelled by using up its Safe
+transaction number with another transaction, such as the Safe app's on-chain
+rejection at that number.
+
+Each file's own description (`meta.description`) says the same for its phase,
+and says what the signers read on Base before signing: the phase the
+collection is in now, and in `base.phase-3.json` and `base.phase-4.json` also
+that the Regents Safe owns the randomness subscription, that the subscription
+lists the collection, and that it holds at least the 0.5 ETH asked for under
+"Keeping the subscription funded". The founding files for fleets 2 to 4 ask
+for the same reads of the subscription (step 4). The description says what the
+step saw when it wrote the file, and no step reads the balance. Read the facts
+on Base yourselves, not from the file:
 
 ```sh
 # The phase the collection is in now.
 cast call 0xaBC959B463542497639adA57388c65D05AB34A30 "phase()(uint8)" --rpc-url "$BASE_RPC_URL"
 
-# Before phases 3 and 4: the coordinator and the subscription id, the first two values.
+# Before fleets 2 to 4 and phases 3 and 4: the coordinator and the subscription id, the first two values.
 cast call 0xaBC959B463542497639adA57388c65D05AB34A30 \
   "randomness()(address,uint256,bytes32)" --rpc-url "$BASE_RPC_URL"
 
 # The subscription's owner, the fourth value, must be the Regents Safe,
 # 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e, its consumers, the fifth,
-# must include the collection, and its native ETH balance, the second, must be
-# at least 500000000000000000 (0.5 ETH).
+# must include the collection, and its native ETH balance, the second (the first
+# is its LINK balance), must be at least 500000000000000000 (0.5 ETH).
 cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
   "getSubscription(uint256)(uint96,uint96,uint64,address,address[])" <subscription id> \
   --rpc-url "$BASE_RPC_URL"
@@ -678,10 +725,12 @@ past the five founding ones, so while the subscription does not list the
 collection or, on Base, the Regents Safe does not own it, a single Trading
 Fleet stops the record step for every fleet, the founding ones included. The
 order on Base is therefore: the subscription's owner asks to hand it to the
-Safe (step 1), the Safe accepts it and lists the collection (step 3), before
-phase 3 is opened (step 6), and only after that handover does the trading
-factory's deployment run and do the signers sign its `addFactory` call.
-Neither the steps to phases 3 and 4 nor this script prepares its call before.
+Safe (step 1), the Safe accepts it and lists the collection (step 3), and the
+subscription is funded, before the founding batches for fleets 2 to 4 (step 4)
+and so before phase 3 is opened (step 6), and only after that handover does
+the trading factory's deployment run and do the signers sign its `addFactory`
+call. None of the founding step for fleets 2 to 4, the steps to phases 3 and 4
+and this script prepares its call before.
 
 Only the collection's keeper or the Regents Safe may send what a Trading
 Fleet's treasury owes REGENT revenue staking on to staking, with
@@ -780,8 +829,9 @@ Nothing under `rehearsal/` is ever loaded into the Safe: a batch written there
 is a real, signable Base batch with nothing in it to show it came from a fork
 (see "Before signing a phase file" in step 6). To
 see what the next step prepares, make a batch's call on the fork from the
-Safe's address, impersonated as below. The steps to phases 3 and 4 and the
-trading factory's deployment stop on the fork, as on Base, until the Safe owns the
+Safe's address, impersonated as below. The founding step for fleets 2 to 4, the
+steps to phases 3 and 4 and the trading factory's deployment stop on the fork,
+as on Base, until the Safe owns the
 subscription and lists the collection: impersonate the subscription's owner to call
 `requestSubscriptionOwnerTransfer(<subscription id>, <Safe>)` on the
 coordinator, then the Safe to call `acceptSubscriptionOwnerTransfer(<subscription id>)`
@@ -824,7 +874,9 @@ KEYFLEET_MANIFEST=anvil KEYFLEET_STEP=founding-fleets \
   --rpc-url "$RPC_URL" --broadcast --unlocked
 ```
 
-The subscription's owner adds the collection before the record step:
+The subscription's owner adds the collection before the record step, and in
+any case before the founding step in phase 2, which on every chain prepares
+fleets 2 to 4 only once the subscription lists the collection:
 
 ```sh
 cast send 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 "addConsumer(uint256,address)" \
@@ -886,9 +938,10 @@ any key it receives, so a purchase to it reverts.
 ## What the Safe does
 
 The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the
-randomness subscription and REGENT revenue staking. In the release it adds the
-collection to the subscription, creates the five founding fleets, moves the
-phase when the founder says sales open, and gives the Regents Club keys, each
+randomness subscription and REGENT revenue staking. In the release it creates
+the Regents Club and Classic, accepts the subscription and adds the collection
+to it before it creates Syndicate, Accelerant and Cascade, moves the phase when
+the founder says sales open, and gives the Regents Club keys, each
 only to the holder of its Pass or to the claims contract. As the keeper, it
 makes each Trading Fleet's staking send, a Safe transaction each (see "Trading
 Fleets"). Later it may replace the keeper or allow a newer factory for new

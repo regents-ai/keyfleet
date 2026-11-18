@@ -28,11 +28,13 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 /// Phase 2 opens Classic #1's sales, and phase 3 opens Syndicate, Accelerant and Cascade, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
 /// phase step is run only when the founder says when sales open. Those three sell past their
-/// decks, and phase 4 lets anyone create a fleet, so the step prepares neither phase until the
-/// randomness subscription is ready for a Key that draws: on Base the Regents Safe owns it, and on
-/// every chain it lists the collection. The steps to phases 1 and 2 check nothing of it, yet a file
-/// either writes, landed once phase 2 has opened, opens phase 3: its description says so, and every
-/// phase file's description says to throw it away once its phase has opened.
+/// decks, and phase 4 lets anyone create a fleet, so neither the phase step to either phase nor
+/// the founding step for fleets 2 to 4, without which phase 3 cannot open, prepares anything until
+/// the randomness subscription is ready for a Key that draws: on Base the Regents Safe owns it, and
+/// on every chain it lists the collection. A phase call names no phase, so the phase moves when any
+/// file for it lands: from then on, every other file written for that phase can move the collection
+/// on one more phase, with no check of the subscription. Each phase file's description says what
+/// each such landing opens and to throw the file away.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
 /// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
@@ -58,11 +60,12 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     uint256 public constant CLUB_GIFT_BATCH = 80;
     /// @notice The first phase in which a Key can draw: phase 3 opens Syndicate, Accelerant and
     /// Cascade, which sell past their decks, and phase 4 lets anyone create a fleet. The steps to it
-    /// and to every phase after it wait for the randomness subscription.
+    /// and to every phase after it, and the founding step for those three fleets, wait for the
+    /// randomness subscription.
     uint8 public constant FIRST_DRAWING_PHASE = 3;
     /// @notice The native ETH, in wei, that the signers read the randomness subscription holds
-    /// before signing the calls to phases 3 and 4: the 0.5 ETH the deployment guide asks it to be
-    /// funded with. The step itself reads no balance.
+    /// before signing the calls creating founding fleets 2 to 4 and moving to phases 3 and 4: the
+    /// 0.5 ETH the deployment guide asks it to be funded with. No step reads the balance itself.
     uint256 public constant SUBSCRIPTION_FUNDING = 0.5 ether;
 
     /// @notice The step named by `KEYFLEET_STEP` is not `founding-fleets`, `advance-phase` or
@@ -111,7 +114,11 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     }
 
     /// @notice The Safe's calls creating missing founding fleets for the current launch stage, in
-    /// reserved id order within that stage, each with the manifest's deck and profile.
+    /// reserved id order within that stage, each with the manifest's deck and profile. In phase 2,
+    /// which founds Syndicate, Accelerant and Cascade, the calls are prepared only while the
+    /// randomness subscription is ready as the step to phase 3 requires, since phase 3 cannot open
+    /// without those fleets; each call's description then names what the signers read of it, as
+    /// the phase-3 call's does. The Regents Club and Classic calls check nothing of it.
     function foundingFleetCalls(Manifest memory manifest, KeyfleetFactory factory)
         public
         view
@@ -121,6 +128,12 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetKeys keys = factory.KEYS();
         uint8 phase = keys.phase();
         if (phase >= 3) return new SafeCall[](0);
+        string memory checks;
+        if (phase == 2) {
+            Subscription memory subscription = _subscription(keys);
+            requireSubscriptionReady(subscription);
+            checks = _subscriptionChecks(subscription);
+        }
         uint256 first = phase == 0 ? 5 : phase == 1 ? 1 : 2;
         uint256 last = phase == 2 ? 4 : first;
         uint256 missing;
@@ -134,7 +147,21 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             FoundingFleet memory fleet = manifest.founding[id - 1];
             calls[index++] = SafeCall({
                 name: string.concat("founding-fleet-", vm.toString(id)),
-                description: "",
+                description: bytes(checks).length == 0
+                    ? ""
+                    : string.concat(
+                        "Creates founding fleet ",
+                        vm.toString(id),
+                        " through the factory ",
+                        vm.toString(address(factory)),
+                        ". Sign only after reading on chain ",
+                        vm.toString(block.chainid),
+                        " that the collection ",
+                        vm.toString(address(keys)),
+                        " is in phase 2",
+                        checks,
+                        "."
+                    ),
                 to: address(factory),
                 data: abi.encodeCall(
                     KeyfleetFactory.createFoundingFleet, (fleet.preset, fleet.deckHash, fleet.deckSize, fleet.profile)
@@ -147,13 +174,16 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// The calls to phases 3 and 4 are prepared only while the randomness subscription lists the
     /// collection and, on Base, the Regents Safe owns it, as the record step requires once any Key
     /// draws: from phase 3 anyone may buy a founding Key past its deck, and from phase 4 create a
-    /// fleet. The call names no phase, so landed at any time before `opensAt` it opens whichever
-    /// phase is next: the calls to phases 1 and 2, landed once phase 2 has opened, open phase 3
-    /// with no check of the subscription. Its description says so, says to throw the file away once
-    /// its phase has opened, and names what the signers read on the chain before signing: the phase
-    /// the collection is in now and, for the calls to phases 3 and 4, that the subscription lists the
-    /// collection, on Base that the Regents Safe owns it, and that it holds at least
-    /// `SUBSCRIPTION_FUNDING` of native ETH.
+    /// fleet. The call names no phase, so the phase moves when any file for it lands, at any time
+    /// before its `opensAt`. Landed after another file for the same phase, and before its own
+    /// `opensAt`, a call can move the collection on one more phase, with no check of the
+    /// subscription: a call to phase 1 to phase 2, 3 or 4, a call to phase 2 to phase 3 or 4, and a
+    /// call to phase 3 to phase 4. A call to phase 4 landed after another is refused.
+    /// Its description says what each such landing opens, to throw the file away once any other
+    /// file for its phase has landed and how a signed copy is cancelled, and what the signers read
+    /// on the chain before signing: the phase the collection is in now and, for the calls to phases
+    /// 3 and 4, that the subscription lists the collection, on Base that the Regents Safe owns it,
+    /// and that it holds at least `SUBSCRIPTION_FUNDING` of native ETH.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -163,21 +193,12 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetKeys keys = factory.KEYS();
         uint256 next = keys.phase() + 1;
         string memory checks = string.concat("the collection is in phase ", vm.toString(next - 1));
-        string memory late = string.concat(" Once phase ", vm.toString(next), " has opened, throw this file away.");
         if (next >= FIRST_DRAWING_PHASE) {
             Subscription memory subscription = _subscription(keys);
             requireSubscriptionReady(subscription);
             checks = string.concat(checks, _subscriptionChecks(subscription));
-        } else {
-            late = string.concat(
-                " Landed once phase ",
-                vm.toString(uint256(FIRST_DRAWING_PHASE) - 1),
-                " has opened, it opens phase ",
-                vm.toString(uint256(FIRST_DRAWING_PHASE)),
-                ", with no check of the randomness subscription.",
-                late
-            );
         }
+        string memory late = _landedLate(next, keys.FINAL_PHASE());
         calls = new SafeCall[](1);
         calls[0] = SafeCall({
             name: string.concat("phase-", vm.toString(next)),
@@ -277,10 +298,52 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         );
     }
 
-    /// @dev What the signers read of the randomness subscription before the calls to phases 3 and
-    /// 4, by its id and coordinator as the collection names them: what `requireSubscriptionReady`
-    /// checks on this chain, that the subscription lists the collection and, on Base, that the
-    /// Regents Safe owns it, and that it holds `SUBSCRIPTION_FUNDING`, which the step does not read.
+    /// @dev What a call to phase `phase` does once any other file for that phase has landed, which
+    /// moves the phase: before its own opening it can move the collection on one more phase, from
+    /// each phase it can land in up to `finalPhase`, and in `finalPhase` it is refused. Then how a
+    /// copy the Safe's signers have signed is cancelled.
+    function _landedLate(uint256 phase, uint256 finalPhase) private pure returns (string memory late) {
+        late = string.concat(" Once any other file for phase ", vm.toString(phase), " has landed, ");
+        if (phase == finalPhase) {
+            late = string.concat(late, "throw this file away: landed after that, it is refused.");
+        } else {
+            late = string.concat(
+                late,
+                "this file is dangerous and must be thrown away: landed after that and before its own opening time,",
+                " it can move the collection on one more phase, with no check of the randomness subscription"
+            );
+            for (uint256 landed = phase; landed < finalPhase; ++landed) {
+                late = string.concat(
+                    late,
+                    landed == phase ? ": in phase " : "; in phase ",
+                    vm.toString(landed),
+                    ", to ",
+                    _opens(landed + 1)
+                );
+            }
+            late = string.concat(late, ".");
+        }
+        late = string.concat(
+            late,
+            " A copy that already carries Safe signatures cannot simply be thrown away: cancel it by using up",
+            " its Safe transaction number with another transaction."
+        );
+    }
+
+    /// @dev Phase `phase`, from phase 2 on, and what it opens.
+    function _opens(uint256 phase) private pure returns (string memory) {
+        if (phase == 2) return "phase 2, which opens Classic #1's sales";
+        if (phase == 3) {
+            return "phase 3, which opens Syndicate #1, Accelerant #1 and Cascade #1, whose Keys past their decks draw";
+        }
+        return "phase 4, from which anyone may create a fleet";
+    }
+
+    /// @dev What the signers read of the randomness subscription before the calls creating
+    /// founding fleets 2 to 4 and moving to phases 3 and 4, by its id and coordinator as the
+    /// collection names them: what `requireSubscriptionReady` checks on this chain, that the
+    /// subscription lists the collection and, on Base, that the Regents Safe owns it, and that it
+    /// holds `SUBSCRIPTION_FUNDING`, which no step reads.
     function _subscriptionChecks(Subscription memory subscription) private pure returns (string memory) {
         string memory named = string.concat(
             "randomness subscription ",
@@ -289,7 +352,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             vm.toString(address(subscription.coordinator))
         );
         string memory funded = string.concat(
-            ", and that its native ETH balance, the second value getSubscription returns, is at least ",
+            ", and that its native ETH balance, the second value getSubscription returns (the first is its LINK balance), is at least ",
             vm.toString(SUBSCRIPTION_FUNDING),
             " wei"
         );

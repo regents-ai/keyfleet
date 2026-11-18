@@ -450,7 +450,10 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
 
     /// @dev The committed Base manifest, deployed, founded through the Safe step and recorded over
     /// a stand-in Base once the subscription and keeper are written in: the record publishes the
-    /// collection on chain 8453 with the five founding fleets and their decks.
+    /// collection on chain 8453 with the five founding fleets and their decks. The Regents Club and
+    /// Classic are founded and recorded while another account owns the subscription; Syndicate,
+    /// Accelerant and Cascade once the Regents Safe owns it and it lists the collection, as the
+    /// founding step requires.
     function test_theBaseManifestDeploysFoundsAndRecords() public {
         uint256 subscriptionId = _standInBase();
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
@@ -468,6 +471,8 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         _openPhase(manifest, deployed);
         string memory clubAndClassic = recorder.record(manifest, _summary(deployed));
         assertEq(vm.parseJsonKeys(clubAndClassic, ".fleets").length, 2, "Later Classic fills its own slot");
+        coordinator.openSubscription(subscriptionId, manifest.bindings.safe);
+        _listConsumer(manifest, deployed.KEYS());
         _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
 
         string memory json = recorder.record(manifest, _summary(deployed));

@@ -45,7 +45,8 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
 
         // The Safe's calls with the release's own Safe steps, each its own transaction: the founding
         // fleets each phase needs, then the next phase, until the last is open. The Safe took the
-        // subscription and listed the collection in `setUp`, as the steps to phases 3 and 4 require.
+        // subscription and listed the collection in `setUp`, as the founding step for fleets 2 to 4
+        // and the steps to phases 3 and 4 require.
         while (keys.phase() < keys.FINAL_PHASE()) {
             KeyfleetSafeSteps.SafeCall[] memory founding = safeSteps.foundingFleetCalls(_manifest(), factory);
             for (uint256 i = 0; i < founding.length; ++i) {

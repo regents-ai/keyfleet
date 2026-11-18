@@ -100,7 +100,8 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         staking = IRegentRevenueStakingViews(STAKING);
         fleetsBefore = COLLECTION.fleetCount();
 
-        // The subscription goes to the Safe first, as the phase-3 step requires, then the release's
+        // The subscription goes to the Safe first, as the founding step for fleets 2 to 4 and the
+        // phase-3 step require, then the release's
         // Safe steps, from the Safe's address on the fork: the founding fleets each phase needs, then
         // the next phase, until the last is open.
         _subscriptionToTheSafe();
