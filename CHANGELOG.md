@@ -12374,3 +12374,19 @@ step's report).
   Regents Safe", which gave the rule without its first part.
 - Only the keeper or the Regents Safe may send what is owed on to staking, as before. The guide and
   README only; no script or contract changed.
+
+## 2026-11-18 — Two documents say who the keeper is on Base
+
+- `docs/deployment.md` listed who records an open fleet's deck ("the keeper wallet,
+  recommended"), who triggers a key's permanent card and which fleet number a key's name shows as
+  open founder questions, though the design document's section 13, which it links to, says none
+  are open. It now says none is open and states what is decided: the keeper records an open
+  fleet's deck, and on Base the keeper is the Regents Safe, so a deck there is recorded by a Safe
+  transaction; a key's permanent card shows once its metadata refresh is asked for, by the keeper
+  or by the key's holder, after the card is published; a key's name shows the fleet number within
+  its type.
+- `docs/fleet-manager-factory-design.md` called the keeper a Regents backend wallet in three
+  places: decision row 21, the trust-boundaries table and the deck backend's list item. Each now
+  says that on Base the keeper is the Regents Safe and a deck there is recorded by a Safe
+  transaction; the list item also says the refresh comes from the keeper or the key's holder.
+  Nothing else in that document changed. Documents only; no script or contract changed.

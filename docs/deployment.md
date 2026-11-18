@@ -1040,9 +1040,10 @@ v2.5, paid from one Regents subscription in ETH on Base's 2 gwei lane, and a
 key asks for it only once its fleet has a deck. Keys beyond a fleet's deck use
 the trait draw from the one trait table the collection fixes.
 
-Open questions for the founder, each with the recommendation the build follows
-until answered, are in
-[fleet-manager-factory-design.md](fleet-manager-factory-design.md#13-questions-only-sean-can-answer):
-who records an open fleet's deck (the keeper wallet, recommended), who triggers
-a key's permanent card (the backend, recommended), and which fleet number a
-key's name shows (the number within its type, recommended).
+No question for the founder is open
+([fleet-manager-factory-design.md](fleet-manager-factory-design.md#13-questions-only-sean-can-answer)).
+The keeper records an open fleet's deck, and on Base the keeper is the Regents
+Safe, so a deck there is recorded by a Safe transaction. A key's permanent card
+shows once its metadata refresh is asked for, by the keeper or by the key's
+holder, after the card is published. A key's name shows the fleet number
+within its type.

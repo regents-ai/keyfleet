@@ -48,7 +48,7 @@ What each answer decides (round 2 numbering → id):
 | 18 | KF-SOL-6 | The Chainlink coordinator is fixed forever; replaced 8 Oct by KF-VRF-RETRY, the Safe may change it (3.4) |
 | 19 | KF-SOL-8 | Name "Keyfleet", symbol KEYFLEET |
 | 20 | KF-SOL-9 | ERC-2981 resale fee of 2.5% to the Regents Safe |
-| 21 | KF-SOL-24 | A Regents keeper wallet records each open fleet's deck once, before any of its Keys has a random number; the Safe can replace it; it can't touch money (3.5) |
+| 21 | KF-SOL-24 | The keeper records each open fleet's deck once, before any of its Keys has a random number; on Base the keeper is the Regents Safe, so a deck there is recorded by a Safe transaction; the Safe can replace the keeper; the keeper can't touch money (3.5) |
 | 22 | KF-SOL-25 | The site, through the keeper, asks for the metadata refresh as soon as a card is published; the holder may also ask |
 | 23 | KF-SOL-26 | A Key's name uses the fleet number within its type: Syndicate #1's key 5 is `SYNDICATE—001—005` |
 | 24 | KF-SOL-28 | Admitting OUSD waits until the 7-day opening ends (5.1) |
@@ -448,7 +448,7 @@ How they work:
 | Party | Can | Cannot |
 |---|---|---|
 | Regents Safe | Create the five founding fleets in order; move phases forward; replace the keeper; add a newer factory | Mint a key, move or burn anyone's key, touch any fleet's money, votes, claims, rate, profile or treasury, change a fleet after creation, change a price, supply, split, route or royalty, close sales, step a phase back |
-| Keeper (Regents backend wallet) | Record an open fleet's deck once, before any of its seeds exist; ask for a metadata refresh | Choose a card, change a recorded deck, mint, touch money |
+| Keeper (on Base, the Regents Safe) | Record an open fleet's deck once, before any of its seeds exist, on Base by a Safe transaction; ask for a metadata refresh | Choose a card, change a recorded deck, mint, touch money |
 | Anyone (phase 4) | Create a fleet within the input limits, buying its key 1 | Create before phase 4; pass inputs out of bounds; affect any other fleet |
 | Factory | Register and deploy fleets; write a new fleet's profile and requirements once; hand the creator's USDC to the new manager | Anything after creation |
 | REGENT buyer | Queue fleets with USDC booked; take one piece from the front fleet's manager every 15 minutes, swap it and pay the REGENT to that fleet's treasury | Hold value between calls; take more than a piece; be paid by anyone but the pools it started a swap with |
@@ -546,7 +546,7 @@ Nothing is deployed anywhere today, so nothing needs migrating.
 **Site, backend and media-web lanes, list only (after B5 fixes the ABI):**
 - One collection address; the scanner reads the collection's `Transfer`, `OwnershipEpoch`, `KeyRevealed`, `MetadataUpdate`, `BatchMetadataUpdate`, `FleetCreated`, `DeckSet` and phase events, plus each fleet's manager, Votes, Treasury and Rewards.
 - Metadata at the fixed base, decoding fleet and key number. Key name `CLASSIC—001—072`; traits `Fleet type`, `Fleet number`, the fleet's name, key number, `Card`. Interim art until the permanent card is published; nothing for unminted ids; no guessable links (10.5).
-- The deck backend: on `FleetCreated` for an open fleet, build its deck, `setDeck` from the keeper wallet, then `requestReveal` the waiting keys; after publishing each permanent card, `refreshMetadata`.
+- The deck backend: on `FleetCreated` for an open fleet, build its deck, have the keeper record it with `setDeck` (on Base the keeper is the Regents Safe, so this is a Safe transaction), then `requestReveal` the waiting keys; after publishing each permanent card, `refreshMetadata` from the keeper or the key's holder.
 - Purchase targets the fleet's manager (with the Merkle proof when the fleet has a list); transfers and approvals the collection. The buy button shows "sales have not opened" from `salesOpen`, and may show a requirement reason when the receiving wallet certainly fails all of them at the latest block.
 - A create-a-fleet page for phase 4; a proposal builder for profile changes; `seed-deployment` takes the one record file, with the system and every fleet in it.
 
