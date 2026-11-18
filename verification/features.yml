@@ -2026,6 +2026,12 @@ features:
         test: platform/assets/test/onchain_steps.test.ts
     gaps:
       - Following a press across a reconnect waits on Sean's decision. A press made while the page is still getting its connection back, from the steps the page already holds, reaches the wallet but is shown as not this page's step. In the Buy Key window, which the page closes when it comes back, such a press is not shown at all, and one that asks for its steps then (its form changed, or it held none) sends nothing; the ask names the window by the page's numbering from before, which the fresh page doesn't have.
+      - A browser agent's press that asks the server for its steps never answers the agent if the page moves to another page before the steps come back.
+      - When the connection drops while a press asks for its steps, the browser agent waits about 30 seconds after the page is back, then hears the page lost its connection.
+      - Offline, a press that sends nothing answers the browser agent in the right words, but the person sees no note beside the button, as the report can't reach the server.
+      - Two presses that fail close together leave one note beside the buttons, the later one's.
+      - Signed out, a browser agent's press leaves "Sign in to send this. Nothing was sent." beside the button, while the agent hears that the wallet app has no wallet open.
+      - The browser agent hears "Sent" for any hash the wallet returns, before the server checks it. A hash the page then marks as not this page's step, such as one from held steps sent by a wallet that ignores the steps' sender, is still "Sent" to the agent.
       - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
       - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.
       - WebKit is not run on the Mac.
