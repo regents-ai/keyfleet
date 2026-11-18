@@ -8,8 +8,10 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
   connection open, but in one piece of up to 8 MB that it holds until the last
   byte arrives: a hundred kept-open connections each sending 7.5 MB to an
   address that reads none held 450 to 580 MiB at once, and with each last byte
-  held back, 718 MiB for as long as the senders liked. Here a connection holds
-  one piece of 64 KiB at most.
+  held back, 718 MiB for as long as the senders liked. Here the body takes one
+  piece of 64 KiB at most. The connection still holds what the answer's own
+  work left with it until the read ends, up to 10 seconds: about 8 MB for the
+  docs page.
 
   Reading the whole body before the answer is what lets the caller hear it: a
   connection closed with its body still arriving is reset, and the caller's
@@ -18,18 +20,25 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
   the answer is sent: Plug sends it with the web server's state from before
   this callback ran (`Plug.Conn.send_resp/1`), so a server that kept the
   connection open would count the body as unread and read the next request as
-  its rest.
+  its rest. A request sent right behind such a body is never answered.
 
-  A body is read for at most 8 MB, the most Bandit reads after an answer, and
-  for at most 10 seconds in all, enough for 8 MB sent at 0.8 MB a second; past
-  either, the answer is sent with the rest unread, as Bandit sends it past
-  8 MB. A sender that awaits `Expect: 100-continue` is asked for its body here,
-  since reading it is the only way to tell whether any is left.
+  A body is read for at most 8 MB, the most Bandit reads after an answer. Each
+  read waits for its piece until 10 seconds after reading began, enough for
+  8 MB sent at 0.8 MB a second, and after that takes only what has already
+  arrived. A body sent in chunks is read only as far as it has already
+  arrived, since Bandit waits for each chunk afresh: a read that waited could
+  be held for as long as the sender kept sending small chunks. A caller still
+  sending chunks may then find the connection reset before it reads the
+  answer. Past any of these, the answer is sent with the rest unread, as
+  Bandit sends it past 8 MB.
 
   Left alone:
 
     * an answer to a request whose body was read, or that had none: its
       connection stays open, as before;
+    * a caller that asked `Expect: 100-continue` and was never told to send
+      its body: Bandit answers it and closes the connection without asking
+      for the body (RFC 9110, section 10.1.1);
     * HTTP/2, where a client sends no more than the stream's window and Bandit
       resets a stream it has not read rather than reading it;
     * a connection upgraded to a websocket (`KeyfleetWeb.Plugs.NotebookGateway`);
@@ -60,6 +69,12 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
 
   defp read_the_rest(%Plug.Conn{status: 101} = conn), do: conn
 
+  # Any read, even of nothing, would tell the caller to send its body.
+  defp read_the_rest(
+         %Plug.Conn{adapter: {Bandit.Adapter, %Bandit.Adapter{expect_continue: true}}} = conn
+       ),
+       do: conn
+
   defp read_the_rest(conn) do
     case get_http_protocol(conn) do
       :"HTTP/2" -> conn
@@ -70,7 +85,7 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
   defp close_if_any_was_left(conn) do
     case read_body(conn, length: 0) do
       {:more, _nothing, unread} ->
-        throw_away(unread, @most, System.monotonic_time(:millisecond) + @wait_ms)
+        throw_away(unread, @most, deadline(conn))
         put_resp_header(conn, "connection", "close")
 
       {:ok, _nothing, _read} ->
@@ -83,11 +98,19 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
       put_resp_header(conn, "connection", "close")
   end
 
-  defp throw_away(conn, left, deadline) do
-    wait = deadline - System.monotonic_time(:millisecond)
+  defp deadline(conn) do
+    now = System.monotonic_time(:millisecond)
 
-    with true <- wait > 0,
-         {:more, piece, conn} <-
+    case get_req_header(conn, "transfer-encoding") do
+      [] -> now + @wait_ms
+      _chunked -> now
+    end
+  end
+
+  defp throw_away(conn, left, deadline) do
+    wait = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    with {:more, piece, conn} <-
            read_body(conn, length: min(@piece, left), read_length: @piece, read_timeout: wait),
          true <- byte_size(piece) < left do
       throw_away(conn, left - byte_size(piece), deadline)

@@ -144,6 +144,79 @@ defmodule KeyfleetWeb.Plugs.UnreadBodyTest do
     assert waited in 9_000..12_000
   end
 
+  # Costly failure: a caller that waits to be told to send its body is told
+  # to send 8 MB nobody reads, or waits ten seconds for its answer.
+  test "a caller that asks before sending its body is answered at once and never asked for it",
+       c do
+    socket = connect!(c.port)
+
+    :ok =
+      :gen_tcp.send(
+        socket,
+        head("POST", "/", "localhost", [{"content-length", "8000000"}, {"expect", "100-continue"}])
+      )
+
+    {waited, answer} = :timer.tc(fn -> answer!(socket, "POST") end, :millisecond)
+
+    assert {answer.status, answer.headers["connection"], ends(socket)} == {404, "close", :closed}
+    assert waited < 1_000
+  end
+
+  # Costly failure: each chunk restarts the wait for the next, so a sender
+  # keeps the answer, and the connection's process, for as long as it sends
+  # a byte every few seconds.
+  @tag timeout: 60_000
+  test "a body in chunks still arriving is not waited for", c do
+    socket = connect!(c.port)
+
+    :ok =
+      :gen_tcp.send(socket, head("POST", "/", "localhost", [{"transfer-encoding", "chunked"}]))
+
+    dripper = spawn(fn -> drip(socket, 15) end)
+
+    {waited, answer} = :timer.tc(fn -> answer!(socket, "POST") end, :millisecond)
+    Process.exit(dripper, :kill)
+
+    assert {answer.status, answer.headers["connection"]} == {404, "close"}
+    assert waited < 1_000
+  end
+
+  # Costly failure: a read of the rest in one large piece holds it all until
+  # its last byte arrives.
+  @tag timeout: 60_000
+  test "twenty bodies whose last byte is held back hold no more than their pieces", c do
+    :erlang.garbage_collect()
+    before = :erlang.memory(:total)
+
+    sockets =
+      for _ <- 1..20 do
+        socket = connect!(c.port)
+        :ok = :gen_tcp.send(socket, head("POST", "/", "localhost", length: 7_500_001))
+        :ok = :gen_tcp.send(socket, :binary.copy("h", 7_500_000))
+        socket
+      end
+
+    grew = div(:erlang.memory(:total) - before, @mib)
+    Enum.each(sockets, &:gen_tcp.close/1)
+
+    assert grew < 60
+  end
+
+  # Costly failure: no bound on what is read for nothing.
+  test "a body is read for 8 MB at most, and the rest is left unread", c do
+    socket = connect!(c.port)
+    :ok = :gen_tcp.send(socket, head("POST", "/", "localhost", length: 40 * @mib))
+    test = self()
+
+    spawn(fn ->
+      sent = Enum.count(1..40, fn _ -> :gen_tcp.send(socket, :binary.copy("m", @mib)) == :ok end)
+      send(test, {:sent, sent})
+    end)
+
+    assert_receive {:sent, mib_sent}, 20_000
+    assert mib_sent < 40
+  end
+
   test "an answer sent in parts comes whole after the body nothing read" do
     server =
       start_supervised!(
@@ -236,6 +309,14 @@ defmodule KeyfleetWeb.Plugs.UnreadBodyTest do
   defp recv!(socket) do
     {:ok, data} = :gen_tcp.recv(socket, 0, 20_000)
     data
+  end
+
+  # One byte in a chunk of its own, every second, `left` times.
+  defp drip(_socket, 0), do: :ok
+
+  defp drip(socket, left) do
+    Process.sleep(1_000)
+    if :gen_tcp.send(socket, "1\r\nd\r\n") == :ok, do: drip(socket, left - 1)
   end
 
   # How the connection ends once the answer is read: :closed when the site
