@@ -35,7 +35,9 @@ defmodule KeyfleetWeb.FleetLive do
   The search box beside the fleet's name opens the fleet's search
   (`KeyfleetWeb.SearchLive`, at `/search`) the same way, and "Worldline"
   (`KeyfleetWeb.WorldlineLive`, at `/worldline`) and "Atlas"
-  (`KeyfleetWeb.AtlasLive`, at `/atlas`) open there too.
+  (`KeyfleetWeb.AtlasLive`, at `/atlas`) open there too, and so does the
+  record of settled seasons the hall's "Season" panel links to
+  (`KeyfleetWeb.SeasonsLive`, at `/seasons`).
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
@@ -229,7 +231,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :place, :atom,
     default: :fleet,
     doc:
-      "`:fleet` for the page's own views, or `:treasury`, `:workspace`, `:search`, `:worldline` or `:atlas`, drawn by the inner block"
+      "`:fleet` for the page's own views, or `:treasury`, `:workspace`, `:search`, `:worldline`, `:atlas` or `:seasons`, drawn by the inner block"
 
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
@@ -334,7 +336,9 @@ defmodule KeyfleetWeb.FleetLive do
           </div>
 
           <.entry
-            :if={@view not in [:workspace, :proposals, :treasury, :search, :worldline, :atlas]}
+            :if={
+              @view not in [:workspace, :proposals, :treasury, :search, :worldline, :atlas, :seasons]
+            }
             fleet={@fleet}
             actor={@actor}
             params={@params}

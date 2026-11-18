@@ -19,7 +19,8 @@ defmodule KeyfleetWeb.SeasonPanel do
   down in the browser (`KeyfleetWeb.Components.Countdown`); nothing here
   keeps time.
 
-  The fleet's record of settled seasons is its own page (`record_path/1`).
+  The fleet's record of settled seasons is its own page
+  (`KeyfleetWeb.SeasonsLive`).
   """
 
   use KeyfleetWeb, :html
@@ -31,6 +32,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   alias Keyfleet.Seasons.CoinList
   alias Keyfleet.Seasons.Errors
   alias KeyfleetWeb.BoxLimit
+  alias KeyfleetWeb.SeasonsLive
   alias KeyfleetWeb.ShellLive
   alias Phoenix.Socket.Broadcast
 
@@ -52,9 +54,6 @@ defmodule KeyfleetWeb.SeasonPanel do
     reason: "A reason is plain text of up to 500 characters.",
     no_key: "Only a Key holder picks."
   }
-
-  @doc "The address of the fleet's record of settled seasons."
-  def record_path(fleet_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/seasons"
 
   @doc """
   The season under way as anyone reads it, or nil while none is: its number,
@@ -169,13 +168,22 @@ defmodule KeyfleetWeb.SeasonPanel do
       <.pick :if={@season.member? and @season.taking} season={@season} />
       <.picks :if={@season.member? and @season.face} season={@season} />
 
-      <p class="fleet-detail fleet-season__terms">
-        Results are records, not forecasts. Keyfleet places no order and holds no money. To follow,
-        your agent trades in your own <a href={coinbase()} rel="noopener" target="_blank">Coinbase</a>
-        account.
-      </p>
-      <.link id="fleet-season-record" patch={record_path(@season.fleet_id)}>Record</.link>
+      <.terms />
+      <.link id="fleet-season-record" patch={SeasonsLive.seasons_path(@season.fleet_id)}>
+        Record
+      </.link>
     </section>
+    """
+  end
+
+  @doc "The line under the panel and the record: what the results are, and what Keyfleet does not do."
+  def terms(assigns) do
+    ~H"""
+    <p class="fleet-detail fleet-season__terms">
+      Results are records, not forecasts. Keyfleet places no order and holds no money. To follow,
+      your agent trades in your own <a href={coinbase()} rel="noopener" target="_blank">Coinbase</a>
+      account.
+    </p>
     """
   end
 
@@ -379,8 +387,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   def captain(nil), do: "—"
   def captain(key), do: "Key #{key}"
 
-  @doc "Coinbase's own page for agents, which the panel and the record point to."
-  def coinbase, do: @coinbase
+  defp coinbase, do: @coinbase
 
   defp longest_reason, do: @longest_reason
 

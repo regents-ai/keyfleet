@@ -13043,3 +13043,31 @@ step's report).
   but no form and no pick, proves another Key's pick of the season taking picks is in
   neither the page nor the page's process, updates open pages on a lock and on a turn,
   and pages the picks ten at a time.
+
+## 2026-11-18 — A fleet's record of settled seasons is a page
+
+- New fleet page `/:fleet/:number/seasons` (route id `:seasons`, title "Seasons"),
+  drawn inside the fleet page under its bar like the Worldline and the Atlas, with no
+  tab of its own; the Season panel's Record opens it. `KeyfleetWeb.SeasonsLive` reads
+  `Seasons.settled_page/2` as the page opens: a table of settled seasons, newest first,
+  twenty with More (Season with its start time, Holding, Captain, Result, Picks). A row
+  opens to that season's picks from `Seasons.settled_picks_page/4`, 100 with More (Key,
+  product, result, reason); one row is open at a time. With none settled it says "No
+  season has ended yet." The Coinbase line under the panel is
+  `KeyfleetWeb.SeasonPanel.terms/1`, under both now.
+- "24h" above the table is `Keyfleet.Seasons.Rules.compounded/1` over the newest eight
+  settled seasons, or as many as there are: the product of each season's holding close
+  over open, less one, taken as whole numbers and divided once; a holding without both
+  prices counts as no change, and no seasons is nil. Its tests cover one season, a rise
+  and equal fall, missing prices and exactness (a third and its inverse come back to 0,
+  eight seasons of 45000.5 to 45001 equal the one division).
+- The route is in the route catalog (110 routes), its handoff files, the router's
+  gate coverage, the page titles, the site map (each open fleet's record beside its
+  page), `/docs` (Seasons and the site map line), `docs/agent-parity.md` and
+  `verification/features.yml` (`seasons-record-page`).
+- Tests: `SeasonsPageTest` reads only settled seasons signed out with the day over the
+  newest eight, opens the record from the hall's Record, shows the day over fewer and
+  the empty page, pages twenty seasons, and opens a season of 101 picks a hundred at a
+  time; `PublicPagesControllerTest` finds the record in the site map.
+- Not done: the page doesn't hear a turn; a season settled while it is open shows
+  when it is opened again.

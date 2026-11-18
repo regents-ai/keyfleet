@@ -113,6 +113,27 @@ defmodule Keyfleet.Seasons.Rules do
     end
   end
 
+  @doc """
+  What holding the fleet's holding through each of `seasons` came to: the
+  product of each one's close over open, less one, where a holding without
+  both prices counts as no change; nil for no seasons. The product is taken
+  of whole numbers and divided once, so that division, to 28 digits, is the
+  only rounding.
+  """
+  @spec compounded([season()]) :: Decimal.t() | nil
+  def compounded([]), do: nil
+
+  def compounded(seasons) do
+    {closes, opens} =
+      Enum.reduce(seasons, {1, 1}, fn season, {closes, opens} ->
+        {open, close} = holding_prices(season)
+        [close, open] = whole([close, open])
+        {closes * close, opens * open}
+      end)
+
+    Decimal.div(closes - opens, opens)
+  end
+
   defp scored?(%{open_price: %Decimal{}, close_price: %Decimal{}}), do: true
   defp scored?(_void), do: false
 

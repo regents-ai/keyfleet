@@ -146,7 +146,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Carry out a proposal | `/proposals/:n` | `chain_carry_out`; page `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5 |
 | Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | the same two | the same two | `polls list`, `polls show` | no | — |
 | Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | the same three | the same three | `polls start`, `polls vote`, `polls end` | no | — |
-| Seasons: read now, the settled ones, one season's picks and the products open to picks | the fleet page's Season panel (the season under way, its picks ten at a time, the season taking picks) | `seasons_show`, `seasons_list`, `seasons_picks`, `seasons_coins` | the same four | the same four | `seasons show`, `seasons list`, `seasons picks`, `seasons coins` | no | K18 |
+| Seasons: read now, the settled ones, one season's picks and the products open to picks | the fleet page's Season panel (the season under way, its picks ten at a time, the season taking picks); `/seasons` (the settled ones and their picks) | `seasons_show`, `seasons_list`, `seasons_picks`, `seasons_coins` | the same four | the same four | `seasons show`, `seasons list`, `seasons picks`, `seasons coins` | no | K18 |
 | Seasons: lock or change a Key's pick | the fleet page's Season panel, Lock | `seasons_pick` | the same | the same | `seasons pick` | no | — |
 
 ## Treasury

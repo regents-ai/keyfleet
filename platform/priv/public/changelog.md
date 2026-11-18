@@ -4,6 +4,13 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
+- **Season record.** Each fleet has a Seasons page, opened from the panel's Record,
+  that anyone can read: every season that has ended, newest first, twenty at a time,
+  with the coin the fleet held, its captain, how the holding did and how many Keys
+  picked. Open a season to see every Key's pick, a hundred at a time, with its result
+  and reason. Above them, 24h shows how the holding did over the last eight seasons,
+  a day of them, each season's move multiplied into the next. Results are records, not
+  forecasts.
 - **Season panel.** A fleet's page now shows its season under way to everyone: the
   coin the fleet holds and its price at the start, the captain, the time left, and how
   the last season ended, as a percentage, with whether the crown passed. A Key holder

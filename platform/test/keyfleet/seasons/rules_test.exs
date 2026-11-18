@@ -136,6 +136,52 @@ defmodule Keyfleet.Seasons.RulesTest do
            }
   end
 
+  describe "compounded/1" do
+    test "is nothing for no seasons, and one season's result for one" do
+      assert Rules.compounded([]) == nil
+      assert Decimal.eq?(Rules.compounded([holding("100", "102.5")]), "0.025")
+    end
+
+    test "multiplies the seasons' moves, so a rise and an equal fall lose" do
+      seasons = [holding("100", "110"), holding("110", "99")]
+      assert Decimal.eq?(Rules.compounded(seasons), "-0.01")
+    end
+
+    test "counts a holding without both prices as no change" do
+      seasons = [
+        holding("100", "110"),
+        %{@usdc_season | holding_close_price: nil},
+        %{@usdc_season | holding_open_price: nil, holding_close_price: nil},
+        @usdc_season
+      ]
+
+      assert Decimal.eq?(Rules.compounded(seasons), "0.1")
+    end
+
+    # A third and its inverse come back to exactly nothing, which rounding each
+    # season's result to 28 digits would miss.
+    test "is exact, however the prices are written" do
+      seasons = [holding("3", "1"), holding("0.000123", "0.000123000"), holding("1.0", "3")]
+      assert Decimal.eq?(Rules.compounded(seasons), 0)
+
+      thirds = Rules.compounded([holding("3", "1")])
+      refute Decimal.eq?(Decimal.mult(Decimal.add(thirds, 1), 3), 1)
+
+      # In tenths of a dollar, 450_005 rising to 450_010, eight times over.
+      eight = for _season <- 1..8, do: holding("45000.5", "45001")
+      expected = Decimal.div(450_010 ** 8 - 450_005 ** 8, 450_005 ** 8)
+      assert Rules.compounded(eight) == expected
+    end
+  end
+
+  defp holding(open, close),
+    do: %{
+      @usdc_season
+      | holding: "SOL-USD",
+        holding_open_price: Decimal.new(open),
+        holding_close_price: Decimal.new(close)
+    }
+
   defp pick(token_id, lock_order, product, open, close) do
     %{
       token_id: token_id,

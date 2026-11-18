@@ -1838,6 +1838,39 @@ features:
     gaps:
       - No price moves on the panel while a season runs; results appear when it settles.
 
+  - id: seasons-record-page
+    what: >-
+      Anyone, signed out too, reads a fleet's settled seasons at
+      /:fleet/:number/seasons, opened from the Season panel's Record: newest
+      first, twenty at a time with More, each with its number and start time,
+      holding, captain, the holding's result and how many Keys picked. A
+      season's row opens to its picks, a hundred at a time with More: Key,
+      product, result and reason. Above the table, 24h is the holding's
+      compounded result over the last eight settled seasons, or as many as
+      have settled, multiplied exactly from the holding's prices; a season
+      whose holding has not both prices counts as no change. With none
+      settled the page says so. The page is in the site map.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/seasons_live.ex
+      - platform/lib/keyfleet_web/live/season_panel.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/route_catalog.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet/seasons/rules.ex
+      - platform/assets/css/pages/seasons.css
+    entry:
+      - route: GET /:fleet/:number/seasons
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/seasons_page_test.exs
+      - platform/test/keyfleet/seasons/rules_test.exs
+      - platform/test/keyfleet_web/route_catalog_test.exs
+    gaps:
+      - Read as the page opens and as More asks; a season settled while the page is open shows when it is opened again.
+
   - id: agent-live-feed
     what: >-
       A paired agent keeps one signed GET /api/v1/feed open and hears, the
