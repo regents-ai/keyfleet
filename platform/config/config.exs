@@ -429,12 +429,14 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   # `KeyfleetWeb.Plugs.NotebookGateway`). It is the largest message a live
   # page sends, rounded up. The largest two: the first message of a page
   # reached by a link from one opened at the longest address the site takes,
-  # which carries both addresses and the first page's token (50,307 bytes),
+  # which carries both addresses and the first page's token (50,309 bytes),
   # and the proposal form typed to every field's limit in letters of three
-  # bytes, which a form's change writes as nine characters each (49,540).
-  # Every text field has a browser limit (`maxlength`), a page's tools take
-  # no more (`priv/tool_manifest.json`), and a page drops a #fragment of over
-  # 256 characters before it joins (`assets/js/app.ts`).
+  # bytes, which a form's change writes as nine characters each (49,738).
+  # Every text field has a browser limit (`maxlength`, two more than the site
+  # takes, `KeyfleetWeb.BoxLimit`), a page's tools take no more than the site
+  # does, counted as a box counts (`priv/tool_manifest.json`), a value is
+  # drawn back no longer than its box (`KeyfleetWeb.WalletPanel`), and a page
+  # drops a #fragment of over 256 characters before it joins (`assets/js/app.ts`).
   # KeyfleetWeb.LiveMessageLimitTest and the proposals page's test measure them.
   http: [
     http_1_options: [gc_every_n_keepalive_requests: 1],
