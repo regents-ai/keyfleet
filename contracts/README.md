@@ -2158,8 +2158,13 @@ its usual 30% margin.
 ## Checks
 
 Run `make check-contracts` from the repository root. It runs, in `contracts/`,
-`forge fmt --check`, `forge build`, `forge test` (all but the audit's fork
-proofs) and `script/check_bytecode.sh`.
+`forge fmt --check`, `forge build`, `script/check_bytecode.sh` and last
+`forge test` (all but the audit's fork proofs) through `script/run_tests.sh`,
+which ends the output by saying whether the Base fork proofs ran, naming every
+suite that skipped itself and the path left out. Without `BASE_RPC_URL` the
+suites in `test/fork/` skip themselves and the gate still passes, so read those
+closing lines before taking a pass to include them; the Base gas suite also
+skips there, since it needs `--isolate`.
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),

@@ -12037,3 +12037,13 @@ step's report).
   the collection, that Key waits for its card. Sales go on, and Keys within their decks are dealt
   as before. The order it recommends is the subscription handed to the Safe and the collection
   listed before phase 3 is opened.
+
+## 2026-11-18 — The contract check says what it did not run
+
+- `make check-contracts` passed with every Base fork proof skipped whenever `BASE_RPC_URL` was
+  not set, and nothing at its end said so. It now runs `forge test` last, through
+  `contracts/script/run_tests.sh`, which keeps Forge's own output and exit status and ends with
+  whether the Base fork proofs ran (`Base fork proofs: NOT RUN, BASE_RPC_URL is not set.` or
+  `Base fork proofs: run against BASE_RPC_URL.`), every suite in which a test skipped itself, and
+  the path the gate leaves out, the audit's fork proofs. The bytecode check now runs before the
+  tests. The gate still passes without an endpoint and has no endpoint of its own.

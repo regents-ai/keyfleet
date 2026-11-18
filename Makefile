@@ -92,8 +92,10 @@ check-cli:
 # as it is on elixir-utils main (scripts/check-siwa-latest.sh). Needs `gh auth login`.
 check-siwa-latest:
 	scripts/check-siwa-latest.sh $(REGENTS_CLI_REV)
+# The tests run last, so the gate ends by saying whether the Base fork proofs ran and naming every
+# suite that skipped itself (contracts/script/run_tests.sh); it passes without BASE_RPC_URL.
 check-contracts:
-	cd contracts && nice forge fmt --check && nice forge build && nice forge test --no-match-path 'test/audit/KeyfleetAuditFork.t.sol' && nice script/check_bytecode.sh
+	cd contracts && nice forge fmt --check && nice forge build && nice script/check_bytecode.sh && nice script/run_tests.sh --no-match-path 'test/audit/KeyfleetAuditFork.t.sol'
 # The audit's proofs against real Base contracts, on a fork pinned to one block.
 # Needs BASE_RPC_URL and fails without it.
 check-audit-fork:
