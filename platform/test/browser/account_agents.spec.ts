@@ -1,5 +1,5 @@
 import {expect, test, type Page} from "@playwright/test"
-import {newAgent, pairPerson, useCode} from "./support/agent_tools"
+import {checkInDaily, newAgent, pairPerson, useCode} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {prepareFleet, sellKey} from "./support/fleet_chain"
 
@@ -265,6 +265,41 @@ test("each agent on a Key shows its harness's logo, and Add agent's chevron stan
     const remove = (name: string) => gallery.getByRole("button", {name: `Take ${name} off Key ${key}`}).boundingBox()
     const [museRemove, plainRemove] = [(await remove(museName))!, (await remove(plainName))!]
     expect(museRemove.x).toBe(plainRemove.x)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+  }
+  expect(errors).toEqual([])
+})
+
+// What an agent says blocks it comes to its person's open Agents page with
+// the check-in that says it: quoted in Blocked, beside the agent's check-in
+// light and words. A long line with no spaces wraps within the card, on a wide
+// screen and on a phone.
+test("what an agent says blocks it comes to the open Agents page, and a long line stays within Blocked", async ({page}) => {
+  const fleet = "fleet_tech_classic"
+  prepareFleet(fleet)
+  const agent = newAgent()
+  const name = `Stuck ${agent.slice(2, 8)}`
+  pairPerson(agent, person, name)
+  const errors = await signIn(page)
+  await openAgents(page)
+
+  const blocked = page.locator("#account-agents-blocked")
+  const row = blocked.locator("li", {hasText: name})
+  await expect(row).toHaveCount(0)
+
+  const line = `Waiting on gas, see https://example.com/${"x".repeat(200)}`
+  checkInDaily(agent, fleet, line)
+  await expect(row.locator("blockquote")).toHaveText(`“${line}”`)
+  await expect(row.locator(".check-in-status")).toHaveText("Waiting for a second scheduled check-in")
+  await expect(row.getByRole("link", {name: "Classic #1"})).toHaveAttribute("href", "/classic/1")
+
+  for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
+    await page.setViewportSize(viewport)
+    const card = (await blocked.boundingBox())!
+    const quote = (await row.locator("blockquote").boundingBox())!
+    expect(card.x).toBeGreaterThanOrEqual(0)
+    expect(card.x + card.width).toBeLessThanOrEqual(viewport.width)
+    expect(quote.x + quote.width).toBeLessThanOrEqual(card.x + card.width)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
   }
   expect(errors).toEqual([])

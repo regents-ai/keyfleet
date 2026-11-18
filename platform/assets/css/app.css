@@ -22,6 +22,7 @@
 @import "./components/presence_card.css";
 @import "./components/agent_setup.css";
 @import "./components/fleet_prompts.css";
+@import "./components/schedule_card.css";
 @import "./components/motion.css";
 @import "./components/placeholder.css";
 @import "./components/page_progress.css";

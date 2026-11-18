@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Agents.Here
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
@@ -1137,6 +1138,67 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       refute has_element?(view, "#fleet-prompts-pair")
       refute has_element?(view, "#fleet-prompts-pairing")
+    end
+
+    # Drawn with the page from its first paint, so it never moves the page as
+    # it shows; the scheduled check-in reaches the open page itself.
+    test "Schedule shows while the person's agent has no scheduled check-in seen here" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      first_paint = conn |> get(@path) |> html_response(200) |> LazyHTML.from_document()
+      schedule = LazyHTML.query(first_paint, "#fleet-prompts-schedule:not([hidden])")
+      assert Enum.count(schedule) == 1
+
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+
+      assert has_element?(
+               view,
+               ~s|#fleet-prompts-schedule:not([hidden])[phx-hook=ScheduleCard][data-fleet="#{@fleet}"]|
+             )
+
+      assert has_element?(view, "#fleet-prompts-schedule .schedule-card__who", "Test agent")
+      assert has_element?(view, "#fleet-prompts-schedule [data-dismiss]")
+
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, %{"kind" => "session"})
+      render(view)
+      assert has_element?(view, "#fleet-prompts-schedule")
+
+      run = %{"kind" => "scheduled", "every_minutes" => 1440}
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+      render(view)
+      refute has_element?(view, "#fleet-prompts-schedule")
+    end
+
+    # The browser's cookie names the fleets whose Schedule it put away: read
+    # as the page is requested, and as the card's hook says once one is put
+    # away while the page is open.
+    test "Schedule put away in this browser is drawn on no page of that fleet" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+      assert has_element?(view, "#fleet-prompts-schedule")
+
+      render_hook(view, "schedule_put_away", %{"put_away" => "fleet_tech_classic.#{@fleet}"})
+      refute has_element?(view, "#fleet-prompts-schedule")
+
+      conn = put_req_cookie(conn, "keyfleet_schedule", @fleet)
+      first_paint = conn |> get(@path) |> html_response(200) |> LazyHTML.from_document()
+      assert LazyHTML.query(first_paint, "#fleet-prompts") |> Enum.count() == 1
+      assert LazyHTML.query(first_paint, "#fleet-prompts-schedule") |> Enum.count() == 0
+
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+      refute has_element?(view, "#fleet-prompts-schedule")
+    end
+
+    test "a holder with no agent sees no Schedule", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+
+      assert has_element?(view, "#fleet-prompts-pair")
+      refute has_element?(view, "#fleet-prompts-schedule")
     end
   end
 

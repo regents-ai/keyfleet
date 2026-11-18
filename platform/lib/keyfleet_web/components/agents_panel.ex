@@ -9,7 +9,14 @@ defmodule KeyfleetWeb.AgentsPanel do
   name, which the person may change, and Unpair, which asks first in the site's
   confirm window. Beside each agent are the Keys it is on and those it holds a
   shard of, or, with none, Assign a Key, which leads to Your Keys on the
-  Account page (`KeyfleetWeb.AgentKeys`).
+  Account page (`KeyfleetWeb.AgentKeys`). Above them, Schedule
+  (`KeyfleetWeb.Components.ScheduleCard`) names each agent with no scheduled
+  check-in seen in a fleet where the person holds a Key, for as long as that
+  lasts; unlike a fleet's page, it can't be put away here. Blocked shows, in
+  each agent's own words, what it said was blocking it at its last check-in
+  in a fleet, beside what its check-ins there show
+  (`Keyfleet.Agents.CheckInStatus`), until a check-in says nothing; it is read
+  as the person, who alone may read it besides the agent.
 
   Pairing immediately lets an agent do what `Keyfleet.Capabilities.may/0`
   lists, which the list's tip and the agent's view show the person. Pairing is
@@ -22,8 +29,14 @@ defmodule KeyfleetWeb.AgentsPanel do
   """
   use KeyfleetWeb, :live_component
 
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Agents.ActivityReading
+  alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Capabilities
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias KeyfleetWeb.Components.ScheduleCard
   alias KeyfleetWeb.Live.Session
   alias Regent.Primitives, as: P
   alias RegentAgents.{Harness, HumanBacking, PairedAgent, Person}
@@ -144,6 +157,14 @@ defmodule KeyfleetWeb.AgentsPanel do
   def render(assigns) do
     ~H"""
     <div class="account-agents">
+      <ScheduleCard.card
+        :if={@schedule != []}
+        id={"#{@id}-schedule"}
+        class="account-agents__schedule"
+        agents={@schedule}
+        page={:agents}
+      />
+      <.blocked :if={@blocked != []} id={"#{@id}-blocked"} agents={@blocked} />
       <Regent.Account.agents
         id={@id}
         agents={rows(@agents, @lights, @now)}
@@ -262,6 +283,44 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   def agent_keys(assigns), do: ~H""
 
+  attr :id, :string, required: true
+
+  attr :agents, :list,
+    required: true,
+    doc: "each agent's last word on what blocks it in a fleet, as `blocked/3` gives them"
+
+  @doc """
+  What the person's agents said was blocking them, each in its own words
+  under what its check-ins in that fleet show. The words are drawn as text.
+  """
+  def blocked(assigns) do
+    ~H"""
+    <section id={@id} class="rg-panel agents-blocked" aria-labelledby={"#{@id}-title"}>
+      <div class="rg-panel__body">
+        <h2 id={"#{@id}-title"}>Blocked</h2>
+        <p class="agents-blocked__words">
+          What your agents say is holding them up, in their own words.
+        </p>
+        <ul class="agents-blocked__list">
+          <li :for={agent <- @agents} data-wallet={agent.wallet} data-fleet={agent.fleet_id}>
+            <p class="agents-blocked__who">
+              <strong>{agent.name}</strong>
+              <.link navigate={Fleets.path(agent.fleet_id)}>{Fleets.name(agent.fleet_id)}</.link>
+              <span class="check-in-status" data-light={agent.light}>{agent.status}</span>
+              <span>
+                Last check-in <time datetime={agent.at_iso}>{agent.at}</time>
+              </span>
+            </p>
+            <blockquote class="agents-blocked__line">
+              <p>“{agent.blocker}”</p>
+            </blockquote>
+          </li>
+        </ul>
+      </div>
+    </section>
+    """
+  end
+
   @doc """
   Each agent as the shared list shows it, newest first as the account reads
   them, with its wallet and its check-in light from `lights`, by wallet.
@@ -339,6 +398,42 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   defp keys(_account, :unavailable), do: %{}
 
+  # Each agent with no scheduled check-in seen in a fleet where the person
+  # holds a Key, the fleets in the site's order.
+  defp schedule(account) do
+    person = Human.for_account(account)
+
+    held =
+      person.wallet_addresses
+      |> Keys.keys_held_everywhere!(actor: person)
+      |> MapSet.new(& &1.fleet_id)
+
+    Upkeep.unscheduled(person, for(%{id: id} <- Fleets.catalog(), id in held, do: id))
+  end
+
+  # What each agent last said was blocking it, fleet by fleet, the latest
+  # first, with the light and words its check-ins there give.
+  defp blocked(agents, person, now) when is_list(agents) do
+    names = Map.new(agents, &{&1.wallet, &1.name})
+
+    for check_in <- Keyfleet.Agents.blocked_check_ins!(Map.keys(names), actor: person) do
+      {_status, words} = CheckInStatus.derive(check_in, now)
+
+      %{
+        fleet_id: check_in.fleet_id,
+        wallet: check_in.acting_agent_wallet,
+        name: names[check_in.acting_agent_wallet],
+        blocker: check_in.blocker,
+        status: words,
+        light: CheckInStatus.light(check_in, now),
+        at_iso: DateTime.to_iso8601(check_in.last_check_in_at),
+        at: RegentFormat.relative_time(check_in.last_check_in_at, now)
+      }
+    end
+  end
+
+  defp blocked(:unavailable, _person, _now), do: []
+
   defp agent_keys_of(:unavailable, _agent), do: :unavailable
   defp agent_keys_of(keys, agent), do: keys[agent.id]
 
@@ -356,6 +451,8 @@ defmodule KeyfleetWeb.AgentsPanel do
         agents: agents,
         lights: lights(agents, now),
         keys: keys(socket.assigns.account, agents),
+        schedule: schedule(socket.assigns.account),
+        blocked: blocked(agents, socket.assigns.person, now),
         now: now
       )
 

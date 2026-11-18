@@ -235,6 +235,10 @@ defmodule KeyfleetWeb.FleetLive do
   attr :who, :any, required: true, doc: "the agents \"Here now\" shows"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
+  attr :schedule_put_away, :list,
+    required: true,
+    doc: "the fleets whose Schedule this browser put away (`ScheduleCard.put_away/1`)"
+
   attr :quotes, :map,
     default: nil,
     doc:
@@ -424,6 +428,7 @@ defmodule KeyfleetWeb.FleetLive do
           actor={@actor}
           account={@account}
           lease={@lease}
+          schedule_put_away?={@fleet.fleet_id in @schedule_put_away}
         />
 
         <div class="fleet-stage">

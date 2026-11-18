@@ -8,7 +8,11 @@ defmodule Keyfleet.Agents.Upkeep do
 
   `setup/4` reads the same figures as the five states an agent's setup ends in,
   and `person_agents/2` the same states for the agents a signed-in person has
-  paired, with `pays?/2` the chain's answer on gas.
+  paired, with `pays?/2` the chain's answer on gas. Both name the same steps:
+  an agent with a Key or a shard of its own to mark finishes when all five are
+  done, and one with neither when it is paired and its scheduled check-ins
+  repeat, a shard being only a tip for it. `unscheduled/2` names a person's
+  agents with no scheduled check-in seen, by the same `schedule` state.
   """
 
   alias Keyfleet.Actors.Human
@@ -51,7 +55,9 @@ defmodule Keyfleet.Agents.Upkeep do
 
   @doc """
   The five states of an agent's setup, read from `upkeep` (`read/3`, with its
-  gas), and the one thing to do next, nil once all five are true.
+  gas), the one thing to do next, nil once every step it has is done, and a
+  tip, nil but for an agent with no Key or shard of its own to mark: that its
+  person may give it a shard, which it doesn't need.
   """
   def setup(actor, fleet_id, profile, upkeep) do
     check_in = profile && Agents.get_check_in!(profile.id, fleet_id)
@@ -62,14 +68,15 @@ defmodule Keyfleet.Agents.Upkeep do
       |> states(keys, DateTime.utc_now())
       |> Map.merge(%{paired: match?(%Human{}, actor.pairing), gas: can_pay?(keys, upkeep.gas)})
 
-    Map.put(states, :next_step, next_step(states, keys))
+    Map.merge(states, %{next_step: next_step(states, keys), tip: tip(keys)})
   end
 
   @doc """
-  The agents `person` has paired, each as `%{wallet, name, key_count, schedule,
-  marked, repeated, run_missed, lapses_at}`, in the fleet. `lapses_at` is when
-  the first of its Keys stops being present. Nothing here reads the chain, so a
-  page draws them at once and asks `pays?/2` beside them.
+  The agents `person` has paired, each as `%{wallet, name, key_count, steps,
+  schedule, marked, repeated, run_missed, lapses_at}`, in the fleet. `steps`
+  are the states its setup must reach, in order, as `setup/4` counts them.
+  `lapses_at` is when the first of its Keys stops being present. Nothing here
+  reads the chain, so a page draws them at once and asks `pays?/2` beside them.
   """
   def person_agents(%Human{} = person, fleet_id) do
     now = DateTime.utc_now()
@@ -86,9 +93,32 @@ defmodule Keyfleet.Agents.Upkeep do
         wallet: wallet,
         name: name,
         key_count: length(keys),
+        steps: steps(keys),
         run_missed: match?({:paused, _label}, CheckInStatus.derive(check_in, now)),
         lapses_at: lapses_at(keys)
       })
+    end
+  end
+
+  @doc """
+  Each agent `person` has paired that has no scheduled check-in seen in each
+  of `fleet_ids`, as `setup/4`'s `schedule` reads it, fleet by fleet:
+  `%{fleet_id, wallet, name, status, light}`, with the words and the light
+  `CheckInStatus` gives its check-ins there. An agent whose runs come, or
+  that only waits between them, has had one seen and isn't here.
+  """
+  def unscheduled(%Human{} = person, fleet_ids) do
+    now = DateTime.utc_now()
+    agents = Agents.my_agents(person)
+    wallets = Enum.map(agents, & &1.wallet)
+
+    for fleet_id <- fleet_ids,
+        check_ins = Agents.check_ins_by_wallet(wallets, fleet_id),
+        %{wallet: wallet, name: name} <- agents,
+        not scheduled?(check_ins[wallet]) do
+      {_status, words} = CheckInStatus.derive(check_ins[wallet], now)
+      light = CheckInStatus.light(check_ins[wallet], now)
+      %{fleet_id: fleet_id, wallet: wallet, name: name, status: words, light: light}
     end
   end
 
@@ -99,9 +129,13 @@ defmodule Keyfleet.Agents.Upkeep do
   def pays?(_wallet, 0), do: nil
   def pays?(wallet, key_count), do: can_pay?([key_count], gas(wallet, key_count))
 
+  # A scheduled check-in declares the schedule; one of the agent's in the
+  # fleet has arrived.
+  defp scheduled?(check_in), do: check_in != nil and check_in.schedule_minutes != nil
+
   defp states(check_in, keys, now) do
     %{
-      schedule: check_in != nil and check_in.schedule_minutes != nil,
+      schedule: scheduled?(check_in),
       marked: keys != [] and Enum.all?(keys, &needs_no_mark?(&1.present_until, now)),
       repeated: CheckInStatus.repeating?(check_in, now)
     }
@@ -128,41 +162,51 @@ defmodule Keyfleet.Agents.Upkeep do
   defp can_pay?(_keys, %{pays_own_fee: false}), do: true
   defp can_pay?(_keys, %{marks_left: left}), do: left > 0
 
+  # The states an agent's setup must reach, in order. Marking Keys present is
+  # part of it only for an agent with a Key or a shard of its own to mark; one
+  # with neither acts as its person's Key and needs no shard (`tip/1`).
+  defp steps([]), do: [:paired, :schedule, :repeated]
+  defp steps(_keys), do: [:paired, :gas, :schedule, :marked, :repeated]
+
+  defp next_step(states, keys), do: Enum.find_value(steps(keys), &step(&1, states[&1]))
+
+  defp tip([]),
+    do:
+      "Optional, for presence only: your person may give you a shard of their Key, so you " <>
+        "can mark it present for them. Without one they mark it themselves, and nothing " <>
+        "else needs it: the may field says what you can do now."
+
+  defp tip(_keys), do: nil
+
   # Each step past pairing is about presence or scheduled check-ins, never
   # what the agent may read or write (`may`), and the schedule's two are what
   # Keyfleet has seen arrive, never what the agent has set up on its side.
-  defp next_step(%{paired: false}, _keys), do: "Ask your person for a pairing code."
+  defp step(_step, true), do: nil
+  defp step(:paired, false), do: "Ask your person for a pairing code."
 
-  defp next_step(_states, []),
-    do:
-      "For presence only: ask your person for a shard of their Key, or to mark it present " <>
-        "themselves. The may field says what you can do now."
-
-  defp next_step(%{gas: nil}, _keys),
+  defp step(:gas, nil),
     do:
       "For presence only: the chain didn't answer whether your wallet can pay to mark your " <>
         "Keys. Read this again in a minute."
 
-  defp next_step(%{gas: false}, _keys),
+  defp step(:gas, false),
     do: "For presence only: ask your person to send your wallet ETH on Base to pay for marks."
 
-  defp next_step(%{schedule: false}, _keys),
+  defp step(:schedule, false),
     do:
       "No scheduled check-in for this fleet has reached Keyfleet yet. Keyfleet sees one when " <>
         "a run your scheduler starts syncs this fleet with run.kind scheduled: schedule your " <>
         "check-ins, then start one now."
 
-  defp next_step(%{marked: false}, _keys), do: "For presence only: mark your Keys present."
+  defp step(:marked, false), do: "For presence only: mark your Keys present."
 
   # Not repeating is exactly one of these two (`CheckInStatus.repeating?/2`);
   # a new interval clears the confirmation (`Changes.ScheduledCheckIn`).
-  defp next_step(%{repeated: false}, _keys),
+  defp step(:repeated, false),
     do:
       "Keyfleet hasn't confirmed your schedule for this fleet, or your last scheduled " <>
         "check-in is more than twice run.every_minutes plus 45 minutes old. Keep checking " <>
         "in with the same run.every_minutes, and read this again after your next check-in."
-
-  defp next_step(_states, _keys), do: nil
 
   # A Key needs no mark while its 48 hours run, and while it waits for its
   # automatic start, which comes by itself and before which the contract

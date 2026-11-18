@@ -1,6 +1,6 @@
 import {existsSync, readFileSync} from "node:fs"
 import {expect, test, type Locator, type Page} from "@playwright/test"
-import {newAgent, useCode} from "./support/agent_tools"
+import {checkInDaily, newAgent, useCode} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {allowUsdc, landStep, markPresent, prepareFleet, sellKey} from "./support/fleet_chain"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
@@ -9,7 +9,8 @@ import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 // up your agent" brings them to the fleet's page. Pair and Mark present stand
 // under its tabs: Pair opens the pairing box and goes once an agent is paired,
 // which the visit's lines record (KeyfleetWeb.VisitLog); Mark present marks the owner's idle Key in one press, every press reaching
-// the wallet, and goes once the Key is present. Signed in as "other-account"
+// the wallet, and goes once the Key is present. Schedule shows under them
+// while the agent has no scheduled check-in seen. Signed in as "other-account"
 // (test/support/test_privy_verifier.ex), whose account no other spec pairs an
 // agent with, nor gives a Classic Key. Each press goes to a stand-in wallet;
 // the test lands it, then records on the made-up chain what the contract logs.
@@ -100,6 +101,9 @@ function visitEvents(visit: string) {
     .map(({event}) => `${event.name} ${event.where}`)
 }
 
+// The agent the first walk pairs, which the second schedules.
+let astra = ""
+
 test.beforeAll(() => {
   prepareFleet(fleet)
   allowUsdc(owner, 1_000_000_000_000)
@@ -145,10 +149,11 @@ test("a new owner pairs an agent and marks their idle Key present from the top o
 
   await pair.click()
   await expect(pair).toHaveAttribute("aria-expanded", "true")
-  const agent = newAgent()
-  useCode(agent, await pairingCode(page, "Dots"), "Astra")
+  astra = newAgent()
+  useCode(astra, await pairingCode(page, "Dots"), "Astra")
   await expect(pair).toHaveCount(0)
   await expect(page.locator("#fleet-prompts-pairing")).toHaveCount(0)
+  await expect(page.locator("#fleet-prompts-schedule")).toBeVisible()
   const visit = (await page.context().cookies()).find(cookie => cookie.name === "_visit")!.value
   await expect.poll(() => visitEvents(visit)).toContain("step agent_paired")
   await expect(mark).toBeEnabled()
@@ -163,7 +168,78 @@ test("a new owner pairs an agent and marks their idle Key present from the top o
   landStep(first.hash, first.transaction, true)
   markPresent(fleet, owner)
   await expect(mark).toHaveCount(0)
-  await expect(page.locator("#fleet-prompts > *")).toHaveCount(0)
+  await expect(page.locator("#fleet-prompts > *")).toHaveCount(1)
+  await expect(page.locator("#fleet-prompts-schedule")).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+// Astra, paired above, has had no scheduled check-in seen. Schedule sits in
+// the page under the tabs, Copy line gives the guide's line, whose address
+// answers, and Dismiss puts it away on this fleet's page in this browser,
+// across a reload. The Agents page keeps Astra's row for this fleet, with no
+// Dismiss, until Astra's run checks in here, and then it goes by itself, as
+// the card on the fleet's page does. Astra may be named for another fleet the
+// person holds a Key in too, so the walk names the row by agent and fleet.
+test("Schedule gives the line to schedule check-ins, goes when put away, and stays on the Agents page until one is seen", async ({page}) => {
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
+  await page.setViewportSize({width: 1280, height: 720})
+  await (await installAuthenticatedPrivy(page, "other-account")).establishLocalSession()
+  await page.goto("/classic/1")
+  await connected(page)
+
+  const card = page.locator("#fleet-prompts-schedule")
+  await expect(card).toBeVisible()
+  await expect(card.getByRole("heading", {name: "Schedule"})).toBeVisible()
+  const who = card.locator(".schedule-card__who")
+  await expect(who).toContainText("Astra")
+  await expect(who).toContainText("Hasn’t checked in")
+  const tabs = (await page.locator(".fleet-bar").boundingBox())!
+  expect((await card.boundingBox())!.y).toBeGreaterThanOrEqual(tabs.y + tabs.height)
+  await expect(page.locator("dialog[open]")).toHaveCount(0)
+
+  await page.evaluate(() => navigator.clipboard.writeText(""))
+  await card.getByRole("button", {name: "Copy line"}).click()
+  const line = await page.evaluate(() => navigator.clipboard.readText())
+  expect(line).toMatch(/^Schedule your Keyfleet check-ins, every 10 minutes to once a day, /)
+  expect(line).toContain('told "Check in on Keyfleet as your keyfleet skill says."')
+  const [, guide] = line.match(/\((\S+) says how\)/)!
+  expect((await page.request.get(guide)).status()).toBe(200)
+
+  await card.getByRole("button", {name: "Dismiss"}).click()
+  await expect(card).toHaveCount(0)
+  await page.reload()
+  await expect(card).toHaveCount(0)
+  await connected(page)
+  await expect(card).toHaveCount(0)
+
+  await page.goto("/account/agents")
+  await connected(page)
+  const kept = page.locator("#account-agents-schedule")
+  await expect(kept).toBeVisible()
+  const row = kept.locator(`li[data-fleet="${fleet}"]`, {hasText: "Astra"})
+  await expect(row).toContainText("Classic #1")
+  await expect(row).toContainText("Hasn’t checked in")
+  await expect(kept.getByRole("button", {name: "Copy line"})).toBeVisible()
+  await expect(kept.getByRole("button", {name: "Dismiss"})).toHaveCount(0)
+
+  // On a phone it stays within the screen.
+  await page.setViewportSize({width: 390, height: 844})
+  const {x, width} = (await kept.boundingBox())!
+  expect(x).toBeGreaterThanOrEqual(0)
+  expect(x + width).toBeLessThanOrEqual(390)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await page.setViewportSize({width: 1280, height: 720})
+
+  // With nothing put away, the fleet's page shows no Schedule once Astra's
+  // run has checked in.
+  checkInDaily(astra, fleet)
+  await expect(row).toHaveCount(0)
+  await page.context().clearCookies({name: "keyfleet_schedule"})
+  await page.goto("/classic/1")
+  await connected(page)
+  await expect(card).toHaveCount(0)
   expect(errors).toEqual([])
 })
 

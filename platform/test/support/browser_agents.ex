@@ -117,15 +117,16 @@ defmodule Keyfleet.BrowserAgents do
 
   @doc """
   `agent`'s daily run checks in with the fleet, as a sync from its scheduled
-  run does, with a profile of its own made the first time. Like a real
-  check-in, it tells the open pages of the agent's person.
+  run does, with a profile of its own made the first time, saying `blocker`
+  blocks it when given. Like a real check-in, it tells the open pages of the
+  agent's person.
   """
-  def check_in!(agent, fleet_id) do
+  def check_in!(agent, fleet_id, blocker \\ nil) do
     {:ok, actor} = Agents.with_pairing(agent_actor(agent))
     Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: actor)
+    run = %{"kind" => "scheduled", "every_minutes" => 1440, "blocker" => blocker}
 
-    {:ok, _check_ins} =
-      Agents.check_in(actor, fleet_id, %{"kind" => "scheduled", "every_minutes" => 1440})
+    {:ok, _check_ins} = Agents.check_in(actor, fleet_id, run)
 
     :ok
   end

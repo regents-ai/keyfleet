@@ -1180,12 +1180,15 @@ features:
   - id: agent-setup-dots
     what: >-
       On a Key's page its signed-in owner sees Your agent: each agent they
-      have paired with five dots, Paired, Gas, Schedule, Marked and Repeated,
-      a bright green when done and a faded orange when not done or not known
-      yet. Each dot opens a few words on what it is and, when it is not done,
-      how to put it right. Marked is done when every Key the agent acts for is
-      present or waits for its automatic start. Only gas asks the chain, so
-      the row is drawn at once and that dot fills in when the answer comes.
+      have paired with a dot for each step its doctor names, Paired, Gas,
+      Schedule, Marked and Repeated, a bright green when done and a faded
+      orange when not done or not known yet. An agent with no Key or shard of
+      its own has only Paired, Schedule and Repeated, and a quiet line saying
+      a shard is optional. Each dot opens a few words on what it is and, when
+      it is not done, how to put it right. Marked is done when every Key the
+      agent acts for is present or waits for its automatic start. Only gas
+      asks the chain, so the row is drawn at once and that dot fills in when
+      the answer comes.
     who: person
     level: ordinary
     paths:
@@ -1200,6 +1203,91 @@ features:
       - platform/test/keyfleet_web/live/key_profile_test.exs
     gaps:
       - Nothing checks the dots in a browser at 390 and 1280. WebKit is not run on the Mac.
+
+  - id: schedule-card
+    what: >-
+      A signed-in Key holder whose paired agent has no scheduled check-in
+      seen in a fleet sees a Schedule card on that fleet's page, below the
+      tabs, drawn with the page from its first paint so it never moves the
+      page: one sentence saying the agent isn't coming back on its own yet,
+      one line naming the first such agent with its check-in light and words
+      (on a phone the light alone, the words read out) and how many more as a
+      link to the Agents page, and Copy line beside it, which copies the
+      guide's line for scheduling check-ins. The card is
+      one height however many agents it names. Dismiss puts it away for that
+      fleet in this browser only, in a cookie the server reads as each page
+      is requested. The same card, without Dismiss, lists each agent with its
+      fleet on the Agents page while the state holds. Both go by themselves
+      when a scheduled check-in is seen; an agent only between runs never
+      shows it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/schedule_card.ex
+      - platform/assets/css/components/schedule_card.css
+      - platform/assets/js/hooks/schedule_card.ts
+      - platform/lib/keyfleet_web/components/fleet_prompts.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet_web/live/session.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet/agents/upkeep.ex
+    entry:
+      - route: GET /:fleet/:number
+      - route: GET /account/agents
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/fleet_prompts.spec.ts
+    gaps:
+      - The light and words in the card are read when the page is; a check-in without a schedule tells no page, so they move on when it is next read.
+      - Dismiss lives in the browser, so another browser or a cleared one shows the card again.
+      - A page left open in another tab learns of a card put away only when it next draws that fleet's card or is requested again.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
+
+  - id: agent-blocker
+    what: >-
+      An agent may add one line to a check-in, `run.blocker`, saying in its
+      own words what is blocking it: plain text up to 280 characters once
+      trimmed, an empty one being none, and one too long or holding a line
+      break, control or invisible character refused as `invalid_request`
+      with nothing written. Its paired person sees it on the Agents page in
+      a Blocked card, quoted as the agent's words, beside the agent's
+      check-in light, words and last check-in. Nobody else reads it: not
+      another person, not another agent of the same person, not that
+      person's Keyfleet account, not a visitor. The agent's next recorded
+      check-in without one clears it; one too soon to be recorded keeps it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/agents/check_in.ex
+      - platform/lib/keyfleet/agents.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/agent_tools/rooms.ex
+      - platform/lib/keyfleet_web/agent_tools/rooms/answer.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/assets/css/pages/account.css
+      - platform/priv/repo/migrations/20261117195656_agent_check_in_blocker.exs
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/sync
+      - route: GET /account/agents
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/check_ins_test.exs
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/account_agents.spec.ts
+    gaps:
+      - Only a scheduled check-in tells the person's open pages; a line sent with a session check-in shows when the Agents page is next read.
+      - The line is read by the person the agent last checked in for; an agent paired with someone new shows them its line only from its next check-in.
+      - Each kind of check-in is recorded at most once a minute, so a line sent again within the minute is not recorded; the answer's `check_in.blocker` says what the person sees.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
+      - Not yet run by a real agent.
 
   - id: fleet-directory
     what: >-

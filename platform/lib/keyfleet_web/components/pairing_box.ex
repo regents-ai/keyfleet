@@ -266,6 +266,9 @@ defmodule KeyfleetWeb.PairingBox do
 
   @check_in "Check in on Keyfleet as your keyfleet skill says."
 
+  @doc "What each of an agent's scheduled check-ins is told, as the guide says."
+  def check_in, do: @check_in
+
   defp setup(:claude_code),
     do: """
     Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/claude-code, and work in ~/keyfleet/claude-code.

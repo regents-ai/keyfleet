@@ -50,6 +50,7 @@ import {OnchainSteps} from "./hooks/onchain_steps"
 import {MenuAgents} from "./hooks/menu_agents"
 import {MotionCount, MotionList, MotionRefusal, MotionStamp, MotionTick} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
+import {ScheduleCard} from "./hooks/schedule_card"
 import {ThemeSwitch} from "./hooks/theme_switch"
 import {TokenMenu} from "./hooks/token_menu"
 import {Tour} from "./hooks/tour"
@@ -339,6 +340,7 @@ const hooks = {
   OnchainSteps,
   PlacesChart,
   PublicName,
+  ScheduleCard,
   ScrollRow,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   ThemeSwitch,

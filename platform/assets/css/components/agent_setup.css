@@ -66,6 +66,12 @@
   background: var(--agent-dot-done);
 }
 
+.agent-setup__tip {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-fg-muted);
+}
+
 .agent-setup__wrong {
   margin: 0;
   font-size: 0.875rem;

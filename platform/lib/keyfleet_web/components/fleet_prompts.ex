@@ -12,21 +12,32 @@ defmodule KeyfleetWeb.Components.FleetPrompts do
   every idle Key the sending wallet holds present
   (`Keyfleet.WalletSteps` flow `:present_idle`).
 
+  Under them, Schedule (`KeyfleetWeb.Components.ScheduleCard`) shows while an
+  agent the person paired has no scheduled check-in seen here. Its person may
+  put it away for this fleet, which only their browser remembers, in a cookie
+  the `ScheduleCard` hook writes. The page passes `schedule_put_away?`, read
+  from that cookie as the page was requested and kept as the hook says, so a
+  card shows from the first paint or not at all and never moves the page
+  once drawn.
+
   The page sends `changed: true` when the person's agents, the fleet's Keys or
-  a step sent from the page change, and the buttons are read again. It sends
+  a step sent from the page change, and all three are read again. It sends
   `present: token_ids` when Keys of the fleet are marked present, and they are
   read again only when one of them was the person's idle Key.
   """
   use KeyfleetWeb, :live_component
 
   alias Keyfleet.Agents
+  alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias KeyfleetWeb.Components.Count
+  alias KeyfleetWeb.Components.ScheduleCard
   alias KeyfleetWeb.WalletPanel
 
   @impl true
-  def mount(socket), do: {:ok, assign(socket, pair?: false, idle: [], pairing: false)}
+  def mount(socket),
+    do: {:ok, assign(socket, pair?: false, idle: [], schedule: [], pairing: false)}
 
   @impl true
   def update(%{changed: true}, socket), do: {:ok, read(socket)}
@@ -47,13 +58,14 @@ defmodule KeyfleetWeb.Components.FleetPrompts do
     do: {:noreply, update(socket, :pairing, &(not &1))}
 
   # Pairing without a Key opens nothing here, so a person holding none sees
-  # neither button.
+  # none of the three.
   defp read(%{assigns: %{actor: actor, fleet: %{fleet_id: fleet_id}}} = socket) do
     keys = Keys.keys_held_in_fleet!(fleet_id, actor.wallet_addresses, actor: actor, load: [:idle])
 
     assign(socket,
       pair?: keys != [] and not Agents.has_paired_agent?(actor),
-      idle: for(%{idle: true, token_id: token_id} <- keys, do: token_id)
+      idle: for(%{idle: true, token_id: token_id} <- keys, do: token_id),
+      schedule: if(keys == [], do: [], else: Upkeep.unscheduled(actor, [fleet_id]))
     )
   end
 
@@ -108,6 +120,22 @@ defmodule KeyfleetWeb.Components.FleetPrompts do
         lease={@lease}
         start={Fleets.path(@fleet.fleet_id)}
       />
+      <ScheduleCard.card
+        :if={@schedule != [] and not @schedule_put_away?}
+        id={"#{@id}-schedule"}
+        class="fleet-prompts__schedule"
+        agents={@schedule}
+        page={:fleet}
+        phx-hook="ScheduleCard"
+        phx-mounted={JS.ignore_attributes(["hidden"])}
+        data-fleet={@fleet.fleet_id}
+      >
+        <:dismiss>
+          <button type="button" class="schedule-card__dismiss" aria-label="Dismiss" data-dismiss>
+            <Regent.Icons.icon name="x" />
+          </button>
+        </:dismiss>
+      </ScheduleCard.card>
     </div>
     """
   end

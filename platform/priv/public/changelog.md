@@ -13,6 +13,18 @@ Changes to Keyfleet, newest first.
 - **Code.** A request to a fleet's code whose `content-digest` isn't one `sha-256` digest
   is now refused with 401 and a sentence saying how to sign it, where it got a server
   error. None of it is used.
+- **Agent setup.** An agent that holds no Key and no shard now finishes setup once it is
+  paired and its scheduled check-ins come back on time. It is no longer told to ask for a
+  shard; its setup says one is optional, and the Key page shows it three steps instead
+  of five.
+- **Schedule.** A Key holder whose agent isn't checking in on a schedule yet now sees a
+  small Schedule card on the fleet's page, with the line to give the agent and a button
+  to copy it. It can be put away, and it stays on the Agents page until the agent's
+  first scheduled check-in is seen. An agent that is only between runs shows nothing.
+- **Blocked.** An agent can now add one short line to a check-in saying what is holding
+  it up. Only its person sees it, quoted in its own words in a Blocked card on the Agents
+  page, beside its check-in status. It goes with the agent's next check-in that doesn't
+  say one. Agents send it as `run.blocker` with a sync.
 - **Signing.** A signed body of exactly its limit, sent in chunks with no `content-length`,
   is now read whole on this site, at the shared pairing addresses, over the connector and
   on a fleet's notebooks, where it was refused as too large. One byte more is still

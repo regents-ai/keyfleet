@@ -11024,6 +11024,151 @@ Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues) and
 (138 compile-connected, at the limit) passed. The focused tests above, with the public
 pages and route coverage tests: 272 passed (3 properties, 269 tests).
 
+## 2026-11-17: an agent with no Key or shard finishes setup without one (Sean's 33 a)
+
+- `Keyfleet.Agents.Upkeep` names an agent's setup steps once (`steps/1`): Paired, Gas,
+  Schedule, Marked and Repeated for an agent with a Key or a shard of its own to mark,
+  and only Paired, Schedule and Repeated for one with neither. The doctor's
+  `setup.next_step` is the first of its steps not done, so a keyless agent's is `null`
+  once it is paired and its scheduled check-ins repeat. The step that told it to ask for
+  a shard is gone; the doctor's setup gains `tip`, a required string or `null`, saying
+  for that agent only that its person may give it a shard to mark their Key present,
+  which nothing else needs.
+- The person's Your agent row on a Key's page (`KeyfleetWeb.Components.AgentSetup`)
+  draws a dot for each of those steps, from `Upkeep.person_agents/2`'s new `steps`, never
+  worked out again: a keyless agent has three dots and a quiet line saying a shard is
+  optional. The words for its Gas and Marked dots without a shard are gone with them.
+- The contract (both copies) moves to 36.1.0 for `tip`; its setup and `gas` words, /docs,
+  the doctor tool's text, `cli/COMMANDS.md`, the public changelog and the verification
+  list say the same. The guide is unchanged. No migration.
+
+Check (partition `_kf_s3`, PORT unset): format, the contract copies in sync, Credo (765
+files, no issues) and xref (138 compile-connected, at the limit) passed. Upkeep, the Key
+page, the agent Key route, the contract, connector, signed-request, launch gate, release
+package, tool commands and agent files tests: 117 passed (1 property, 116 tests), 1
+excluded.
+
+## 2026-11-17: a Schedule card for a person whose agent isn't checking in on a schedule (Sean's 35 a)
+
+- `Keyfleet.Agents.Upkeep.unscheduled/2` names a person's agents with no scheduled
+  check-in seen in each fleet given, by the same `schedule` state the setup dots use,
+  with the check-in light and words `CheckInStatus` already gives. An agent only between
+  runs has a schedule and is never named.
+- `KeyfleetWeb.Components.ScheduleCard` draws it: a Schedule panel with one sentence,
+  each such agent's light and words, and Copy line holding the guide's line for
+  scheduling check-ins (its words for each check-in come from `PairingBox.check_in/0`,
+  so the two never drift). The fleet page's prompts (`FleetPrompts`) show it below the
+  tabs for a Key holder, with Dismiss: the `ScheduleCard` hook keeps that in the browser
+  per fleet and the card is sent hidden until the hook has read it, so a put-away card
+  never flashes. The Agents page (`AgentsPanel`) keeps the same card above the agents,
+  naming each fleet, without Dismiss. Both go when a scheduled check-in is seen, as that
+  already tells the person's pages. No database change.
+- The public changelog and the verification list (`schedule-card`) say the same. No
+  contract change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(770 files, no issues) and xref (138 compile-connected, at the limit) passed. The fleet
+page, shell, Key page and Upkeep tests: 166 passed. Browser walks `fleet_prompts` and
+`account_agents`: 9 passed. Typecheck passed; vitest 573 passed, and its 14 failures are
+the untracked review file `assets/test/adversarial_send_step.test.ts` (13) and
+`key_map_state` timing out under load (passes alone, 13 of 13).
+
+## 2026-11-17: an agent says what blocks it, for its person alone (Sean's 36 a)
+
+- A check-in may carry `run.blocker`, one line in the agent's own words saying what is
+  blocking it, with either kind of run. `Keyfleet.Agents.CheckIn` keeps it in the new
+  nullable `blocker` column: plain text up to 280 characters once trimmed (counted in
+  characters), an empty one being none. The agent's next recorded check-in sets it again
+  or clears it; one skipped as too soon (each kind at most once a minute) changes nothing.
+- One rule (`CheckIn.blocker?/1`, the attribute's own constraints) decides a good line.
+  The signed door's shape check (`SignedAgent`) uses it, so a line over 280 characters
+  or holding a line break, control or invisible character answers 422 `invalid_request`
+  over signed HTTP and through the connector's `fleets_sync` alike, before the sync
+  waits and with nothing written. The connector passes the line through as sent.
+- Only two read it, by field policy: the agent itself, and its paired person signed in
+  as themselves (the person its last check-in was for). Another person, another agent of
+  the same person, that person's Keyfleet account, a reader with no actor and a read
+  through the agent's profile get a forbidden field. `Keyfleet.Agents.blocked_check_ins/2`
+  (`:blocked`, persons only) gives a person their agents' lines.
+- The Agents page (`AgentsPanel`) shows a Blocked card while any line holds: each
+  agent's name, fleet, check-in light and words and last check-in, then its line quoted
+  as its own words, drawn as text. The shared agents list from regent_ui has no place
+  beside its last check-in, so the card stands on its own under Schedule.
+- The sync answer's `check_in` gains `blocker`, what the person sees. Contract 36.2.0
+  (both copies): `Blocker`, the run's two shapes, the 422 words and the answer. The tool
+  list, `cli/commands.json`, `cli/COMMANDS.md`, /docs and `docs/agent-parity.md` say the
+  same. The guide (3.35.0) says to put it in each sync while blocked, in the place of
+  "don't repeat it until it changes", to stay under 9,000 characters. The public
+  changelog and the verification list (`agent-blocker`) say the same. regents-cli needs
+  no code change, as `rooms sync` passes `run` on as sent; its pinned
+  `platforms/keyfleet/` copies need a refresh.
+- Migration `20261117195656_agent_check_in_blocker` adds one nullable `text` column,
+  `keyfleet_app.agent_check_ins.blocker`, and nothing else; down removes it.
+
+Check (partition `_kf_s3`, PORT unset): format, the contract copies in sync, compile
+with warnings as errors, Credo (770 files, no issues) and xref (138 compile-connected, at
+the limit) passed. Check-ins, signed requests, connector, contract, tool commands, agent
+files, release package and shell tests: 96 passed (1 property, 95 tests), 1 excluded.
+The whole suite, run in three parts (`test/keyfleet`, `test/keyfleet_web` and its
+folders): 1,546 passed (22 properties, 1,524 tests), 19 excluded, none failed. Browser
+walks `account_agents` and `fleet_prompts`: 10 passed. Typecheck passed; vitest 574
+passed, and its 13 failures are the untracked review file
+`assets/test/adversarial_send_step.test.ts`.
+
+## 2026-11-17: Schedule keeps one small height and never moves the page; three walks mended
+
+The release check's chain walks, where the signed-in holder has seven paired agents with
+no scheduled check-in, found the fleet page's Schedule card about 420 px tall, and three
+walks broken by it.
+
+- The fleet page's card (`ScheduleCard`, `page={:fleet}`) is one height however many
+  agents it names: title and Dismiss, the sentence, then one line with the first agent's
+  name, light and words and "and N more" linking to the Agents page, with Copy line
+  beside it, or under it on a phone. A long name is cut first, down to its first letters,
+  then a long state. Where the line is too narrow for both and how many more (under
+  26rem, as on a phone), the light leads the name and the state's words are kept for
+  screen readers alone (a container query on the card's foot). With one agent or eight
+  it is 199 px tall at 1280 wide and 221 px at 390. The Agents page (`page={:agents}`) still lists each agent with its fleet, and each
+  row now names its fleet (`data-fleet`).
+- It no longer moves the page as it shows. It was drawn hidden and shown by its hook once
+  the page connected, pushing the hall down. The server now draws it, or leaves it out,
+  from the first paint: Dismiss writes the fleets put away to the cookie
+  `keyfleet_schedule` (fleet ids joined by dots, a year, `SameSite=Lax`), which
+  `Live.Session.render_context/1` carries into the page's token, and `ShellLive` keeps
+  them as `schedule_put_away` and tells the fleet page whether its card is put away. The
+  hook hides the card at once and sends the page what the cookie says now
+  (`schedule_put_away`), which takes the card away; a card drawn later for a fleet put
+  away since the page was requested, from another tab or after a reconnect, is hidden
+  before it paints and sent the same way. A page whose token predates this loads once
+  more, as one without a client key already does.
+- The guided tour brings a part into view with room for its ring, the ring's 8 px as a
+  scroll margin while it scrolls, so a part at the screen's foot is ringed whole. The
+  holder's Intro step was brought flush to the foot below the tall card, and its ring cut
+  short by about 6 px.
+- The channel list's "…" is gone 2 px before the very end (`animation-range-end`). A
+  wheel can leave a list sitting a fraction of a pixel down the page one pixel short of
+  its end, where the "…" stayed at 2% opacity; the compact card left the list so.
+- Walks: the footer walk's left-menu half wheels until the page's end, where one 400 px
+  wheel assumed the page was at most 400 px from it (the page did move 400 px; 103 were
+  left). The Schedule walk names the Agents page row by agent and fleet, as Astra can be
+  named for two fleets; expects the card gone, not hidden, once put away; and clears the
+  cookie before checking the card goes by itself once Astra's run checks in. The fleet
+  page tests check the first paint holds the card, and that the cookie and the page's
+  event keep it away; the session gate tests name the token's new key.
+- The verification list (`schedule-card`) says the same. No database or contract change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(770 files, no issues) and xref (138 compile-connected, at the limit) passed. Fleet page,
+shell, session gate and account tests: 136 passed. The whole suite, run in three parts
+(`test/keyfleet`, `test/keyfleet_web` and its folders): 1,547 passed (22 properties,
+1,525 tests), 19 excluded, none failed. Typecheck passed; vitest 498 passed, leaving out
+the untracked review file `assets/test/adversarial_send_step.test.ts`; the asset budgets
+pass on a minified build (the unminified test build's CSS is over its 60 KiB line).
+Browser walks: the whole chain project, 139 walks, passed twice, before and after the
+phone line; `atlas` alone, 1 passed; the default project, 127 passed. Pictures of the
+card at 1280 and 390 wide, light and dark, with one agent and with eight, were taken by
+a scratch walk that is not kept.
+
 ## 2026-11-17 — The install line and checker pin name regents-cli 1.10.31
 
 - `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
@@ -11032,3 +11177,10 @@ pages and route coverage tests: 272 passed (3 properties, 269 tests).
   body, and a command sent to an address Keyfleet no longer serves asks the person to update.
   Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
 - The command line section of the public documents says which Python it runs on (3.12 to 3.14).
+
+## 2026-11-17 — The install line and checker pin name regents-cli 1.10.32
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.32 (tag commit `a972d344`), the
+  newest release, published while the release before it was being checked. Its tag commit
+  was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
