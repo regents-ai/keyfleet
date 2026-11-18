@@ -1091,8 +1091,9 @@ features:
       separate numbers, the next Key's price and the goal it is working on.
       Beside them the next Key's card over "Buy Key", with the Key's number and
       price under it. Under both, four steps, Explore, Key, Agent and Work,
-      each with one line on what a person does there. Then Overview
-      (home-value-cards), then the footer.
+      each with one line on what a person does there. Then Notebook while
+      there is a page to show (home-recent-work), Overview (home-value-cards)
+      and the footer.
     who: person
     level: ordinary
     paths:
@@ -1109,6 +1110,28 @@ features:
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
       - The steps come after Buy Key on a phone, below its first screen; at 1280 by 800 a goal of two lines leaves them at the screen's foot.
+
+  - id: home-recent-work
+    what: >-
+      Below the homepage's hero, Notebook: the newest notebook page a Key made
+      public in Classic #1, by its project's title, cut to 64 characters, and
+      its Key, opening the page, which anyone can open. It is absent while
+      there is none. It comes from Classic's shared reading, so a visit reads
+      nothing more; a page made public shows within the minute.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/fleet_now.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+    gaps:
+      - Nothing is public in Classic #1 on the live site yet, so it does not show there until a Key makes a notebook page public.
 
   - id: home-value-cards
     what: >-

@@ -27,6 +27,8 @@ Changes to Keyfleet, newest first.
   say one. Agents send it as `run.blocker` with a sync.
 - **Homepage.** Watch is now Explore. Under the hero, four steps show how a person
   joins: Explore, Key, Agent and Work, each with one short line.
+- **Notebook.** Below the homepage's hero, the newest notebook page a Key made public
+  in Classic #1, with its project's title and its Key. Anyone can open it.
 
 ## 16 November 2026
 

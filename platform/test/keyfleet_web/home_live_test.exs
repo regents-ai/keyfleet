@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   import ExUnit.CaptureLog
 
   alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
+  alias Keyfleet.Projects.Publication
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.FleetNow
   alias Phoenix.Socket.Broadcast
@@ -33,6 +34,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   price and the goal it is working on, which links its workspace
   # - under the hero, the four steps in order, Explore, Key, Agent and Work,
   #   each a title with one line
+  # - below the hero, Notebook: the newest notebook page made public, by its
+  #   project's title and its Key, opening the page. With none it is not
+  #   drawn, and it costs the page no read
   # - launch-gate: internal links stay on the fleets' maps, workspaces,
   #   proposals and treasuries, the account and pairing pages, the public
   #   documents, or anchors that exist
@@ -326,6 +330,51 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(html, "#home-steps a", "href") == []
   end
 
+  test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page",
+       %{conn: conn} do
+    make_public!(%{key: 3, kind: :page, page: page_path(1)})
+    make_public!(%{project: "understanding", key: 7, kind: :page, page: page_path(2)})
+    read_fleets()
+
+    {:ok, view, html} = live(conn, "/")
+
+    assert text(view, "#home-notebook-title") == "Notebook"
+    assert text(view, "#home-notebook-name") == "Keyfleet Classic #1 Collaborative Understanding"
+    assert text(view, "#home-notebook .rl-notebook__key") == "Key 7"
+
+    assert attribute(html, "a#home-notebook-open", "href") == [
+             Keyfleet.Notebooks.url(@classic, page_path(2))
+           ]
+
+    assert attribute(html, "a#home-notebook-open", "target") == ["_blank"]
+    assert attribute(html, "a#home-notebook-open", "rel") == ["noopener noreferrer"]
+
+    assert attribute(html, "main section[id]", "id") == [
+             "home-hero",
+             "home-notebook",
+             "home-overview"
+           ]
+  end
+
+  test "with no notebook page made public there is no Notebook, and no row for it",
+       %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/")
+    assert attribute(html, "main section[id]", "id") == ["home-hero", "home-overview"]
+    assert attribute(html, "main .rl-recent", "class") == []
+  end
+
+  test "a notebook page made public costs the homepage no read of its own", %{conn: conn} do
+    get(conn, "/")
+    {before, _conn} = Keyfleet.QueryHelpers.queries_during(fn -> get(build_conn(), "/") end)
+
+    for n <- 1..8, do: make_public!(%{key: n, kind: :page, page: page_path(n)})
+    read_fleets()
+
+    {count, served} = Keyfleet.QueryHelpers.queries_during(fn -> get(build_conn(), "/") end)
+    assert html_response(served, 200) =~ ~s(id="home-notebook")
+    assert count == before
+  end
+
   test "Explore opens Classic #1's page, over Classic #1's figures", %{conn: conn} do
     for token_id <- 1..2, do: issue!(@classic, token_id)
     Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
@@ -416,6 +465,20 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   # What the homepage's producer does as the site starts and on each pass.
   defp read_fleets, do: FleetNow.read(@classic)
+
+  # Something a Key made public in Classic, by default in `general`.
+  defp make_public!(attrs) do
+    Publication
+    |> Ash.Changeset.for_create(
+      :record,
+      Map.merge(%{fleet_id: @classic, project: "general", author_wallet: @owner}, attrs),
+      actor: %Actors.System{}
+    )
+    |> Ash.create!()
+  end
+
+  defp page_path(n),
+    do: Keyfleet.Notebooks.result_path("nb-0123456789abcdef", "run_#{n}", 1_790_000_000_000 + n)
 
   # A fleet the site has never read, as just after it starts, then read once.
   defp first_read(fleet_id) do

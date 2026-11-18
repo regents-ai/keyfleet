@@ -5,7 +5,9 @@ defmodule KeyfleetWeb.HomeLive do
   here, the price of the next Key and the goal it is working on. Beside it the
   Key on offer's card art over "Buy Key", which opens the "Buy Key" window, as
   the header's "Buy Key" does. Under both, the four steps a person takes:
-  Explore, Key, Agent and Work. Then Overview, the row of six value cards
+  Explore, Key, Agent and Work. Under the hero, Notebook: the newest notebook
+  page a Key made public in Classic #1, which opens for anyone; it is left
+  out while there is none. Then Overview, the row of six value cards
   (`KeyfleetWeb.Components.ValueCards`), one for each part of a fleet, each
   opening a page anyone can read; then the footer.
 
@@ -179,22 +181,24 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # Classic as the homepage shows it: its name and sale (`BuyKey.sale/2`),
-  # from a reading of the open fleet the goal it is working on, and the agents
-  # here, nil until they are counted.
+  # from a reading of the open fleet the goal it is working on and its newest
+  # notebook page made public, and the agents here, nil until they are counted.
   defp fleet(fleet_id) do
     found = FleetNow.fetch(fleet_id)
 
     fleet_id
     |> BuyKey.sale(found)
+    |> Map.merge(work(found))
     |> Map.merge(%{
       name: Fleets.name(fleet_id),
-      goal: goal(found),
       here: here(SharedFigures.reading(Here.fleet_key(fleet_id)))
     })
   end
 
-  defp goal({%{coming_soon?: false} = reading, _degraded?}), do: reading.goal
-  defp goal(_not_open), do: nil
+  defp work({%{coming_soon?: false} = reading, _degraded?}),
+    do: Map.take(reading, [:goal, :page])
+
+  defp work(_not_open), do: %{goal: nil, page: nil}
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
@@ -268,6 +272,9 @@ defmodule KeyfleetWeb.HomeLive do
       <main>
         <Regent.Structure.row rail={false}>
           <.hero classic={@classic} />
+        </Regent.Structure.row>
+        <Regent.Structure.row :if={@classic.page} rail={false}>
+          <.recent page={@classic.page} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}>
           <section id="home-overview" class="rl-overview" aria-labelledby="home-overview-title">
@@ -362,6 +369,34 @@ defmodule KeyfleetWeb.HomeLive do
   defp lead, do: @lead
 
   defp steps, do: @steps
+
+  attr :page, :map, required: true
+
+  # Notebook: the newest notebook page made public, by its project's title and
+  # its Key, opening the page.
+  defp recent(assigns) do
+    ~H"""
+    <div class="rl-recent">
+      <section id="home-notebook" class="rl-recent__part" aria-labelledby="home-notebook-title">
+        <h2 id="home-notebook-title" class="rl-recent__label">Notebook</h2>
+        <p class="rl-notebook">
+          <span id="home-notebook-name" class="rl-notebook__name">{@page.title}</span>
+          <span class="rl-notebook__key">{@page.key}</span>
+          <a
+            id="home-notebook-open"
+            class="rl-notebook__open"
+            href={@page.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-describedby="home-notebook-name"
+          >
+            Open the page
+          </a>
+        </p>
+      </section>
+    </div>
+    """
+  end
 
   attr :sales, :map, required: true
   attr :failed, :boolean, required: true

@@ -211,6 +211,23 @@
     .rl-hero .rl-now { animation-delay: 150ms; }
   }
 
+  /* Under the hero, between hairlines: Notebook, Classic #1's newest notebook
+     page made public, in one line after its label. */
+  .rl-recent { display: grid; padding-inline: var(--rg-panel-padding); }
+  .rl-recent__part { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: .25rem var(--space-3); padding-block: .75rem; }
+  .rl-recent__label { color: var(--rl-muted); font-family: var(--font-family-title); font-size: .8125rem; font-weight: 400; letter-spacing: .02em; }
+
+  /* Notebook: the project's title, its Key and the page, which opens apart. */
+  .rl-notebook { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem var(--space-2); min-width: 0; }
+  .rl-notebook__name { min-width: 0; font-size: .9375rem; overflow-wrap: anywhere; }
+  .rl-notebook__key { color: var(--rl-muted); font-size: .8125rem; }
+  .rl-notebook__open { margin-inline-start: auto; font-size: .875rem; }
+  .rl-notebook__open::after { content: " ↗" / ""; }
+
+  @media (min-width: 48rem) {
+    .rl-recent__part { grid-template-columns: 6rem minmax(0, 1fr); }
+  }
+
   /* Overview, under the hero: its section bar, then the value cards
      (components/value_cards.css), at the hero's inline padding. */
   .rl-overview { display: grid; gap: var(--space-4); padding: var(--space-5) var(--rg-panel-padding) var(--space-6); }

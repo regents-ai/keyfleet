@@ -11204,3 +11204,25 @@ leaving out the untracked review file `assets/test/adversarial_send_step.test.ts
 asset budgets pass on a minified build. Walks: homepage, homepage details and launch
 steps, 20 passed. The whole suite and the chain and phone walks are run once, with the
 next homepage change on this branch.
+
+## 2026-11-17: the homepage shows Classic #1's newest notebook page made public (Sean's 44 a)
+
+- Below the hero, in a row of its own, Notebook (`#home-notebook`): the newest notebook
+  page a Key made public in Classic #1, by its project's title (one line, at most 64
+  characters, cut on a whole word) and its Key, with "Open the page", a plain link that
+  opens the page on Classic's notebook host in a new tab; anyone can open it, signed out.
+  While there is none (the live site today) the row is not drawn: no empty slot, no words.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `page`): the
+  fleet's project titles (`Project :titles`) and the newest page from
+  `Publication :in_fleet` with no actor, both actions anyone may read, so 2 more queries
+  a pass (a notice, at most once a second, or the minute's heal), not per visit. Making a
+  page public sends no notice, so it shows within the minute. A page in a deleted project
+  is passed over. The homepage itself reads nothing more: a test counts its queries with
+  and without pages made public.
+- The verification list has a `home-recent-work` row and `home-ways-in` names Notebook;
+  the public changelog says it. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed. Homepage, harbour sea and fleet page tests: 111
+passed. The whole suite, the walks and the asset budgets were run on the next commit,
+which builds on this one.
