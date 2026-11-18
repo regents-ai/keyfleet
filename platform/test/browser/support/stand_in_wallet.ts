@@ -2,13 +2,18 @@ import type {Page} from "@playwright/test"
 
 import type {SentTransaction} from "./fleet_chain"
 
-/** What the stand-in wallet does with a transaction it is asked to send. */
-export type Answer = "send" | "decline"
+/**
+ * What the stand-in wallet does with a transaction it is asked to send. "fail"
+ * fails once the send has started, with an error that says neither that it was
+ * declined nor why, as a wallet that loses its own connection mid-send: the
+ * page can't know whether it was sent.
+ */
+export type Answer = "send" | "decline" | "fail"
 
 /** What the stand-in wallet does when it is asked to switch network. */
 export type SwitchAnswer = "switch" | "decline"
 
-type StandIn = {sent: SentTransaction[]; hashes: string[]; answer: Answer}
+type StandIn = {sent: SentTransaction[]; hashes: string[]; asked: number; answer: Answer}
 
 declare global {
   interface Window {
@@ -22,7 +27,8 @@ declare global {
  * person picks a wallet. Its switch stands in for Privy's: it moves the wallet
  * to the network asked, or is declined as a person declining in their wallet
  * app would. It sends nothing anywhere: each transaction it is asked to send
- * is kept, answered with a new random hash, or declined the same way. The
+ * is counted, then kept and answered with a new random hash, declined the same
+ * way, or failed. The
  * page's scripts are ES modules, so the one that keeps the active wallet is
  * found among those the page's script imports, and is the same module the
  * page's buttons read.
@@ -43,7 +49,7 @@ export async function useStandInWallet(
         const module = await import(chunk)
         if (typeof module.replaceActiveEthereumWallet !== "function") continue
 
-        const standIn: StandIn = window.standInWallet ?? {sent: [], hashes: [], answer}
+        const standIn: StandIn = window.standInWallet ?? {sent: [], hashes: [], asked: 0, answer}
         standIn.answer = answer
         window.standInWallet = standIn
 
@@ -60,9 +66,11 @@ export async function useStandInWallet(
               case "eth_chainId":
                 return `0x${chainId.toString(16)}`
               case "eth_sendTransaction": {
+                standIn.asked += 1
                 if (standIn.answer === "decline") {
                   throw Object.assign(new Error("User rejected the request."), {code: 4001})
                 }
+                if (standIn.answer === "fail") throw new Error("The wallet lost its connection.")
                 const sent = (params as SentTransaction[])[0]
                 // Every hash is new, as a real chain's are, across pages and runs.
                 const bytes = crypto.getRandomValues(new Uint8Array(32))

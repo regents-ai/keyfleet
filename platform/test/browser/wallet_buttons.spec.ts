@@ -523,6 +523,44 @@ test("a browser agent's claim from a wallet the account doesn't link sends nothi
   expect(errors).toEqual([])
 })
 
+test("a browser agent's claim that the wallet may have sent while the page is offline is never answered as nothing sent", async ({
+  page,
+}) => {
+  await installModelContext(page)
+  // The claim step's name in each review the group is sent, as its hook keeps them.
+  await page.addInitScript(() => {
+    window.addEventListener("phx:onchain-steps:review", event => {
+      const {component_id, review} = (event as CustomEvent<{component_id: string; review: {steps: {step: string}[]} | null}>)
+        .detail
+      if (component_id === "key-profile-claim-action") {
+        document.documentElement.dataset.claimSteps = review?.steps.map(({step}) => step.toLowerCase()).join(" ") ?? ""
+      }
+    })
+  })
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, me, "fail")
+  // The page holds the claim's step, so the press goes straight to the wallet
+  // without asking the server first.
+  await expect(page.locator("html")).toHaveAttribute("data-claim-steps", new RegExp(`\\bclaim-${usdc}\\b`))
+  await page.evaluate(
+    () =>
+      new Promise<void>(resolve =>
+        (window as unknown as {liveSocket: {disconnect(done: () => void): void}}).liveSocket.disconnect(resolve),
+      ),
+  )
+
+  const answer = await callTool(page, "keys_claim", {asset: usdc})
+
+  // The wallet was asked and failed mid-send, and the page could not tell the
+  // server: the agent hears that the page lost its connection, never that
+  // nothing was sent, and the page doesn't say so either.
+  expect(await page.evaluate(() => window.standInWallet!.asked)).toBe(1)
+  expect(answer).toMatchObject({ok: false, error: {code: "connection_lost"}})
+  expect(answer.error!.message).not.toMatch(/nothing was sent/i)
+  await expect(page.locator("#key-profile-claim-action [data-onchain-lost]")).toBeHidden()
+  expect(errors).toEqual([])
+})
+
 test("after the page reconnects, a claim whose steps the page already had reaches the wallet and is followed until it lands", async ({
   page,
 }) => {
