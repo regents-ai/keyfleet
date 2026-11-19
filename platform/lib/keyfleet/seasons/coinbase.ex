@@ -10,12 +10,14 @@ defmodule Keyfleet.Seasons.Coinbase do
   traded over the last 24 hours (`approximate_quote_24h_volume`). `USDC`
   always may. A list that goes on past twenty pages is not read.
 
-  A product's price at boundary T is the close of the newest one-minute
-  candle of the season that ended at T (`GET /market/products/{product_id}/candles`,
-  one request for every minute of the season, which Coinbase answers up to
-  350 at a time): the minute that started at T - 60 s, or, when that minute
-  had no trade, the last that did. With no trade all season it has no
-  price, and a close of 0 or below is no price either. `USDC`'s price is 1.
+  A product's price at boundary T is the newest good close among the
+  one-minute candles of the season that ended at T
+  (`GET /market/products/{product_id}/candles`, one request for every minute
+  of the season, which Coinbase answers up to 350 at a time): the minute that
+  started at T - 60 s, or, when that minute had no trade, the last that did.
+  A close of 0 or below, or one that is not a number, is passed over for the
+  minute before it, and with no good close all season there is no price.
+  `USDC`'s price is 1.
   Prices are the decimals Coinbase sent.
 
   A product Coinbase no longer knows has no price. Any other answer but a
@@ -147,13 +149,16 @@ defmodule Keyfleet.Seasons.Coinbase do
 
   defp next_page(products, _last_page, _params, _pages_left), do: {:ok, products}
 
+  # The newest good close of the season's minutes, a bad one passed over.
   defp newest_close(candles, minutes) do
     candles
-    |> Enum.map(fn %{"start" => start, "close" => close} -> {String.to_integer(start), close} end)
-    |> Enum.filter(fn {start, _close} -> start in minutes end)
-    |> Enum.max_by(fn {start, _close} -> start end, fn -> nil end)
+    |> Enum.map(fn %{"start" => start, "close" => close} ->
+      {String.to_integer(start), above_zero(close)}
+    end)
+    |> Enum.filter(fn {start, price} -> start in minutes and price != nil end)
+    |> Enum.max_by(fn {start, _price} -> start end, fn -> nil end)
     |> case do
-      {_start, close} -> above_zero(close)
+      {_start, price} -> price
       nil -> nil
     end
   end

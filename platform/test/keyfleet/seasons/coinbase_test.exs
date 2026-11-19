@@ -68,7 +68,7 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     assert Coinbase.eligible() == {:error, :too_many_pages}
   end
 
-  test "a price is the close of the minute before the boundary, or the newest of the season that ended there" do
+  test "a price is the close of the minute before the boundary, or the newest good one of the season that ended there" do
     # The season that ended at the boundary began three hours before it.
     CoinbaseStub.stub([], %{
       "SOL-USD" => [{minutes_before(1), "73.160"}, {minutes_before(2), "73.2"}, {@boundary, "80"}],
@@ -80,12 +80,17 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
       "QUIET-USD" => [{minutes_before(181), "1.5"}],
       "SLOW-USD" => [{minutes_before(180), "0.00000123"}],
       "ZERO-USD" => [{minutes_before(2), "5"}, {minutes_before(1), "0.000"}],
-      "BELOW-USD" => [{minutes_before(1), "-1"}]
+      "BELOW-USD" => [{minutes_before(3), "4"}, {minutes_before(1), "-1"}],
+      "NAN-USD" => [{minutes_before(9), "3"}, {minutes_before(2), "NaN"}, {minutes_before(1), ""}],
+      "BAD-USD" => [{minutes_before(2), "0"}, {minutes_before(1), "-1"}]
     })
 
-    # The newest close is the price, and one of 0 or below is none.
-    assert Coinbase.price("ZERO-USD", @boundary) == {:ok, nil}
-    assert Coinbase.price("BELOW-USD", @boundary) == {:ok, nil}
+    # A close of 0 or below, or one that is not a number, gives way to the
+    # newest good one before it, and with none there is no price.
+    assert Coinbase.price("ZERO-USD", @boundary) == {:ok, Decimal.new("5")}
+    assert Coinbase.price("BELOW-USD", @boundary) == {:ok, Decimal.new("4")}
+    assert Coinbase.price("NAN-USD", @boundary) == {:ok, Decimal.new("3")}
+    assert Coinbase.price("BAD-USD", @boundary) == {:ok, nil}
 
     assert Coinbase.price("SOL-USD", @boundary) == {:ok, Decimal.new("73.160")}
     assert Coinbase.price("ETH-USD", @boundary) == {:ok, Decimal.new("2002")}

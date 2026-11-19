@@ -13728,3 +13728,10 @@ step's report).
   refused as not plain. The battery, the first property and the tower examples fail on
   the old rule. The worst 500-unit reasons, the review's and ones aimed at the new
   count, take 10 to 76 µs each.
+- A bad close in the newest minute no longer hides an older good one:
+  `Keyfleet.Seasons.Coinbase.price/2` drops closes of 0, below 0 or not a number before
+  it chooses the newest of the season's minutes, so a product whose last minute closed
+  at 0 is priced at the good close before it, and only a season with no good close
+  gives none. The module note, the docs and the feature list say so. `CoinbaseTest`
+  prices products whose newest close is 0, below 0, not a number or empty at the good
+  close before it; it fails on the old reading.
