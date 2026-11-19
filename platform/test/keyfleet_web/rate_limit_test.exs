@@ -82,4 +82,34 @@ defmodule KeyfleetWeb.RateLimitTest do
     assert post(conn, "/mcp/more", %{}).status == 429
     assert post(with_token, "/mcp", %{}).status != 429
   end
+
+  test "a first part with a percent escape is not found and spends nothing; a later one spends",
+       %{conn: conn} do
+    for {method, plain, escaped, plain_status} <- [
+          {:get, "/healthz", "/%68ealthz", 200},
+          {:get, "/api/v1/fleets", "/%61pi/v1/fleets", 200},
+          {:get, "/share/nothing.png", "/%73hare/nothing.png", 404},
+          {:get, "/oauth/authorize", "/%6Fauth/authorize", 404},
+          {:post, "/mcp", "/%6Dcp", 404}
+        ] do
+      for accept <- ["text/html", "application/json", "text/markdown"] do
+        asking = put_req_header(conn, "accept", accept)
+        unknown = dispatch(asking, @endpoint, method, "/no-such-address")
+        answer = dispatch(asking, @endpoint, method, escaped)
+
+        assert answer.status == 404, escaped
+        assert get_resp_header(answer, "ratelimit-policy") == [], escaped
+        assert get_resp_header(answer, "content-type") == get_resp_header(unknown, "content-type")
+        assert answer.resp_body == unknown.resp_body, escaped
+      end
+
+      answer = dispatch(conn, @endpoint, method, plain)
+      assert answer.status == plain_status, plain
+      assert get_resp_header(answer, "ratelimit-policy") == [~s("default";q=120;w=60)], plain
+    end
+
+    answer = get(conn, "/api/v1/%66leets")
+    assert answer.status == 200
+    assert get_resp_header(answer, "ratelimit-policy") == [~s("default";q=120;w=60)]
+  end
 end

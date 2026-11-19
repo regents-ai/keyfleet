@@ -62,6 +62,11 @@ defmodule KeyfleetWeb.Endpoint do
   # pages register, and no other site's.
   plug :secure_every_answer
 
+  # An address's first part is spelled one way: one holding a percent sign
+  # names nothing, before the budget below is counted or any plug below reads
+  # the address.
+  plug :one_spelling
+
   # While the site is closed, only the early-access page, the legal pages, the
   # operational files and the static files get past this.
   plug KeyfleetWeb.Plugs.LaunchGate
@@ -133,6 +138,14 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.Session, @session_options
   plug :markdown_addresses
   plug KeyfleetWeb.Router
+
+  defp one_spelling(%Plug.Conn{path_info: [first | _]} = conn, _opts) do
+    if String.contains?(first, "%"),
+      do: raise(Phoenix.Router.NoRouteError, conn: conn, router: KeyfleetWeb.Router),
+      else: conn
+  end
+
+  defp one_spelling(conn, _opts), do: conn
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())

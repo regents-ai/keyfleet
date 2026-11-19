@@ -13555,3 +13555,24 @@ step's report).
   sign-in server's keys are read.
 - docs.md's and agents.md's hello-card sentences say only what a card is and that
   sending one changes nothing in the answer. Neither file has a version to bump.
+
+## 2026-11-19 — An address's first part is spelled one way
+
+- `KeyfleetWeb.Endpoint`'s `one_spelling/2`, after the security headers and before the
+  launch gate: a request whose first path part holds a percent sign names nothing, and
+  gets the answer any unknown address gets, before the per-address budget is counted and
+  before any later plug reads the address. No real address has one: the router's first
+  parts, the fleets' addresses, `/.well-known` and the static files are plain words. The
+  notebook and code hosts are answered above it by their own gateways, as before.
+- An escape after the first part is an ordinary part of the address, counted and routed
+  as before.
+- Tests: `RateLimitTest` (4): `/healthz`, `/api/v1/fleets`, `/share/…`, `/oauth/authorize`
+  and `/mcp` with the first part escaped answer 404 exactly as an unknown address does,
+  asked for HTML, JSON or Markdown, with no budget header; written plainly they answer as
+  before and are counted; `/api/v1/%66leets` is counted and answers 200.
+  `AgentJoinJourneyTest`'s escaped agent addresses keep their escape in the second or
+  third part, and `PublicPagesControllerTest` opens an agent page with an escaped part
+  after the first.
+- Docs: docs.md's Sign-in says an address whose first part holds a percent-escape answers
+  404 as any unknown address does. No version changes: the API contract and `/skill.md`
+  are untouched.

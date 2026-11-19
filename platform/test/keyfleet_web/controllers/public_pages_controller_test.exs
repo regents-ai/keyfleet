@@ -91,12 +91,14 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     end
   end
 
-  test "an agent page that is not here is not found, and an escaped address opens its page" do
+  test "an agent page that is not here is not found, and one with an escaped part opens" do
     assert_error_sent(404, fn -> get(build_conn(), "/agents/no-such-agent") end)
 
-    page = build_conn() |> get("/%70rivacy") |> html_response(200) |> LazyHTML.from_document()
+    page =
+      build_conn() |> get("/agents/%63odex") |> html_response(200) |> LazyHTML.from_document()
+
     assert Enum.count(LazyHTML.query(page, "#route-content .reading__prose")) == 1
-    assert {:ok, _view, _html} = live(build_conn(), "/%70rivacy")
+    assert {:ok, _view, _html} = live(build_conn(), "/agents/%63odex")
   end
 
   test "the homepage is titled with the site name and what it is for" do
