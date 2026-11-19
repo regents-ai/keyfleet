@@ -38,6 +38,7 @@ import {FleetPreview} from "./hooks/fleet_preview"
 import {HarbourSea} from "./hooks/harbour_sea"
 import {PlacesChart} from "./hooks/places_chart"
 import {PublicName} from "./hooks/public_name"
+import {RoomThread} from "./hooks/room_thread"
 import {ScrollRow} from "./hooks/scroll_row"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
@@ -74,28 +75,24 @@ type ShellHook = Hook & {
 
 let cachedShellState: ShellState | undefined
 
-// A room opened from its fleet's hall takes the keyboard to its name, and on
-// a phone, where the hall stacks above the room, brings the name into view.
-// Any other step within the page leaves the keyboard where it is.
+// A room opened from its fleet's hall takes the keyboard to its name, so a
+// screen reader says which room it is. The name takes it where it stands:
+// the room itself opens at its newest post (hooks/room_thread.ts). Any other
+// step within the page leaves the keyboard where it is.
 let shownRoom = new URLSearchParams(window.location.search).get("room")
 
-function revealRoom(event: Event) {
+function focusRoomName(event: Event) {
   const room = new URLSearchParams(window.location.search).get("room")
   const opened = room !== null && room !== shownRoom
   shownRoom = room
   if (!opened || (event as CustomEvent<{kind?: string}>).detail?.kind !== "patch") return
-  const title = document.getElementById("rooms-thread-title")
-  if (!title) return
-  const {top, bottom} = title.getBoundingClientRect()
-  const inView = top >= 0 && bottom <= window.innerHeight
-  title.focus({preventScroll: inView})
-  if (!inView) title.scrollIntoView({block: "start"})
+  document.getElementById("rooms-thread-title")?.focus({preventScroll: true})
 }
 
 // Live navigation keeps the document, so each page restates its theme
 // (theme.ts); every theme switch follows what it shows.
 window.addEventListener("phx:page-loading-stop", syncTheme)
-window.addEventListener("phx:page-loading-stop", revealRoom)
+window.addEventListener("phx:page-loading-stop", focusRoomName)
 window.addEventListener("popstate", syncTheme)
 window.addEventListener("pageshow", syncTheme)
 
@@ -340,6 +337,7 @@ const hooks = {
   OnchainSteps,
   PlacesChart,
   PublicName,
+  RoomThread,
   ScheduleCard,
   ScrollRow,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),

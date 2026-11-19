@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.Agents
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
+  alias Keyfleet.KeylessPosts
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Rooms
@@ -347,6 +348,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         })
 
       %{
+        agent: agent,
         owners: post_as(writer, "Hull survey started"),
         shards: post_as(agent, "Readings are in"),
         others: post_as(other, "Dry dock")
@@ -360,7 +362,6 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, other_page, _html} = live(conn, @path)
       {:ok, owner_view, _html} = build_conn() |> signed_in_as(@owner) |> live(@path)
 
-      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key 1")
       refute has_element?(view, "#rooms-muted")
 
       view |> element("#rooms-mute-#{owners.id}") |> render_click()
@@ -401,7 +402,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       render_hook(view, "mute_key", %{})
       render_hook(view, "mute_key", %{"key" => ["1"]})
 
-      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key 1")
+      assert has_element?(view, "#rooms-mute-#{owners.id}")
       refute has_element?(view, "#rooms-muted")
     end
 
@@ -410,6 +411,28 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       assert html =~ "Hull survey started"
       refute has_element?(view, "#rooms-mute-#{owners.id}")
+    end
+
+    test "is offered on a post written as a Key, and nothing is on one written as no Key",
+         %{conn: conn, agent: agent, writer: writer} do
+      keyless = KeylessPosts.seed!(@fleet, agent, "Before posting here needed a Key")
+
+      keyed =
+        Rooms.send_message!(
+          %{
+            fleet_id: @fleet,
+            slug: "people",
+            body: "Hull survey started",
+            idempotency_key: "p-1"
+          },
+          actor: writer
+        )
+
+      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live("/classic/1?room=people")
+
+      assert has_element?(view, "#rooms-mute-#{keyed.id}")
+      refute has_element?(view, "#rooms-mute-#{keyless.id}")
+      refute has_element?(view, "#rooms-profile-#{keyless.id}")
     end
   end
 

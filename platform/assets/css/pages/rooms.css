@@ -95,12 +95,32 @@
   width: 100%;
 }
 
-/* In the hall the room takes the feed's place, spaced as the feed is. */
+/* In the hall the room takes the feed's place, spaced as the feed is: its
+   name, its posts, then what was refused and the box to write in. */
 .fleet-hall > .rooms-thread {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   padding: 0.75rem var(--rg-panel-padding);
+}
+
+/* On a wide screen the posts scroll on their own, edge to edge of the
+   column, between the room's name and the box to write in, which stay where
+   they are. A room of a few posts keeps them down by the box, as a chat
+   does. Narrower, the room scrolls with the page. */
+@media not (max-width: 64rem) {
+  .fleet-hall > .rooms-thread > .rooms-posts {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-inline: calc(-1 * var(--rg-panel-padding));
+    padding-inline: var(--rg-panel-padding);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .rooms-posts > :first-child {
+    margin-block-start: auto;
+  }
 }
 
 .rooms-thread__head {
@@ -118,6 +138,12 @@
 }
 
 .rooms-posts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rooms-foot {
   display: grid;
   gap: 1rem;
 }
@@ -174,8 +200,8 @@
   padding-block: 0.5rem;
 }
 
-/* The Key and its Mute button share the post's first line; who wrote as the
-   Key runs on the line under them. */
+/* The Key, the agent's picture and what can be done with the Key share the
+   post's first line; who wrote as the Key runs on the line under them. */
 .rooms-author {
   display: flex;
   flex-wrap: wrap;
@@ -223,9 +249,91 @@
   gap: 0.2rem;
 }
 
-.rooms-mute {
-  margin-inline-start: auto;
+/* The Key's profile, copying the wallet and muting the Key: small icons,
+   quiet until pointed at, held to the height of the words beside them. With
+   a mouse they show while the pointer or the keyboard is on the sender's
+   lines, keeping their place while hidden so nothing moves, and while a copy
+   says it is done; on a touch screen they are always there. */
+.rooms-actions {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 0.125rem;
+  margin-block: -0.375rem;
   font-weight: 400;
+}
+
+.rooms-actions .rooms-action {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-fg-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.rooms-actions .rooms-action:is(:hover, :focus-visible) {
+  border-color: var(--color-border);
+  color: var(--color-fg);
+}
+
+.rooms-actions .rooms-action svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.rooms-actions .rooms-action:active svg {
+  transform: scale(0.88);
+  transition-duration: 100ms;
+}
+
+.rooms-actions .rooms-action[data-copy-state="copied"] {
+  color: var(--color-success);
+}
+
+.rooms-actions .rooms-action[data-copy-state="failed"] {
+  color: var(--color-error);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rooms-author:not(:hover, :focus-within) > .rooms-actions:not(:has([data-copy-state])) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .rooms-actions .rooms-action {
+    inline-size: max(2.75rem, 44px);
+    block-size: max(2.75rem, 44px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rooms-actions .rooms-action,
+  .rooms-actions .rooms-action svg {
+    transition: none;
+  }
+
+  .rooms-actions .rooms-action:active svg {
+    transform: none;
+  }
+}
+
+/* One copy on a line: where the sender's actions copy the wallet, the
+   wallet's own copy icon stands aside. */
+.rooms-author:has(> .rooms-actions .rg-copy) .rooms-writer .rg-copy {
+  display: none;
 }
 
 .rooms-muted ul {
@@ -287,11 +395,6 @@
 @media (max-width: 47.99rem) {
   .rooms-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* The Keys you muted wait below the posts. */
-  .rooms-muted {
-    order: 1;
   }
 
   /* The Key a post was written as, which opens its page, is a full

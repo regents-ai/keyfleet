@@ -14,8 +14,10 @@ defmodule KeyfleetWeb.RoomsLive do
   by the keys themselves, and the page is drawn from what the room holds
   rather than from anything the browser was told along the way.
 
-  Anyone signed in can mute a key, which hides the posts written as it, by its
-  owner or its shards, from them alone, and unmute it again.
+  A room opens at its newest post. Each post's first line offers the key it
+  was written as: its profile, a copy of the wallet the post shows, and a
+  mute. Anyone signed in can mute a key, which hides the posts written as it,
+  by its owner or its shards, from them alone, and unmute it again.
 
   A post on the page is `Keyfleet.Rooms.Message.public/2`, the same map
   the topic of a room anyone reads carries for each new post, so a post read
@@ -99,29 +101,6 @@ defmodule KeyfleetWeb.RoomsLive do
         </h2>
       </header>
 
-      <section
-        :if={MapSet.size(@room.muted) > 0}
-        id="rooms-muted"
-        class="rooms-panel rooms-muted"
-        aria-labelledby="rooms-muted-title"
-      >
-        <h3 id="rooms-muted-title">Muted Keys</h3>
-        <ul>
-          <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
-            Key {Rules.grouped(token_id)}
-            <Regent.Primitives.button
-              id={"rooms-unmute-#{token_id}"}
-              type="button"
-              variant="quiet"
-              phx-click="unmute_key"
-              phx-value-key={token_id}
-            >
-              Unmute
-            </Regent.Primitives.button>
-          </li>
-        </ul>
-      </section>
-
       <div :if={is_nil(@room.room_id) and not @room.key?} id="rooms-locked">
         <.notice notice={@notice} />
         <p :if={@room.refreshing?}>
@@ -156,8 +135,36 @@ defmodule KeyfleetWeb.RoomsLive do
         </div>
       </div>
 
-      <div :if={@room.room_id != nil} class="rooms-posts">
-        <.notice :if={not @room.people?} notice={@notice} />
+      <%!-- A room always opens at its newest post (`RoomThread`), and the
+      Keys the reader muted wait above the posts. --%>
+      <div
+        :if={@room.room_id != nil}
+        id={"rooms-posts-#{@room.room_id}"}
+        class="rooms-posts"
+        phx-hook="RoomThread"
+      >
+        <section
+          :if={MapSet.size(@room.muted) > 0}
+          id="rooms-muted"
+          class="rooms-panel rooms-muted"
+          aria-labelledby="rooms-muted-title"
+        >
+          <h3 id="rooms-muted-title">Muted Keys</h3>
+          <ul>
+            <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
+              Key {Rules.grouped(token_id)}
+              <Regent.Primitives.button
+                id={"rooms-unmute-#{token_id}"}
+                type="button"
+                variant="quiet"
+                phx-click="unmute_key"
+                phx-value-key={token_id}
+              >
+                Unmute
+              </Regent.Primitives.button>
+            </li>
+          </ul>
+        </section>
 
         <Regent.Primitives.empty_state
           :if={not @room.shown? and @room.last_seq == 0}
@@ -194,18 +201,9 @@ defmodule KeyfleetWeb.RoomsLive do
               <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
             </p>
             <p :if={message.kind == :post} class="rooms-author">
-              <.author room={@room} message={message} />
-              <Regent.Primitives.button
-                :if={@room.muter? and message.as_key != nil}
-                id={"rooms-mute-#{message.id}"}
-                class="rooms-mute"
-                type="button"
-                variant="quiet"
-                phx-click="mute_key"
-                phx-value-key={message.as_key}
-              >
-                Mute Key {Rules.grouped(message.as_key)}
-              </Regent.Primitives.button>
+              <.author room={@room} message={message}>
+                <.actions :if={message.as_key} room={@room} message={message} />
+              </.author>
             </p>
             <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
               Replying to post {message.reply_to_seq}
@@ -218,8 +216,11 @@ defmodule KeyfleetWeb.RoomsLive do
             </p>
           </li>
         </ol>
+      </div>
 
-        <.notice :if={@room.people?} notice={@notice} />
+      <%!-- Under the newest post: what was refused, and the box to write in. --%>
+      <div :if={@room.room_id != nil} class="rooms-foot">
+        <.notice notice={@notice} />
 
         <%!-- Posting here takes a Key, so anyone else is shown what the Public room shows them. --%>
         <.form
@@ -286,6 +287,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   attr :room, :map, required: true, doc: "the room open in the hall"
   attr :message, :map, required: true, doc: "a line as `Message.public/2` draws it"
+  slot :inner_block, doc: "what the reader can do with the key, on the key's own line"
 
   # Who wrote a line: the key it was written as, which opens that key over
   # the room, and beneath it the person's wallet or the agent's name, and
@@ -300,12 +302,54 @@ defmodule KeyfleetWeb.RoomsLive do
       Key {Rules.grouped(@message.as_key)}
     </.link>
     <.agent_picture :if={@message.author.picture} src={@message.author.picture} />
+    {render_slot(@inner_block)}
     <.writer id={"rooms-writer-#{@message.id}"} author={@message.author} />
     <small :if={@message.quoting?} class="rooms-writer">
       <span aria-hidden="true">“</span>
       <span class="visually-hidden">Quoting its person</span>
     </small>
     <.verified_human :if={@message.author.human_backed} />
+    """
+  end
+
+  attr :room, :map, required: true, doc: "the room open in the hall"
+  attr :message, :map, required: true, doc: "a post written as a key"
+
+  # What the reader can do with the key a post was written as: open it over
+  # the room, copy the wallet the post shows, and mute it when they may. An
+  # agent's post shows no wallet, so it offers no copy.
+  defp actions(assigns) do
+    ~H"""
+    <span class="rooms-actions">
+      <.link
+        id={"rooms-profile-#{@message.id}"}
+        class="rooms-action"
+        patch={KeyLinks.key_path(@room.fleet_id, @message.as_key, %{"room" => @room.slug})}
+        aria-label={"Key #{Rules.grouped(@message.as_key)} profile"}
+        title="Profile"
+      >
+        <Regent.Icons.icon name="user" />
+      </.link>
+      <Regent.Primitives.copy_icon
+        :if={@message.author.wallet}
+        id={"rooms-copy-#{@message.id}"}
+        class="rooms-action"
+        text={@message.author.wallet}
+        label="Copy wallet"
+      />
+      <button
+        :if={@room.muter?}
+        id={"rooms-mute-#{@message.id}"}
+        type="button"
+        class="rooms-action"
+        phx-click="mute_key"
+        phx-value-key={@message.as_key}
+        aria-label={"Mute Key #{Rules.grouped(@message.as_key)}"}
+        title="Mute"
+      >
+        <Regent.Icons.icon name="ban" />
+      </button>
+    </span>
     """
   end
 
