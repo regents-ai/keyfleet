@@ -11,8 +11,9 @@
 # the build takes no credentials. The image is built for this machine's Docker
 # architecture, since it runs here.
 #
-# The smoke check starts the image against a throwaway PostgreSQL 17 on its own
-# Docker network and removes them afterwards. It runs the staging release
+# The smoke check starts the image against a throwaway PostgreSQL, at the
+# version platform/.tool-versions names, on its own Docker network and removes
+# them afterwards. It runs the staging release
 # commands against it, then starts production's two machines (platform/fly.toml)
 # as one cluster: the graph machine with an empty graph volume and the site
 # machine with none. It checks the health endpoint, the home page, a built
@@ -30,6 +31,9 @@ commit="$(git rev-parse HEAD)"
 image="keyfleet:${commit:0:12}"
 run="keyfleet-smoke-$$"
 database_url="postgres://smoke:smoke@regents-staging-db.internal/keyfleet_smoke"
+# The throwaway database is the PostgreSQL version platform/.tool-versions names.
+postgres="$(awk '$1 == "postgres" { print $2 }' platform/.tool-versions)"
+[[ -n $postgres ]] || { echo "platform/.tool-versions names no postgres version." >&2; exit 1; }
 # The network's own private IPv6 range, one per run, as Fly gives each machine
 # a private IPv6 address that names its node in the cluster. Docker hands the
 # database the range's first addresses, so the machines' own start at ::1:2.
@@ -95,8 +99,11 @@ docker run --detach --name "$run-db" --network "$run" \
   --network-alias regents-staging-db.internal \
   --env POSTGRES_USER=smoke --env POSTGRES_DB=keyfleet_smoke \
   --env POSTGRES_HOST_AUTH_METHOD=trust \
-  docker.io/library/postgres:17 >/dev/null
+  "docker.io/library/postgres:$postgres" >/dev/null
 wait_for "the database" docker exec "$run-db" pg_isready --quiet --host 127.0.0.1 --username smoke
+server_version="$(docker exec "$run-db" psql --username smoke --dbname keyfleet_smoke --tuples-only --no-align --command 'SHOW server_version')"
+# The answer is the version, then the build's own note, such as "17.12 (Debian 17.12-1.pgdg13+1)".
+[[ ${server_version%% *} == "$postgres" ]] || fail "the throwaway database is PostgreSQL $server_version, not $postgres"
 
 release_env=(
   --network "$run"
@@ -133,6 +140,11 @@ machine_env=(
   --env PICTURES_PUBLIC_URL=https://pictures.invalid
   --env KEY_ART_URL=http://key-art.invalid
   --env LIGHTHOUSE_API_KEY=smoke
+  # The presence timer's wallet key is required and never used here: with no
+  # chain node nothing is sent. A fresh random key that holds nothing.
+  --env KEYFLEET_PRESENCE_TIMER_KEY="0x$(openssl rand -hex 32)"
+  # Fly names the image each machine runs; here it is the one just built.
+  --env FLY_IMAGE_REF="$image"
 )
 
 # /data stands in for the Fly volume, empty and owned by the app user as
@@ -193,5 +205,5 @@ echo "  migrations      bootstrap-staging and migrate succeeded; pending-migrati
 echo "  health          $base/healthz answered $health"
 echo "  static asset    $stylesheet answered $stylesheet_answer"
 echo "  graph host      $graph_host loaded the graph host"
-echo "  database        the running server queried $connected_database"
+echo "  database        the running server queried $connected_database on PostgreSQL $server_version"
 echo "  cluster         the site reached a graph writer on $writer_node"
