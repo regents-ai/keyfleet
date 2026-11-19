@@ -91,8 +91,9 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     end
   end
 
-  test "an agent page that is not here is not found, and one with an escaped part opens" do
+  test "a page that is not here or has its first part escaped is not found, and one with a later part escaped opens" do
     assert_error_sent(404, fn -> get(build_conn(), "/agents/no-such-agent") end)
+    assert build_conn() |> get("/%70rivacy") |> html_response(404)
 
     page =
       build_conn() |> get("/agents/%63odex") |> html_response(200) |> LazyHTML.from_document()

@@ -1459,15 +1459,12 @@ features:
       the 2,048 bytes allowed for the whole sign-in request. /mcp is the shared
       RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
       token, 120 requests a minute per connected account; before that a
-      request without a token spends the /api per-address budget and one with
-      a token the connector's own per-address ceiling of 6,000 a minute, so
-      every person's Claude, calling from the same servers, never shares one
-      120-a-minute bucket. Each kind of sign-in request under /oauth has its
-      own count for each client address, 30 registrations a minute and 120 a
-      minute of each other kind (token, revocation, the consent page, Allow or
-      Cancel, Connected apps and Disconnect), past which it answers 429
-      rate_limited. 405 for anything but POST, Keyfleet's own refusal
-      words. Tokens are stored only as their hash. Claude's guide, its skill,
+      request with a token counts against the connector's own ceiling of
+      6,000 a minute for the address it comes from, which every person's
+      Claude calling from those servers shares, and one without a token
+      against that address's /api budget of 120 a minute, shared with
+      everything else it sends there. 405 for anything but POST, Keyfleet's
+      own refusal words. Tokens are stored only as their hash. Claude's guide, its skill,
       its place on /agents and the sitemap, the pair request's
       `claude` harness and the lines in llms.txt and agents.md naming /mcp
       exist only while the switch is on; off, /agents/claude is not found and

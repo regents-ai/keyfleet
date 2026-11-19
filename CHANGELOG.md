@@ -13524,27 +13524,29 @@ step's report).
   untracked adversarial test files. No page script changed, so vitest and tsc were not
   run.
 
-## 2026-11-19 — Each kind of sign-in request has its own count for each address
+## 2026-11-19 — Sign-in's limits are as on main
 
-- `KeyfleetWeb.OAuthController` counts each kind of sign-in request for each client
-  address in fixed one-minute windows (`RequestRateLimiter`): 30 registrations, and 120
-  each of token, revocation, the consent page, Allow or Cancel, Connected apps and
-  Disconnect. Past a count the answer is 429 `{"error":"rate_limited"}` with
-  `Retry-After: 60`, in JSON on the two pages too, given before the library sees the
-  request, so no `oauth refused` line is written. The per-address budget `/api` spends
-  does not count sign-in requests.
-- Tests: `OAuthConsentTest` (6) spends each kind's count in turn from one address within
-  one window, each with a request that reads and writes nothing: every kind admits its
-  whole count while the kinds before it stay spent, and the next request is refused.
-  Then the consent and registration requests a real app sends are refused at their plain
-  addresses and with an escape after the first part, and are not found with one in the
-  first part, with no published identity read and no app, document, code or token row
-  written; the same consent from another address reads ChatGPT's identity.
-- Docs: features.yml's claude-connector row, the README's two sign-in rows and the
-  router's and controller's notes say the counts, and the router and README say that a
-  refusal past a count logs nothing, while one the library makes logs its endpoint and
-  reason. docs.md's Rate limits does not name sign-in. No version changes: the API
-  contract and `/skill.md` are untouched.
+- This branch leaves sign-in's limits as main has them: `KeyfleetWeb.OAuthController` is
+  main's file, counting registration (30 a minute), token, revocation, the consent page
+  and Allow or Cancel (120 a minute each) for each client address, each its own count in
+  fixed one-minute windows. Past a count the answer is 429 `{"error":"rate_limited"}`
+  with `Retry-After: 60`, given before the library sees the request, so no
+  `oauth refused` line is written. The per-address budget `/api` spends does not count
+  sign-in requests.
+- Tests: `OAuthConsentTest` (6) spends those five counts in turn from one address within
+  one minute, read with `RequestRateLimiter.check/3`, each with a request that reads and
+  writes nothing: each admits its whole count while the ones before it stay spent, and
+  the next request is refused. Then the consent and registration requests a real app
+  sends are refused at their plain addresses and with an escape after the first part, and
+  are not found with one in the first part, with no published identity read and no app,
+  document, code or token row written; the same consent from another address reads
+  ChatGPT's identity.
+- Docs: the README's sign-in row and the router's note say no sign-in request is logged
+  and a refusal the library makes logs only its endpoint and reason. docs.md's Rate
+  limits does not name sign-in. features.yml's claude-connector row says what a
+  connector request shares: one with a token, the connector's ceiling for the address it
+  comes from with every other person's Claude there; one without, that address's /api
+  budget. No version changes: the API contract and `/skill.md` are untouched.
 
 ## 2026-11-19 — The library move's record says only what is proved
 
@@ -13562,21 +13564,27 @@ step's report).
 ## 2026-11-19 — An address's first part is spelled one way
 
 - `KeyfleetWeb.Endpoint`'s `one_spelling/2`, after the security headers and before the
-  launch gate: a request whose first path part holds a percent sign names nothing, and
-  gets the answer any unknown address gets, before the per-address budget is counted and
-  before any later plug reads the address. No real address has one: the router's first
-  parts, the fleets' addresses, `/.well-known` and the static files are plain words. The
-  notebook and code hosts are answered above it by their own gateways, as before.
+  launch gate: a request whose first path part holds a percent sign names nothing, and is
+  answered 404, not found, in the caller's format, whether the site is open or closed,
+  before the per-address budget is counted and before any later plug reads the address.
+  No real address has one: the router's first parts, the fleets' addresses,
+  `/.well-known` and the static files are plain words. The notebook and code hosts are
+  answered above it by their own gateways, as before.
 - An escape after the first part is an ordinary part of the address, counted and routed
   as before.
-- Tests: `RateLimitTest` (4): `/healthz`, `/api/v1/fleets`, `/share/…`, `/oauth/authorize`
-  and `/mcp` with the first part escaped answer 404 exactly as an unknown address does,
-  asked for HTML, JSON or Markdown, with no budget header; written plainly they answer as
-  before, and the four on the per-address budget carry its header; `/api/v1/%66leets` is
-  counted and answers 200.
-  `AgentJoinJourneyTest`'s escaped agent addresses keep their escape in the second or
-  third part, and `PublicPagesControllerTest` opens an agent page with an escaped part
-  after the first.
+- Tests: `RateLimitTest` (5): `/healthz`, `/api/v1/fleets`, `/share/…`, `/oauth/authorize`
+  and `/mcp` with the first part escaped answer 404, not found, in the format asked for,
+  HTML, JSON or Markdown, with no budget header; written plainly they answer as before,
+  and the four on the per-address budget carry its header; `/api/v1/%66leets` is counted
+  and answers 200. With the site closed, `/%70rivacy`, `/%61pi/v1/fleets` and
+  `/%6Fauth/authorize` still answer 404 with no budget header.
+  `AgentJoinJourneyTest` sends agent addresses escaped in the first part, answered 404
+  not found with the sign-in server never asked, and in the second or third, answered
+  404 `operation_unknown`. `PublicPagesControllerTest` finds no page at `/%70rivacy` and
+  opens an agent page with an escaped part after the first.
 - Docs: docs.md's Sign-in says an address whose first part holds a percent-escape answers
-  404 as any unknown address does. No version changes: the API contract and `/skill.md`
-  are untouched.
+  404, not found, in the format asked for, whether Keyfleet is open or not; its Rate
+  limits names everything that shares the per-address budget and that an IPv6 address
+  is counted by its /64 block. The public changelog says an address whose first part is
+  written with a percent escape is not found. No version changes: the API contract and
+  `/skill.md` are untouched.

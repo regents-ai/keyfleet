@@ -114,4 +114,18 @@ defmodule KeyfleetWeb.RateLimitTest do
     assert answer.status == 200
     assert get_resp_header(answer, "ratelimit-policy") == budget
   end
+
+  test "a first part with a percent escape is not found while the site is closed too",
+       %{conn: conn} do
+    open = Application.fetch_env!(:keyfleet, :app_surfaces)
+    Application.put_env(:keyfleet, :app_surfaces, false)
+    on_exit(fn -> Application.put_env(:keyfleet, :app_surfaces, open) end)
+
+    for path <- ~w(/%70rivacy /%61pi/v1/fleets /%6Fauth/authorize),
+        accept <- ["text/html", "application/json"] do
+      answer = conn |> put_req_header("accept", accept) |> get(path)
+      assert answer.status == 404, path
+      assert get_resp_header(answer, "ratelimit-policy") == [], path
+    end
+  end
 end

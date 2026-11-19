@@ -26,6 +26,9 @@ Changes to Keyfleet, newest first.
   for a day, that it is paired with a person here, which it can show on other Regent
   sites. The card comes once its person has signed in here with a wallet. An agent can
   show its own card here too, beside a signed request; it grants nothing here.
+- **Addresses.** Every page has one address. An address whose first part is written with
+  a percent sign code in place of a letter, such as `/%70rivacy` for `/privacy`, is not
+  found.
 
 ## 18 November 2026
 

@@ -13,9 +13,9 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   #   callback on the app's own host, and the site's form-action stays 'self';
   # - Claude's published identity and an app registered here connect and
   #   refresh as before;
-  # - each kind of sign-in request has its own count for each client address,
-  #   which no other kind spends; past it, escaped or not, consent reads no
-  #   identity and registration writes no app.
+  # - registration, token, revocation, consent and Allow or Cancel each have
+  #   their own count for each client address; past it, escaped or not, consent
+  #   reads no identity and registration writes no app.
   # Published identities and key sets are served without a network, and the
   # hosted signer is a stand-in; the rest is the site's.
   use KeyfleetWeb.ConnCase, async: false
@@ -293,7 +293,7 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   # among them would start every count again. Each kind is spent with a request
   # that reads and writes nothing, and each kind spent after the first admits
   # its whole count while the kinds before it stay spent.
-  test "each kind of sign-in request is refused past its own count and no other's; past it, consent reads and registration writes nothing, escaped or not",
+  test "registration, token, revocation, consent and Allow are each refused past their own count; past it, consent reads and registration writes nothing, escaped or not",
        c do
     rows = sign_in_rows()
     anonymous = Map.put(build_conn(), :remote_ip, c.from)
@@ -317,17 +317,10 @@ defmodule KeyfleetWeb.OAuthConsentTest do
        fn -> anonymous |> put_req_header("content-type", form) |> post("/oauth/revoke", "") end},
       {120, fn -> get(page, "/oauth/authorize") end},
       {120,
-       fn -> c.browser |> put_req_header("content-type", form) |> post("/oauth/authorize", "") end},
-      {120, fn -> get(page, "/oauth/connections") end},
-      {120,
-       fn ->
-         c.browser
-         |> put_req_header("content-type", form)
-         |> post("/oauth/connections/revoke", "")
-       end}
+       fn -> c.browser |> put_req_header("content-type", form) |> post("/oauth/authorize", "") end}
     ]
 
-    {:ok, %{reset: left}} = RequestRateLimiter.admit({:window_left, make_ref()}, 1, 60)
+    {:ok, %{reset: left}} = RequestRateLimiter.check(:oauth_minute, 1, 60)
     if left <= 5, do: Process.sleep(:timer.seconds(left))
 
     for {count, request} <- kinds do

@@ -322,8 +322,23 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
   # Costly failure: an agent address spelled with percent-escapes crashes the
   # site, or reaches a handler past the checks that read it as written.
-  test "an agent address with a percent-escape in its second or third part is no operation's, signed or not",
+  test "an agent address with a percent-escape in its first three parts reaches no operation, signed or not",
        c do
+    for path <- ["/%61pi/agents/v1/pair", "/%61pi/v1/profile"],
+        headers <- [
+          signed(c, @body, "keyfleet", 8453, path).headers,
+          %{"content-type" => "application/json"}
+        ] do
+      answer =
+        Req.post!(c.app <> path,
+          headers: Map.put(headers, "accept", "application/json"),
+          body: @body,
+          retry: false
+        )
+
+      assert outcome(answer) == {404, "not_found"}, path
+    end
+
     for path <- [
           "/api/%61gents/v1/pair",
           "/api/agents/%761/pair",

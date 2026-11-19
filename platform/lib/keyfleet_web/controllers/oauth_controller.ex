@@ -4,9 +4,7 @@ defmodule KeyfleetWeb.OAuthController do
 
   alias Keyfleet.Accounts.RequestRateLimiter
 
-  # Every action but discovery has its own count for each client address: 30
-  # registrations a minute, and 120 a minute of each other kind.
-  plug :rate_limit when action not in [:resource_metadata, :server_metadata]
+  plug :rate_limit when action in [:register, :token, :revoke, :authorize, :approve]
 
   for action <- [:resource_metadata, :server_metadata, :register, :token, :revoke] do
     def unquote(action)(conn, _params), do: RegentOAuth.Protocol.call(conn, unquote(action))
