@@ -14501,20 +14501,21 @@ step's report).
   all thirteen together; `platform/mix.lock` changes only in those entries. 0e89c4fc is
   b695c5a0 plus two Points commits:
   - The start run, `RegentPoints.StartAwards`, asks each start rule's source about the
-    run's own time instead of the start, and runs at most once a day where before it
-    ran once until Oban pruned it. An account, linked social account or paired agent
+    run's own time instead of the start, and runs once a day where before it ran once
+    until Oban pruned it; a run that ends failed or cancelled holds nothing back, so
+    the next hour starts another. An account, linked social account or paired agent
     made after the Points start (16 Nov, 17:00 UTC) and before Keyfleet's release
-    switched Points on (19 Nov), which no save offered, is now recorded and earns once,
-    at its own time. What accounts had before the start still earns at the start, and
+    switched Points on (19 Nov), which no save offered and which is still there when
+    the run comes, is now recorded and earns once, at its own time. What accounts had before the start still earns at the start, and
     nothing Points has recorded is offered again.
-  - An award still waiting, or refused, blocks no later offer. A one-time rule stops
-    taking an account's offers only once that account has earned it; offers checked
-    together for one account end with one earned and the rest `capped`. A refused
-    event can be offered again, and the new facts replace the refused ones.
+  - An account's award still waiting, or refused, no longer closes the rule to that
+    account: a one-time rule is closed to an account only once it has earned it.
+    Offers checked together for one account end with one earned and the rest
+    `capped`. A refused event can be offered again, and the new facts replace the
+    refused ones.
 - This corrects the entry "Points: an award goes only to the account its offer named"
   above. A social account refused because it changed hands no longer earns for nobody:
-  its present holder earns it once, through its own link's offer or the next start run,
-  and only one account ever earns it.
+  its present holder can earn it once, and only one account ever earns it.
 - Keyfleet's three sources already read the moment they are asked about, not the
   configured start. `Keyfleet.Points.AccountActivated` lists the accounts made before
   it, `Keyfleet.Points.LinkedSocial` the links made before it that are still there, and

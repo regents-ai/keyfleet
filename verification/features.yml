@@ -833,10 +833,10 @@ features:
       A person earns Regent Points on Keyfleet for five account actions, each
       once across every Regent site: their account, linking X, GitHub or
       Farcaster, and their first paired agent. Each is offered to Points in the
-      save that makes it. A run at most once a day offers what Points has not
-      recorded: what they already had when Points started earns at the start,
-      and what came after the start earns once at its own time. Only production
-      approves the five.
+      save that makes it. A run once a day, started again the next hour when
+      it fails, offers what they still have that Points has not recorded: what they already had when
+      Points started earns at the start, and what came after the start earns
+      once at its own time. Only production approves the five.
     who: person
     level: ordinary
     paths:
@@ -862,6 +862,7 @@ features:
     gaps:
       - An X, GitHub or Farcaster account that replaced another one here before this release keeps the time the first one was linked, so if that was before the Points start it earns at the start.
       - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
+      - One rare limit in the shared library's daily run is with its lead to close; this row is updated when the fix is live.
 
   - id: account-ens-name
     what: >-
