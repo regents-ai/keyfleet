@@ -65,8 +65,9 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
     end)
 
     # Season 1 settled holding BTC-USD, up 2.5%; season 2 runs holding
-    # SOL-USD, its crown passed to Key 2's pick, with a pick from each of the
-    # `pickers` more Keys a test asks for; season 3 takes picks.
+    # SOL-USD, its crown passed to Key 2's pick, or the `holding`, open price
+    # and captain a test names, with a pick from each of the `pickers` more
+    # Keys a test asks for; season 3 takes picks.
     boundary = Seasons.boundary(DateTime.utc_now())
     first = season!(1, DateTime.add(boundary, -3, :hour))
     first |> lock!("BTC-USD", "100", nil) |> settle!("102.5", "0.025")
@@ -80,7 +81,8 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
       pick!(wallet, 2, "ETH-USD", nil)
     end
 
-    running = lock!(running, "SOL-USD", "143.27", 2)
+    {holding, price, captain} = Map.get(context, :holding, {"SOL-USD", "143.27", 2})
+    running = lock!(running, holding, price, captain)
 
     %{running: running, taking: season!(3, DateTime.add(boundary, 6, :hour))}
   end
@@ -187,6 +189,21 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
         refute page =~ @secret
         refute page =~ "Keys locked"
       end
+    end
+  end
+
+  # A holding with no price at its season's end, and no pick that scored: the
+  # crown goes to USDC and no Key takes it, so it is not said to have passed.
+  @tag holding: {"USDC", "1", nil}
+  test "a crown let go to USDC with no captain is dropped, not passed", %{conn: conn} do
+    FleetNow.read(@fleet)
+
+    for reader <- [build_conn(), signed_in_as(conn, @holder)] do
+      {:ok, view, _html} = live(reader, @path)
+
+      assert has_element?(view, "#fleet-season-holding", "USDC")
+      assert has_element?(view, "#fleet-season-captain", "—")
+      assert has_element?(view, "#fleet-season-last", "Crown dropped")
     end
   end
 

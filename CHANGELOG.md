@@ -13382,8 +13382,10 @@ step's report).
     `invalid_pick` with the rule's hint, the same refusal signed and through the
     connector. Before, the connector counted letters first and answered
     `invalid_request` "reason is at most 500 characters" to 501 letters, while 251 emoji
-    passed it and met the rule. The listed schema keeps `maxLength` 500, the most any
-    reason the rule takes can have.
+    passed it and met the rule. The listed schema keeps `maxLength` 500, which counts
+    characters as sent, while the rule counts UTF-16 units once the reason is trimmed:
+    every reason the rule takes fits it once trimmed, but one sent with spaces around
+    it, such as 500 letters wrapped in spaces, is over it and still taken.
   - Documents made true. docs.md: a pick is void when its product isn't open to picks
     as the turn that starts its season runs, normally a minute after the start and later
     after downtime or while Coinbase can't be read (it said "when its season starts");
@@ -13670,3 +13672,15 @@ step's report).
   sends a reason empty, left out, given and null, and a notebooks cursor empty and
   null, through the connector and the signed request (the reasons over signed /mcp
   too) and finds the same answer or refusal at each; both fail with the old null rule.
+- Three sentences made true. The feature list's Coinbase gap said a turn makes about
+  one request plus two per coin; at each boundary it makes one list request for the
+  starting season's picks (none for USDC alone, one a page past the first, and a list
+  past twenty pages fails the turn) and one price request for each distinct product
+  other than USDC whose price decides something, so at worst twenty list requests and
+  one price request for each Key's pick in the two seasons plus the holding, once for
+  each boundary a late turn catches up. This changelog called the listed `maxLength`
+  of 500 the most any reason the rule takes can have; the rule counts after trimming,
+  so 500 letters wrapped in spaces are taken. The Season panel said "Crown passed"
+  when the crown went to USDC with no Key taking it; `KeyfleetWeb.SeasonPanel` now
+  says "Crown dropped" there, and `SeasonPanelTest` finds it for a visitor and a
+  member.

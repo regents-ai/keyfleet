@@ -160,7 +160,7 @@ defmodule KeyfleetWeb.SeasonPanel do
             <span :if={@season.face && @season.face.last}>
               <span class="fleet-season__figure">{percent(@season.face.last.result)}</span>
               <span class="fleet-season__minor">
-                {if @season.face.last.passed?, do: "Crown passed", else: "Crown kept"}
+                {crown(@season.face)}
               </span>
             </span>
           </dd>
@@ -393,6 +393,12 @@ defmodule KeyfleetWeb.SeasonPanel do
   @doc "A captain's Key, or a dash for none."
   def captain(nil), do: "—"
   def captain(key), do: "Key #{key}"
+
+  # What became of the crown as the last season settled: kept by its holding,
+  # passed to a pick's Key, or let go to USDC with no Key taking it.
+  defp crown(%{last: %{passed?: false}}), do: "Crown kept"
+  defp crown(%{captain_key: nil}), do: "Crown dropped"
+  defp crown(_face), do: "Crown passed"
 
   defp coinbase, do: @coinbase
 
