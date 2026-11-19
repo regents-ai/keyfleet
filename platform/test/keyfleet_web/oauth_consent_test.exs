@@ -11,7 +11,8 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   #   still fits the session cookie;
   # - Allow and Cancel answer a page that sends the browser on to the app's
   #   callback on the app's own host, and the site's form-action stays 'self';
-  # - Claude's published identity and an app registered here connect as before;
+  # - Claude's published identity and an app registered here connect and
+  #   refresh as before;
   # - an address that has spent its request budget is refused at every sign-in
   #   address before anything is read or written.
   # Published identities and key sets are served without a network, and the
@@ -232,7 +233,7 @@ defmodule KeyfleetWeb.OAuthConsentTest do
     refute_received {:read, @claude}
   end
 
-  test "an app registered here connects with no key of its own, as before", c do
+  test "an app registered here connects and refreshes with no key of its own, as before", c do
     callback = "https://agent.example/oauth/callback"
 
     registered =
@@ -256,7 +257,7 @@ defmodule KeyfleetWeb.OAuthConsentTest do
     assert String.starts_with?(address, callback <> "?")
     assert %{"code" => code, "state" => "registered-state"} = answered(address)
 
-    assert {200, %{"access_token" => access}} =
+    assert {200, %{"access_token" => access, "refresh_token" => refresh_token}} =
              token(
                %{
                  "grant_type" => "authorization_code",
@@ -270,6 +271,17 @@ defmodule KeyfleetWeb.OAuthConsentTest do
              )
 
     assert "register_identity" in tool_names(access, c.from)
+
+    assert {200, %{"access_token" => _}} =
+             token(
+               %{
+                 "grant_type" => "refresh_token",
+                 "client_id" => client_id,
+                 "refresh_token" => refresh_token,
+                 "resource" => RegentOAuth.resource()
+               },
+               c.from
+             )
   end
 
   # Every address under /oauth spends the per-address request budget, here at

@@ -13423,15 +13423,32 @@ step's report).
   link and refresh lead to the app's callback, so the consent page's `form-action 'self'`
   holds and the library no longer touches the page's CSP. The consent page lists each
   permission and what the app never does (`permission`, the `keyfleet.agent` line and
-  `never` in config.exs); its button is Allow. A sign-in request's details may take 2,048
-  bytes as JSON, and `ui_locales` is dropped. Refusals carry `error_description`, and a
+  `never` in config.exs); its button is Allow. Refusals carry `error_description`, and a
   failure logs "oauth failed" with its endpoint and exception. `connected_clients` adds
   `connected_at`. config.exs filters `client_assertion` from logs.
+- oauth: a refusal at registration, token, revocation, consent or Allow logs one warning,
+  `oauth refused endpoint=… reason=…`, with no value from the request.
+- oauth: one new telemetry event, `[:regent_oauth, :client_keys, :read]` with its result,
+  for each read of an app's key set; Keyfleet's metrics don't list it.
+- oauth: Connected apps shows "Connected <date>" beside each app, the day of its oldest
+  access token not yet revoked, and lists the most recently connected first.
+- oauth: the consent page is a row for each permission and a last row led by "Never",
+  then Allow and Cancel, then "Returns to <host>" and a Connected apps link; the line
+  above each page's title is the site's host alone, and `consent_note` is gone.
+- oauth: discovery also lists `none` and `private_key_jwt` for the revocation address,
+  and RS256 and ES256 as the signing algorithms for both the token and revocation
+  addresses.
+- oauth: token and revocation answer 401 `invalid_client` when an app's assertion is
+  missing or fails, and 503 `temporarily_unavailable` when its keys can't be read just
+  now.
+- oauth: the "Unavailable" page and Allow's "This connection link no longer works" page
+  each log a warning with their reason.
 - Migration 20261119120000_oauth_long_values.exs runs the library's V4:
   `oauth_tokens.state` and `redirect_uri`, `oauth_clients.name` and `jwks_uri` become
   `text`, and `oauth_clients.redirect_uris` `varchar[]`; they were `varchar(255)` from
-  the first connector migration. No row changes and no table is rewritten; each table is
-  locked while its type changes, waiting at most five seconds (`SET LOCAL lock_timeout`).
+  the first connector migration. No row changes and no table is rewritten. It waits up to
+  five seconds for each table's lock (`SET LOCAL lock_timeout`), `oauth_tokens` first,
+  holding it while it waits for `oauth_clients`: about ten seconds at worst.
   Without it a 600-character state answered 503 at Allow (a Postgrex error on the code's
   insert), seen with the old types in a scratch copy of the consent test. Release order
   (scripts/deploy.sh): the graph machine runs it as its release command, then the site
@@ -13445,6 +13462,8 @@ step's report).
   first of its Keyfleet origins, which is what `PHX_HOST` gives. `SignedAgent`'s admission
   keeps a card that passes as `conn.assigns.hello_card` (`RegentAgents.HelloCard.put_card/2`),
   on the API and at `/mcp` for an agent signing its own requests; nothing reads it.
+- agents: the shared whoami, me and pair addresses (`RegentAgents.HTTP`) check a card
+  beside a signed request the same way, which may read SIWA's published keys.
 - chain: `Presses.failed/1` takes `wallet_refused`. Keyfleet's own failure lists
   (telemetry.ex:51, visit_log/events.ex:27) don't, and its page script never sends it.
   points: the adapter is asked again before an award is written; a summary's `done`
@@ -13472,7 +13491,8 @@ step's report).
   the `chatgpt` harness, once kf/seasons-1118 lists it, would be refused
   `hosted_request_not_allowed` until siwa-server allows it. The library's hello-card key
   read keeps nothing when it fails, so while SIWA's key address is down each signed
-  request carrying a card reads it again, up to seven seconds. At the 2,048-byte limit the
+  request carrying a card, and each pairing question, reads it again, up to seven seconds.
+  At the 2,048-byte limit the
   session cookie is 3,374 of its 4,096 bytes.
 - Not proven: real ChatGPT and real Claude have not connected; no browser here follows
   the return page to another host (the template's Chromium walk does, on the same
@@ -13523,3 +13543,16 @@ step's report).
   controller's notes say the rule, and the router and README say that a refusal there
   logs its endpoint and reason, though no request is logged. No version changes: the
   API contract and `/skill.md` are untouched.
+
+## 2026-11-19 — The library move's record says only what is proved
+
+- The library move's entry no longer lists the 2,048-byte limit or the dropped
+  `ui_locales` as changes, both so before the move; it gives the migration's lock wait as
+  up to five seconds for each of its two tables, and it adds one line for each change the
+  library brought that it left out.
+- `OAuthConsentTest`'s registered app now refreshes its token as well, so the entry's
+  "connect, exchange and refresh" holds for it; features.yml's claude-connector row says
+  what the consent tests run for each app, and the hello-cards row says when the
+  sign-in server's keys are read.
+- docs.md's and agents.md's hello-card sentences say only what a card is and that
+  sending one changes nothing in the answer. Neither file has a version to bump.

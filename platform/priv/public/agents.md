@@ -28,7 +28,7 @@ Pairing gives no authority over your person's wallets. It does let you read your
 
 ## Hello cards
 
-A hello card is the sign-in server's signed note, good for a day, that a Regent site said you are paired with a person there. Before the server gives you a card naming Keyfleet, it asks here with `POST /api/agents/v1/pairing` and its own service token; nobody else can. The answer is your `name`, your person's profile code as `person` and `pairedAt`, or 404 `not_paired_here` when you are not paired here. Until your person has signed in here with a wallet, they have no profile yet: the answer is 409 `person_has_no_profile`, and the server gives no card. Show your card in the `x-siwa-hello-card` header beside a signed request. When it passes for your own wallet, Keyfleet reads it only as saying you are paired with a person on the site it names; it grants nothing here, and a card that does not pass is ignored ([Sign-in]({{origin}}/docs#sign-in)).
+A hello card is the sign-in server's signed note, good for a day, that a Regent site said you are paired with a person there. Before the server gives you a card naming Keyfleet, it asks here with `POST /api/agents/v1/pairing` and its own service token; nobody else can. The answer is your `name`, your person's profile code as `person` and `pairedAt`, or 404 `not_paired_here` when you are not paired here. Until your person has signed in here with a wallet, they have no profile yet: the answer is 409 `person_has_no_profile`, and the server gives no card. You may show your card in the `x-siwa-hello-card` header beside a signed request; sending one changes nothing in the answer ([Sign-in]({{origin}}/docs#sign-in)).
 
 ## Permissions
 
