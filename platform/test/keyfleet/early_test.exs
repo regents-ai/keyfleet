@@ -94,6 +94,21 @@ defmodule Keyfleet.EarlyTest do
     assert [%Signup{email: "ada@mail.example.com"}] = list()
   end
 
+  # Costly failure: a host the rules can't write in ASCII is kept as typed, so
+  # one address is on the list under two spellings or never reaches anyone.
+  test "a host is stored in ASCII, and one the rules can't write is refused" do
+    assert {:ok, _signup} = Early.sign_up("ada@bücher.de")
+    assert {:ok, _signup} = Early.sign_up("ada@xn--n3h.net")
+
+    assert Enum.sort(Enum.map(list(), & &1.email)) == ["ada@xn--bcher-kva.de", "ada@xn--n3h.net"]
+
+    long = "ada@xn--" <> String.duplicate("a", 236) <> ".com"
+
+    for address <- ["ada@foo_bar.com", "ada@ab--cd.com", "ada@xn--abc-.com", long] do
+      assert {:error, %Ash.Error.Invalid{}} = Early.sign_up(address), inspect(address)
+    end
+  end
+
   test "an address of exactly 254 bytes fits" do
     address = String.duplicate("a", 242) <> "@example.com"
     assert byte_size(address) == 254
