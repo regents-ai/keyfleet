@@ -24,6 +24,7 @@ export default defineConfig({
     "wallet_buttons.spec.ts",
     "wallet_keys.spec.ts",
     "key_shards.spec.ts",
+    "room_chat.spec.ts",
     "room_mutes.spec.ts",
     "dm_confirm.spec.ts",
     "copy_buttons.spec.ts",
