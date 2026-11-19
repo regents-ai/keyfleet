@@ -107,7 +107,14 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
       "ZERO-USD" => [{minutes_before(2), "5"}, {minutes_before(1), "0.000"}],
       "BELOW-USD" => [{minutes_before(3), "4"}, {minutes_before(1), "-1"}],
       "NAN-USD" => [{minutes_before(9), "3"}, {minutes_before(2), "NaN"}, {minutes_before(1), ""}],
-      "BAD-USD" => [{minutes_before(2), "0"}, {minutes_before(1), "-1"}]
+      "BAD-USD" => [{minutes_before(2), "0"}, {minutes_before(1), "-1"}],
+      "ODD-USD" => [
+        {minutes_before(4), "6"},
+        {minutes_before(3), nil},
+        {minutes_before(2), 4},
+        {minutes_before(1), %{"value" => "9"}}
+      ],
+      "LATE-USD" => [{minutes_before(5), nil}, {minutes_before(1), "7"}]
     })
 
     # A close of 0 or below, or one that is not a number, gives way to the
@@ -116,6 +123,10 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     assert Coinbase.price("BELOW-USD", @boundary) == {:ok, Decimal.new("4")}
     assert Coinbase.price("NAN-USD", @boundary) == {:ok, Decimal.new("3")}
     assert Coinbase.price("BAD-USD", @boundary) == {:ok, nil}
+
+    # So does a close that is not text, newest or older than the one taken.
+    assert Coinbase.price("ODD-USD", @boundary) == {:ok, Decimal.new("6")}
+    assert Coinbase.price("LATE-USD", @boundary) == {:ok, Decimal.new("7")}
 
     assert Coinbase.price("SOL-USD", @boundary) == {:ok, Decimal.new("73.160")}
     assert Coinbase.price("ETH-USD", @boundary) == {:ok, Decimal.new("2002")}

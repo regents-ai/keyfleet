@@ -169,13 +169,15 @@ defmodule Keyfleet.Seasons.Coinbase do
     end
   end
 
-  # A close of 0 or below, or one that is not a number, is no price.
-  defp above_zero(close) do
+  # A close of 0 or below, or one that is not a number sent as text, is no price.
+  defp above_zero(close) when is_binary(close) do
     case Decimal.parse(close) do
       {%Decimal{sign: 1, coef: coef} = price, ""} when is_integer(coef) and coef > 0 -> price
       _not_a_price -> nil
     end
   end
+
+  defp above_zero(_not_text), do: nil
 
   defp get(path, options) do
     config = Application.fetch_env!(:keyfleet, __MODULE__)

@@ -13778,3 +13778,9 @@ step's report).
   and that a null inside an input is sent as it is, so the tool's own rules decide:
   fleets_sync with graph.project or run.blocker sent as null is refused, and taken
   when they are left out. No tool's behaviour changed.
+- A candle whose close is not text (null, a bare number or anything else) is passed
+  over like any other bad close, wherever it stands in Coinbase's answer, where
+  before it raised and so failed the whole price. `Coinbase.above_zero/1` reads only
+  text, and every other close is no price. `CoinbaseTest` prices a product whose
+  newest closes are null, a number and an object, and one with a null close older
+  than the one taken.
