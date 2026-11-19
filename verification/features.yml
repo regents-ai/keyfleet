@@ -763,7 +763,10 @@ features:
       holds whose award has not earned, and only one account ever earns a
       thing: what they already had when Points started earns at the start, and
       what came after the start earns once at its own time. Once a run succeeds
-      no other runs that day. Only production approves the five.
+      no other runs that day. Only production approves the five. Several
+      accounts may link the same X account, and it earns once, for the account
+      that linked it first and still holds it; a GitHub or Farcaster account is
+      linked to one account at a time.
     who: person
     level: ordinary
     paths:
@@ -786,6 +789,7 @@ features:
     gaps:
       - An X, GitHub or Farcaster account that replaced another one here before this release keeps the time the first one was linked, so if that was before the Points start it earns at the start.
       - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
+      - Several accounts holding one X account was proven once by hand on a throwaway database (19 Nov), through the sign-in save and Points' check with a stand-in Privy session; nothing runs it again.
 
   - id: account-ens-name
     what: >-

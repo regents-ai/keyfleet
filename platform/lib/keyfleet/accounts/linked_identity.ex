@@ -1,6 +1,9 @@
 defmodule Keyfleet.Accounts.LinkedIdentity do
   @moduledoc """
   A social account Privy verified for one human account, one per provider.
+  Several human accounts may link the same social account of a shared provider
+  (`@shared_providers`); any other provider's social account is linked to one
+  human account at a time.
 
   `inserted_at` is when this subject was linked to this account: a later
   sign-in with the same subject leaves it, and linking a different subject for
@@ -12,9 +15,25 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
+  # The providers whose social accounts several human accounts may link at once,
+  # and the one place that choice is made. Every other provider's subject is held
+  # by one account, which the database keeps to (`:unique_subject_per_provider`).
+  @shared_providers [:x]
+
   postgres do
     table "linked_identities"
     repo(Keyfleet.Repo)
+
+    identity_wheres_to_sql(
+      unique_subject_per_provider:
+        "provider NOT IN (#{Enum.map_join(@shared_providers, ", ", &"'#{&1}'")})"
+    )
+
+    custom_indexes do
+      # Points reads the links to one social account by its provider and subject,
+      # shared or not. Built in the same short transaction as the subject rule.
+      index([:provider, :subject])
+    end
   end
 
   attributes do
@@ -41,11 +60,25 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
   end
 
   identities do
+    # One row per account and provider, so one per account and subject, shared
+    # or not: sign-ins of one account at once meet in `:upsert_verified`, whose
+    # conflict target this is.
     identity :unique_provider_per_account, [:provider, :human_account_id]
-    identity :unique_subject_per_provider, [:provider, :subject]
+
+    # A sign-in reports the subject error as a social account another account
+    # holds (`Keyfleet.Accounts.VerifiedSession`).
+    identity :unique_subject_per_provider, [:provider, :subject] do
+      where expr(provider not in ^@shared_providers)
+      field_names [:subject]
+    end
   end
 
   actions do
+    # A refresh finds its row through the primary read.
+    read :read do
+      primary? true
+    end
+
     create :upsert_verified do
       accept [
         :provider,
@@ -67,10 +100,10 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
       emit Keyfleet.Accounts.Signals, :social_linked
     end
 
-    # A sign-in that finds the same subject already linked to the account.
+    # A sign-in whose subject is still linked to the account. The domain finds the
+    # row by provider, subject and account in the same statement that updates it.
     update :refresh_verified do
       accept [:username, :display_name, :verified_at, :metadata]
-      require_atomic? false
     end
 
     read :read_mine do
@@ -95,20 +128,29 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
       prepare build(select: [:provider, :username, :human_account_id], sort: [provider: :asc])
     end
 
-    read :by_provider_subject do
+    # Of the accounts that hold one social account, the link made first: the one
+    # its Points answer for (`Keyfleet.Points.LinkedSocial`), so a later link by
+    # another account moves nothing.
+    read :first_link do
       get? true
       argument :provider, :atom, allow_nil?: false
       argument :subject, :string, allow_nil?: false
       filter expr(provider == ^arg(:provider) and subject == ^arg(:subject))
+      prepare build(sort: [inserted_at: :asc, human_account_id: :asc], limit: 1)
     end
 
     # Each account's link to one provider made before a moment, such as the time the
-    # Points start run reads them, by provider, subject and account alone.
+    # Points start run reads them, by provider, subject and account alone, in
+    # `:first_link`'s order.
     read :linked_before do
       argument :provider, :atom, allow_nil?: false
       argument :at, :utc_datetime_usec, allow_nil?: false
       filter expr(provider == ^arg(:provider) and inserted_at < ^arg(:at))
-      prepare build(select: [:provider, :subject, :human_account_id])
+
+      prepare build(
+                select: [:provider, :subject, :human_account_id],
+                sort: [inserted_at: :asc, human_account_id: :asc]
+              )
     end
 
     destroy :remove_verified do
@@ -119,10 +161,11 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
 
   policies do
     policy action([
+             :read,
              :upsert_verified,
              :refresh_verified,
              :for_account,
-             :by_provider_subject,
+             :first_link,
              :linked_before,
              :remove_verified
            ]) do

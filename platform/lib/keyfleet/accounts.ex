@@ -33,7 +33,13 @@ defmodule Keyfleet.Accounts do
 
     resource Keyfleet.Accounts.LinkedIdentity do
       define :upsert_linked_identity, action: :upsert_verified
-      define :refresh_linked_identity, action: :refresh_verified
+
+      # One statement finds the row still holding the subject for the account and
+      # updates it; no row matched answers not found.
+      define :refresh_linked_identity,
+        action: :refresh_verified,
+        get_by: [:provider, :subject, :human_account_id],
+        default_options: [bulk_options: [strategy: :atomic]]
 
       define :list_my_linked_identities, action: :read_mine
       define :list_linked_identities_for_account, action: :for_account, args: [:human_account_id]
@@ -42,8 +48,8 @@ defmodule Keyfleet.Accounts do
         action: :shown_for_accounts,
         args: [:human_account_ids]
 
-      define :get_linked_identity_by_subject,
-        action: :by_provider_subject,
+      define :get_first_link,
+        action: :first_link,
         args: [:provider, :subject],
         not_found_error?: false
 

@@ -14724,3 +14724,36 @@ step's report).
   unused locks, `mix hex.audit`, format, Credo, Sobelow, the Ash codegen, the
   route handoff and the TypeScript typecheck), and the compile-connected count
   stays 145. The contracts are unchanged.
+
+## 2026-11-19 — Several accounts may link the same X account
+
+- As ash-template does, several accounts may link the same X account. GitHub and
+  Farcaster stay one account each: a GitHub or Farcaster account another account
+  holds is reported as before and not linked. A shared X account earns its Points
+  award once, for the account that linked it first and still holds it.
+- A sign-in refreshes an account that is already linked in one step.
+- The choice lives in one place, `@shared_providers` in
+  `Keyfleet.Accounts.LinkedIdentity`. Its `:unique_subject_per_provider` identity
+  covers every other provider and names the subject in its error, which
+  `VerifiedSession` reports as held by someone else. `:unique_provider_per_account`
+  still keeps each account to one row per provider.
+- Points: `LinkedIdentity` `:first_link` (`Accounts.get_first_link`, in place of
+  `:by_provider_subject`) answers, of the accounts holding one social account, the
+  link made first; `Keyfleet.Points.LinkedSocial.verify/1` reads it, and the daily
+  run (`LinkedSocial.existing/2`) offers a shared social account once, to that
+  account. The key `provider:subject` and every Points setting are unchanged.
+- Migration `20261119232542_shared_x_accounts`, on `keyfleet_app.linked_identities`
+  alone and in one transaction that waits at most 5 seconds for its lock: the subject
+  index becomes the same index over every row but X's, and a plain index on provider
+  and subject serves the Points read. No row changes. Its `down` brings the rule back
+  for X and fails, changing nothing, while two accounts hold the same X account.
+- Rolling back: the release before this one reads a social account's link expecting
+  one account, so it can run again only until two accounts hold the same X account.
+  After that a fault is fixed with a new release, not by going back.
+- The shared libraries stay at b9d530d4: the shared profiles already allow several
+  profiles to hold one X account on the shared database.
+- Checks: `make check` passes every gate; the compile-connected count stays 145; the
+  Ash codegen check is clean. A hand run on a throwaway database showed the migration
+  leaving every row as it was, its lock wait ending at 5 seconds, its `down` working
+  before any sharing and refused after, and the sign-in save and Points' check
+  behaving as above.
