@@ -46,6 +46,8 @@ defmodule KeyfleetWeb.ShellLive do
     Read,
     RoomsLive,
     SearchLive,
+    SeasonPanel,
+    SeasonsLive,
     SharedFigures,
     TreasuryLive,
     WorkspaceLive,
@@ -67,6 +69,8 @@ defmodule KeyfleetWeb.ShellLive do
   @search_events ~w(search search_more)
   @worldline_events ~w(worldline_older worldline_filter)
   @atlas_events ~w(atlas_older atlas_blocks_fleet atlas_blocks_things)
+  @season_events ~w(season_pick season_lock season_more)
+  @seasons_events ~w(seasons_more seasons_open)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -99,6 +103,10 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:worldline, [])
      |> stream_configure(:atlas_things, dom_id: &AtlasLive.dom_id/1)
      |> stream(:atlas_things, [])
+     |> stream_configure(:season_rows, dom_id: & &1.id)
+     |> stream(:season_rows, [])
+     |> stream_configure(:season_picks, dom_id: &"fleet-season-pick-#{&1.key}")
+     |> stream(:season_picks, [])
      |> assign(
        route_spec: nil,
        client_key: client_key,
@@ -163,7 +171,10 @@ defmodule KeyfleetWeb.ShellLive do
        shared: %{},
        buy_key: nil,
        pass_note: nil,
-       quotes: nil
+       quotes: nil,
+       season: nil,
+       season_topics: [],
+       seasons: nil
      )
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
@@ -229,7 +240,8 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_search(route_spec, params)
        |> PollsLive.read_polls(route_spec.route_id, params)
        |> WorldlineLive.read(route_spec.route_id, params)
-       |> AtlasLive.read(route_spec.route_id, params)}
+       |> AtlasLive.read(route_spec.route_id, params)
+       |> SeasonsLive.read(route_spec.route_id, params)}
     end
   end
 
@@ -270,7 +282,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
   # A coming-soon fleet has only its own page: its workspace, proposals,
-  # treasury, polls and search open with the fleet, and its hall opens no room.
+  # treasury, polls, seasons and search open with the fleet, and its hall
+  # opens no room.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :workspace,
@@ -284,6 +297,7 @@ defmodule KeyfleetWeb.ShellLive do
               :treasury,
               :polls,
               :poll,
+              :seasons,
               :search,
               :worldline,
               :atlas
@@ -455,6 +469,12 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(event, params, socket) when event in @atlas_events,
     do: AtlasLive.handle_event(event, params, socket)
 
+  defp press(event, params, socket) when event in @season_events,
+    do: SeasonPanel.handle_event(event, params, socket)
+
+  defp press(event, params, socket) when event in @seasons_events,
+    do: SeasonsLive.handle_event(event, params, socket)
+
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
   defp press("refresh_treasury", _params, socket) do
@@ -584,6 +604,12 @@ defmodule KeyfleetWeb.ShellLive do
        do: PollsLive.handle_info(notice, socket)
 
   defp notice(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
+
+  # A turn of the fleet's seasons, or a pick locked for the one taking picks:
+  # a member's "Season" panel reads what it changed.
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["seasons_changed", "season_changed"],
+       do: {:noreply, SeasonPanel.heard(socket, notice)}
 
   # A mute added or taken away hides or shows that key's posts in the room on
   # show and in the open key's thread.
@@ -878,6 +904,8 @@ defmodule KeyfleetWeb.ShellLive do
           room={@room}
           posts={@streams.posts}
           room_notice={@room_notice}
+          season={@season}
+          season_picks={@streams.season_picks}
         >
           <WorkspaceLive.board
             :if={@route_spec.route_id == :workspace}
@@ -931,6 +959,11 @@ defmodule KeyfleetWeb.ShellLive do
             things={@streams.atlas_things}
             signed_out?={is_nil(actor(@access_context))}
           />
+          <SeasonsLive.page
+            :if={@route_spec.route_id == :seasons}
+            seasons={@seasons}
+            rows={@streams.season_rows}
+          />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
             page={@proposals}
@@ -979,12 +1012,14 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The fleet's places drawn inside its page, under its bar: the page's own
-  # views, its Treasury, its Workspace, its search and its Worldline.
+  # views, its Treasury, its Workspace, its search, its Worldline, its Atlas
+  # and its record of seasons.
   defp fleet_place(:fleet), do: :fleet
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(:search), do: :search
   defp fleet_place(:worldline), do: :worldline
   defp fleet_place(:atlas), do: :atlas
+  defp fleet_place(:seasons), do: :seasons
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
   defp fleet_place(route_id)
@@ -1042,7 +1077,8 @@ defmodule KeyfleetWeb.ShellLive do
               :proposal,
               :search,
               :worldline,
-              :atlas
+              :atlas,
+              :seasons
             ] do
     shown = socket.assigns.fleet
 
@@ -1058,6 +1094,7 @@ defmodule KeyfleetWeb.ShellLive do
     do:
       socket
       |> SharedFigures.follow(:fleet, [])
+      |> SeasonPanel.leave()
       |> assign(
         fleet: nil,
         fleet_params: nil,

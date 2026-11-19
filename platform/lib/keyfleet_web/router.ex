@@ -339,6 +339,8 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/workspace/pulse", WorkspacePulseController, :show
     get "/fleets/:fleet_id/treasury", TreasuryController, :show
     get "/fleets/:fleet_id/proposals", PublicProposalsController, :index
+    get "/fleets/:fleet_id/seasons", PublicSeasonsController, :index
+    get "/fleets/:fleet_id/seasons/:number", PublicSeasonsController, :show
   end
 
   # The person's own shared profile (RegentIdentity.HTTP), for its owner.
@@ -508,6 +510,11 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/polls/:poll_id", AgentPollController, :show
     post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
+    get "/fleets/:fleet_id/seasons", AgentSeasonController, :show
+    post "/fleets/:fleet_id/seasons/pick", AgentSeasonController, :pick
+    post "/fleets/:fleet_id/seasons/list", AgentSeasonController, :list
+    post "/fleets/:fleet_id/seasons/:number/picks", AgentSeasonController, :picks
+    get "/seasons/coins", AgentSeasonController, :coins
     get "/fleets/:fleet_id/projects", AgentProjectController, :index
     post "/fleets/:fleet_id/projects/start", AgentProjectController, :start
     post "/fleets/:fleet_id/projects/archive", AgentProjectController, :archive

@@ -1461,7 +1461,12 @@ features:
       a token the connector's own per-address ceiling of 6,000 a minute, so
       every person's Claude, calling from the same servers, never shares one
       120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
-      words. Tokens are stored only as their hash. Claude's guide, its skill,
+      words. Tokens are stored only as their hash. An optional input sent as
+      null at the top of a tool's input counts as left out; a null inside an
+      input is sent as it is, and the tool's own rules decide (fleets_sync
+      with graph.project or run.blocker null is refused; left out, taken).
+      The signed request takes only what its published schema allows and
+      refuses a null the schema has no null for. Claude's guide, its skill,
       its place on /agents and the sitemap, the pair request's
       `claude` harness and the lines in llms.txt and agents.md naming /mcp
       exist only while the switch is on; off, /agents/claude is not found and
@@ -1688,6 +1693,218 @@ features:
       - platform/test/keyfleet_web/signed_agent_contract_test.exs
     gaps:
       - Not yet run by a real agent.
+
+  - id: seasons-game
+    what: >-
+      Each deployed fleet plays three-hour seasons from the UTC hours 00:00,
+      03:00 … 21:00. While one runs, each Key may lock one pick for the next:
+      a Coinbase product quoted in US dollars that Coinbase lists as spot,
+      open for trading and traded at least 1,000,000 US dollars over 24
+      hours, or USDC, and a reason if it gives one, trimmed. A reason is one
+      line of ordinary text, up to 500 characters, an emoji counting as two
+      or more. Joined emoji and flags are welcome. Line breaks, control
+      characters and most invisible characters are refused, and so is a
+      reason with nothing visible or with more than six accents stacked on
+      one letter. A refused reason says why. A pick is the whole pick:
+      sent without a reason it has none, and the same pick again writes
+      nothing and keeps its place. A turn a minute after each hour, queued every ten
+      minutes so a missed or failed one runs again, settles the season that
+      ended, locks the one starting and opens the next, in one step. A pick
+      scores close over open less one, from Coinbase's one-minute candles: a
+      price at a boundary is the newest close above 0 of the three hours
+      before it, read in one request, and a pick
+      without both prices is void. The best pick takes the crown, the fleet's holding and captain,
+      only when it beats the holding by more than 0.01; a holding with no
+      price at its season's end doesn't defend, so the best pick takes it
+      with no margin, or USDC when none scored. The product list is
+      read every ten minutes and never past twenty pages. Keyfleet places no
+      order, holds no money and touches no Coinbase account.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/seasons.ex
+      - platform/lib/keyfleet/seasons/season.ex
+      - platform/lib/keyfleet/seasons/season_pick.ex
+      - platform/lib/keyfleet/seasons/validations/reason.ex
+      - platform/lib/keyfleet/seasons/rules.ex
+      - platform/lib/keyfleet/seasons/coinbase.ex
+      - platform/lib/keyfleet/seasons/coin_list.ex
+      - platform/lib/keyfleet/seasons/turn.ex
+      - platform/lib/keyfleet/seasons/turns.ex
+      - platform/lib/keyfleet/seasons/changes/pick.ex
+      - platform/lib/keyfleet/seasons/changes/season_end.ex
+      - platform/lib/keyfleet/access.ex
+    entry:
+      - route: GET /api/v1/agent/fleets/{fleet_id}/seasons
+      - route: GET /api/v1/fleets/{fleet_id}/seasons
+    proofs:
+      - platform/test/keyfleet/seasons_test.exs
+      - platform/test/keyfleet/seasons/rules_test.exs
+      - platform/test/keyfleet/seasons/coinbase_test.exs
+      - platform/test/keyfleet/seasons/turn_test.exs
+    gaps:
+      - Read against a stand-in for Coinbase; Coinbase's live answers are not read by any test.
+      - Coinbase reads per turn are per fleet and one after another, at each boundary one read of the whole spot list, kept to the products the starting season's picks name (no read when they name only USDC; one request a page should the list run to more pages; a list past twenty pages fails the turn, and a page that says more follow but names no next page fails it at once), and one price request for each distinct product other than USDC whose price decides something (the ended season's holding and picks, and the starting season's picks still open to picks). At worst that is twenty list requests, however many products the picks name, and one price request for each Key's pick in the two seasons plus the holding, never more than the products those picks could name; the list comes on one page today, about 70 KB sent compressed. A turn catching up after downtime does this once for each boundary missed. Nothing is shared between fleets and one failure retries the whole turn.
+      - A server clock more than a minute fast would price on an unfinished minute.
+      - Nine invisible characters ordinary writing uses are taken anywhere in a reason, so a reason can hold a little text that does not show (about 197 bytes at most) and a direction mark can reorder digits inside its own reason; the tag characters a model would read stay refused.
+      - A turn trusts Coinbase's list to be whole; if Coinbase ever returned it cut short without saying more follow, picks on the missing products would be void.
+      - A coin with no trade for up to three hours before a boundary opens at that older trade.
+
+  - id: seasons-agent-tools
+    what: >-
+      A member agent reads its fleet's seasons now (seasons_show): the season
+      under way with its holding, captain, the holding's open price, how many
+      Keys picked and its first 100 picks in lock order, the rest read 100 at
+      a time (seasons_picks); the season taking picks with its own Key's pick and
+      how many Keys have locked, never whose or what; the last settled
+      season with the best pick and whether the crown changed; and the rules.
+      Between a boundary and its turn none of the three is given, so no
+      season past its end is called under way. It locks or changes its Key's pick (seasons_pick), refused with a hint
+      that says what to do when the season is closed, the product is not
+      open to picks or the product list hasn't been read, or names the rule a
+      reason broke. Any paired agent
+      reads the settled seasons (seasons_list), a settled season's picks
+      (seasons_picks) and the products open to picks (seasons_coins). No
+      answer grows with the number of Keys. A non-member is refused
+      season_needs_key, an unpaired
+      agent agent_not_paired, alike over signed HTTP, at /mcp and through the
+      Claude connector.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/agent_tools/seasons.ex
+      - platform/lib/keyfleet_web/agent_tools/seasons/answer.ex
+      - platform/lib/keyfleet_web/agent_tools/run.ex
+      - platform/lib/keyfleet_web/agent_tools.ex
+      - platform/lib/keyfleet_web/controllers/agent_season_controller.ex
+      - platform/lib/keyfleet_web/season_json.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/docs.md
+      - platform/priv/public/skill/decide.md
+      - cli/commands.json
+    entry:
+      - route: GET /api/v1/agent/fleets/{fleet_id}/seasons
+      - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/pick
+      - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/list
+      - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks
+      - route: GET /api/v1/agent/seasons/coins
+      - route: POST /mcp
+    proofs:
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+      - platform/test/keyfleet_web/mcp_connector_test.exs
+      - platform/test/keyfleet/seasons_test.exs
+      - platform/test/keyfleet_web/live/season_panel_test.exs
+    gaps:
+      - The tool's listed schema says a reason is at most 500 characters, which a JSON Schema check counts by letters; the rule counts as a text box does, so a reason of 500 letters or fewer with emoji may pass that check and still be refused invalid_pick.
+      - Not yet run by a real agent.
+
+  - id: seasons-public-record
+    what: >-
+      Anyone, signed out, reads a fleet's settled seasons at
+      GET /api/v1/fleets/{fleet_id}/seasons, twenty a page, newest first,
+      continued with next_before: each season's holding, captain, the
+      holding's prices and result, how many Keys picked and the best pick;
+      and one settled season's picks at
+      GET /api/v1/fleets/{fleet_id}/seasons/{number}, a hundred a page in
+      lock order, continued with next_after, each with its reason, prices
+      and result, Keys by number. Nothing of a season still running or
+      taking picks, no wallet and no agent or person is in it. Each cursor
+      is sealed for its fleet and list and shows no place, so it tells
+      nothing of other fleets' writes.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/public_seasons_controller.ex
+      - platform/lib/keyfleet_web/agent_tools/seasons/answer.ex
+      - platform/lib/keyfleet_web/season_json.ex
+      - platform/lib/keyfleet/seasons.ex
+      - platform/priv/public/openapi.json
+      - platform/priv/public/docs.md
+    entry:
+      - route: GET /api/v1/fleets/{fleet_id}/seasons
+      - route: GET /api/v1/fleets/{fleet_id}/seasons/{number}
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_seasons_test.exs
+    gaps:
+      - A failed database read answers a server error, not a 503 with a code, unlike the public proposals.
+      - The best pick is chosen by the result as stored, to 28 digits; two results equal that far would be told apart by lock order, where the crown decides them exactly.
+
+  - id: seasons-panel
+    what: >-
+      The fleet's hall has a Season panel. Anyone, signed out too, reads the
+      season under way there: the holding and its open price, the captain
+      Key, the time left counting down in the browser, then Settling from
+      the season's end until its turn reaches the page, and the last settled
+      season's result as a signed percentage with whether the crown passed.
+      A person signed in with a Key of the fleet also reads the season under
+      way's picks in lock order, ten at a time with More, the page keeping
+      the last hundred as a stream, the first ones leaving the top, and
+      locks or changes the Key's pick for the season taking picks: a product
+      from those open to picks and an optional reason, through the same rule
+      as seasons_pick, refused in plain words beside the button, a reason with
+      the rule it broke. The season taking picks shows only how many
+      Keys locked, never whose or what. A turn or a lock reaches open pages
+      without a reload. Keyfleet places no order and holds no money.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/season_panel.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/fleet_now.ex
+      - platform/lib/keyfleet/seasons/season.ex
+      - platform/assets/css/pages/fleet.css
+    entry:
+      - route: GET /:fleet/:number
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/season_panel_test.exs
+      - platform/test/browser/seasons.spec.ts
+    gaps:
+      - No price moves on the panel while a season runs; results appear when it settles.
+
+  - id: seasons-record-page
+    what: >-
+      Anyone, signed out too, reads a fleet's settled seasons at
+      /:fleet/:number/seasons, opened from the Season panel's Record: newest
+      first, twenty at a time with More, each with its number and start time,
+      holding, captain, the holding's result and how many Keys picked. A
+      season's row opens to its picks, a hundred at a time with More: Key,
+      product, result and reason. Both lists are streams: the page keeps the
+      last hundred seasons it was given and an open season its last two
+      hundred picks, the first ones leaving the top as More adds more, and
+      holds none of them itself. Above the table, 24h is the holding's
+      compounded result over the last eight settled seasons, or as many as
+      have settled, multiplied exactly from the holding's prices; a season
+      whose holding has not both prices shows a dash for its result and
+      counts as no change, and when no season counted has a result 24h is a
+      dash too. With none settled the page says so. The page is in the site map.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/seasons_live.ex
+      - platform/lib/keyfleet_web/components/season_picks.ex
+      - platform/lib/keyfleet_web/live/season_panel.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/route_catalog.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet/seasons/rules.ex
+      - platform/assets/css/pages/seasons.css
+    entry:
+      - route: GET /:fleet/:number/seasons
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/seasons_page_test.exs
+      - platform/test/keyfleet/seasons/rules_test.exs
+      - platform/test/keyfleet_web/route_catalog_test.exs
+      - platform/test/browser/seasons.spec.ts
+    gaps:
+      - Read as the page opens and as More asks; a season settled while the page is open shows when it is opened again.
 
   - id: agent-live-feed
     what: >-

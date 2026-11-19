@@ -49,6 +49,7 @@ export default defineConfig({
     "fleet_tour.spec.ts",
     "kept_page.spec.ts",
     "live_limits.spec.ts",
+    "seasons.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

@@ -10,8 +10,8 @@ defmodule Keyfleet.Agents.Connection.Listing do
   and the policy beside this check refuses it as well.
 
   Like Ash's built-in actor checks, it knows the app by its `role` and the
-  permission by its name, so the thirteen policies that list tools with it
-  take no compile-time dependency on the rest of the site.
+  permission by its name, so the policies that list tools with it take no
+  compile-time dependency on the rest of the site.
   """
 
   use Ash.Policy.SimpleCheck

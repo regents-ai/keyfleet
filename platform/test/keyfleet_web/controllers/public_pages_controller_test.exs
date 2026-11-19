@@ -235,7 +235,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
            end)
   end
 
-  test "the sitemap lists each open fleet's page, not one still coming soon" do
+  test "the sitemap lists each open fleet's page and record of seasons, not one still coming soon" do
     Keyfleet.Fleets.bootstrap_catalog!()
     Keyfleet.ChainHelpers.deploy!("fibonacci_syndicate")
 
@@ -246,7 +246,9 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
       |> List.flatten()
 
     assert PublicDocuments.url("/syndicate/1") in locations
+    assert PublicDocuments.url("/syndicate/1/seasons") in locations
     refute PublicDocuments.url("/cascade/1") in locations
+    refute PublicDocuments.url("/cascade/1/seasons") in locations
   end
 
   defp field(line) do

@@ -13281,6 +13281,287 @@ step's report).
   - "Poll choices past their box are refused as too long": its note now reads "2,009
     characters at most", since c3f9b6285.
 
+## 2026-11-18 — Seasons reach agents and the public record
+
+- Seasons (`Keyfleet.Seasons`): back to back, three hours each on the UTC boundaries,
+  numbered from 1 for each fleet. While one runs, each Key of the fleet locks one pick
+  for the next, a Coinbase spot product quoted in US dollars or `USDC`, with a reason if
+  it gives one; a change moves to the end of the lock order. At each boundary a turn
+  (`Keyfleet.Seasons.Turn`) settles the season that ended (close price over open price,
+  less 1, from Coinbase's one-minute candles), crowns the best pick (the earliest locked
+  among equals) if its result beats the holding's own by more than 0.01, locks the season
+  starting and opens the next. A fleet's first season holds `USDC` with no captain.
+  Keyfleet places no order, holds no money and asks for no Coinbase access: the holding
+  is a score read from Coinbase's public market data. Two new tables, `seasons` and
+  `season_picks`, approved for production.
+- Engine corrections, one commit each:
+  - The products open to picks are read every ten minutes, spot products only, and count
+    as late after twelve (was every minute on every machine).
+  - The turns are queued every ten minutes from a minute past the hour, each fleet's turn
+    at a boundary held to one waiting or running job and queued again once it has
+    finished, so a turn that missed its tick or ran out of attempts is tried again
+    within ten minutes; one that succeeded changes nothing.
+  - A close of 0 or below is no price: a pick priced so is void, and the turns go on.
+  - Reading Coinbase's product list stops after twenty pages, read as not read.
+  - Seasons and their picks are a part of the fleet in `Keyfleet.Access`, read and
+    written by its members as polls are; a pick is still read only by its own Key's side
+    until its season starts.
+- Fixes from the first hostile review (19 Nov), one commit each:
+  - A pick is the whole pick: one sent with no reason, or an empty one, has none
+    (`set_attribute(:reason, nil, new?: true)` in `SeasonPick`'s `:pick`), so the
+    upsert's condition alone decides whether it is a change. The same product with the
+    same reason, none both times included, answers 200, writes nothing and keeps its
+    place; a changed product never keeps the old reason. Before, the signed request and
+    `seasons_pick`, which leave a missing reason out, kept the old reason and still took
+    a new place.
+  - A holding with no price at its season's end is let go (`Rules.crown/2`): the season
+    keeps no result for it, the best scored pick takes the crown with no margin, and with
+    none scored the next season holds `USDC` with no captain. Before, it counted as a
+    result of 0 and was held again with no open price until a pick beat 0 by more than
+    the margin. `Rules.compounded/1` is nil when no season it counts has a result, so the
+    record's 24h shows a dash rather than 0%.
+  - A season cursor is sealed with its fleet and the list it continues, the settled
+    seasons or one season's picks (`Phoenix.Token.encrypt` on the endpoint, its own salt,
+    no age limit; `SeasonJSON.opened/3`): `next_before` and `next_after`, the public
+    record's `?before=` and `?after=`, and `seasons_list`'s and `seasons_picks`'s `before`
+    and `after` are opaque strings of up to 512 characters, and anything else, a cursor
+    given for another fleet, season or list included, answers 400
+    `invalid_season_cursor`. Before, `next_after` was a pick's place in a sequence every
+    fleet shares: some 60 reads found a pick's exact place, and the gaps counted writes in
+    other fleets' seasons still private. The contract (`SeasonNumberCursor` is now
+    `SeasonRecordCursor`), the public OpenAPI file, the tool manifest, the CLI command
+    documents and docs.md say so. Contract 36.4.0, the public OpenAPI file 16.1.0 and the
+    guide 3.36.0 stay, as none is released yet (main has 36.3.0, 16.0.0 and 3.35.0), the
+    same as the seasons' first hard cutover below.
+  - A reason has its own rule (`Keyfleet.Seasons.Validations.Reason`, in place of the
+    attribute's pattern and length): once trimmed, valid UTF-8 on one line, with no
+    control or format character but the joiner between two emoji and the tags of the
+    three flag sequences; at most 500 UTF-16 units, as a text box counts it
+    (`KeyfleetWeb.BoxLimit`); at least one letter, digit, punctuation mark or symbol that
+    shows, the default-ignorable ones, the blank Braille pattern and the null notehead
+    aside; and no more than six marks in a row. The rule broken is
+    `Keyfleet.Seasons.Errors.ReasonError`'s `rule`, and its message is the hint of the
+    agent's 422 `invalid_pick` and the panel's note. Broken UTF-8 is refused before any
+    pattern reads it, so `Seasons.pick/4` answers an error rather than raising. Before, a
+    reason of fillers, blanks or a lone mark was kept and printed as an empty quote, one
+    letter with 499 accents was kept, a family or flag emoji was refused for its joiner or
+    tags, 500 emoji passed as 500 characters, and broken UTF-8 raised inside the pattern.
+    The panel's box now takes 502 units (it took 1,002). No rule elsewhere fitted: rooms
+    and polls share the old pattern, and the early-access address rule takes no emoji.
+  - Between a boundary and its turn no answer calls the season that ended under way
+    (`Seasons.under_way?/2`, its end time not yet come): `seasons_show`'s `running`, and
+    with it `last_settled`, is null then, as `taking_picks` already was. The panel's
+    clock says "Settling" from the season's end until the turn's notice draws the next:
+    `KeyfleetWeb.Components.Countdown` takes `done` words for any format now, not only
+    `clock`, and the browser's countdown keeps its once-a-second tick through the last
+    minute only when it has them. No new timer on the server and no polling. Before, the
+    answer called the ended season under way for that minute or more, and the clock said
+    "Less than a minute left" to a time already past. `seasons_picks` still reads the
+    ended season's picks for a member until it is settled.
+  - The record page's lists are streams with a limit, as a room's thread is: its rows
+    (`:season_rows` in `ShellLive`, two to a season, the second its picks, hidden until
+    opened) keep the last hundred seasons given, and an open season's picks
+    (`KeyfleetWeb.Components.SeasonPicks`, a live component with its own stream) the last
+    two hundred; the first leave the top as More adds more. The page keeps only the
+    newest and oldest numbers read and the season open, and reads a season again when
+    its row is opened, by a number within those it read. Pick ids carry their season
+    (`seasons-N-pick-KEY`) and the More under the picks is `seasons-N-picks-more`. Before,
+    each More added twenty seasons, or a hundred picks, to what the page held for as long
+    as it was open: seasons grow by eight a day, and a Fibonacci fleet's Keys have no
+    limit.
+  - The Season panel's picks are a stream with a limit too (`:season_picks` in
+    `ShellLive`, passed down through `FleetLive.page` and the hall): ten as the panel is
+    read, and in their place when it is read again, ten more with each More, keeping the
+    last hundred, as many as a page of the record holds; the first leave the top. The
+    panel keeps only whether the season has any pick and where More reads from. Its look,
+    ids and More are as they were. Before, each More added ten picks to what the page
+    held for as long as it was open.
+  - A reason has one length rule at both doors: the connector's `seasons_pick` reason
+    argument (`KeyfleetWeb.AgentTools.Seasons`) no longer has its own `max_length` of
+    500, so a reason over 500 UTF-16 units is refused by the reason rule alone, 422
+    `invalid_pick` with the rule's hint, the same refusal signed and through the
+    connector. Before, the connector counted letters first and answered
+    `invalid_request` "reason is at most 500 characters" to 501 letters, while 251 emoji
+    passed it and met the rule. The listed schema keeps `maxLength` 500, which counts
+    characters as sent, while the rule counts UTF-16 units once the reason is trimmed:
+    every reason the rule takes fits it once trimmed, but one sent with spaces around
+    it, such as 500 letters wrapped in spaces, is over it and still taken.
+  - Documents made true. docs.md: a pick is void when its product isn't open to picks
+    as the turn that starts its season runs, normally a minute after the start and later
+    after downtime or while Coinbase can't be read (it said "when its season starts");
+    and a pick belongs to the Key, so whoever holds the Key reads and changes it, and a
+    Key sold before its season starts carries its pick and reason to the buyer.
+    `docs/agent-parity.md` no longer counts the connector's tools (it said 105) and
+    `Keyfleet.Agents.Connection.Listing` no longer counts the policies that use it (it
+    said thirteen; fourteen do). `verification/features.yml`'s `seasons-game` names two
+    more gaps: each turn reads Coinbase for its own fleet, one read after another, with
+    nothing shared and one failure retrying the whole turn; and a server clock more than
+    a minute fast would price on an unfinished minute.
+- Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
+  `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
+  `cli/commands.json`):
+  - `seasons_show`, `GET /api/v1/agent/fleets/:fleet_id/seasons`: the season under way
+    (number, start, end, holding, captain, the holding's open price, its picks in lock
+    order), the season taking picks (number, start, the caller's own pick and
+    `keys_locked`, never whose or what), the last settled season (holding, its result,
+    the best pick and its result, `crown_changed`) and the rules. All three seasons are
+    null for the minute or so between a boundary and its turn (the review fixes above).
+  - `seasons_pick`, `POST …/seasons/pick`: 201 for a new or changed pick, 200 for the
+    same one; 409 `season_closed` with when the next opens, 422 `product_not_open`
+    (call `seasons_coins`) and `invalid_pick`, 503 `coins_unread` (try again shortly).
+  - `seasons_list`, `POST …/seasons/list`: settled seasons newest first, 20 a page, by
+    `before`; 400 `invalid_season_cursor`.
+  - `seasons_coins`, `GET /api/v1/agent/seasons/coins`: the products open to picks, with
+    `read_at`.
+  - A Key's holder and its agents are members as polls count them; anyone else is
+    refused 403 `season_needs_key`, and a fleet whose Keys are being read again 503
+    `ownership_refreshing`. A reason follows its own rule (the review fixes above): one
+    line that shows, of at most 500 units as a text box counts them; a lone surrogate is
+    refused before anything is written.
+- The public record: `GET /api/v1/fleets/:fleet_id/seasons`, signed out, `no-store`,
+  answers what `seasons_list` answers: settled seasons only, Keys by number, no wallet,
+  agent or person, paged by `next_before` and `has_more`.
+- API contract 36.4.0 (was 36.3.0), the public OpenAPI file 16.1.0, the joining guide
+  3.36.0. `/docs` has a Seasons section; `skill.md`, `skill/decide.md`, `agents.md`,
+  `agents/claude.md`, `llms.md` and `help.md` name the tools and the public address.
+  The documents say only that an agent follows the holding in its own person's Coinbase
+  account with its harness's Coinbase tools, link Coinbase's documentation for agents and
+  nothing more, and say results are records, not forecasts.
+- `docs/agent-parity.md` has two Seasons rows; `verification/features.yml` has
+  `seasons-game`, `seasons-agent-tools` and `seasons-public-record`.
+- Tests: `SignedAgentContractTest` drives every documented answer of the four routes
+  against the contract, a stranger's 403 and a 503 while Keys are read again;
+  `McpConnectorTest` runs each tool through the connector and signed `/mcp` against its
+  signed request, an outsider, an unpaired app, another Key's pick taking picks never
+  shown, 250 and 251 emoji, 501 characters and a lone surrogate; `PublicSeasonsTest` reads the
+  record signed out (settled only, the exact fields, no wallet), pages 21 settled
+  seasons, and refuses a bad cursor, another query and an unknown fleet.
+- Not covered:
+  - No page shows seasons yet.
+  - A real Coinbase is never asked in tests; `Keyfleet.CoinbaseStub` stands in.
+  - The tool's listed schema gives a reason `maxLength` 500, which a JSON Schema check
+    counts by letters; the rule counts UTF-16 units, so an agent's own check may pass a
+    reason of emoji the rule refuses `invalid_pick`.
+  - Each page of the public record carries every pick of its seasons, and a database
+    failure there answers a server error, not a 503.
+  - Not yet run by a real agent.
+
+## 2026-11-18 — No season answer grows with the number of Keys
+
+- A hard cutover of the unreleased 36.4.0 season shapes, one shape each:
+  - A settled season in `seasons_list` and the public record carries its holding,
+    captain, prices, result, `pick_count` and `best_pick` (`{key, product, result}` or
+    null), no longer its picks. The best pick is a `has_one` read ordered by the stored
+    result and lock order.
+  - `seasons_show`'s `running` carries `pick_count`, its first 100 picks in lock order
+    and `next_after`.
+  - One season's picks are read on their own, 100 a page in lock order, continued by
+    `next_after` (the last pick's place in the lock order, as text): anyone at
+    `GET /api/v1/fleets/:fleet_id/seasons/:number` (`showPublicSeason`), settled seasons
+    only, a season under way or taking picks answering 404 `season_unknown`; a paired
+    agent with the new fifth tool `seasons_picks`,
+    `POST /api/v1/agent/fleets/:fleet_id/seasons/:number/picks` (`listSeasonPicks`),
+    which also reads the season under way for the fleet's members (403
+    `season_needs_key` otherwise, 503 `ownership_refreshing` while Keys are read again).
+    A fifth tool rather than a `season` argument on `seasons_list`, so no tool answers
+    two shapes.
+  - New refusal `season_unknown`; `invalid_season_cursor` now names both cursors.
+- The contract, the public OpenAPI file (still 16.1.0), the tool manifest, the command
+  list (`seasons picks <fleet> <number>`), `/docs`, `skill/decide.md`, `agents.md`,
+  `agents/claude.md`, `llms.md`, `docs/agent-parity.md`, `docs/agent-feature-map.md` and
+  `verification/features.yml` say the same.
+- Tests: `SignedAgentContractTest` drives every documented answer of the new route;
+  `McpConnectorTest` runs `seasons_picks` through the connector and signed `/mcp`
+  against its signed request; `PublicSeasonsTest` reads a season's picks signed out,
+  pages 101 picks by the cursor, and refuses a season not settled, a bad number and a
+  bad cursor; `SeasonsTest` pages the picks of the season under way.
+- Not covered: the best pick in a list is chosen by the result as stored, to 28 digits,
+  where the crown is decided exactly; they could differ only for two results equal to
+  28 digits.
+
+## 2026-11-18 — The fleet's hall shows its season and takes a Key's pick
+
+- `KeyfleetWeb.SeasonPanel` draws a Season panel at the top of the hall's rail: Holding
+  (product and open price), Captain, Clock (the house `Countdown` hook counting down to
+  `ends_at` in the browser) and Last (the last settled season's result as a signed
+  percentage, and whether the crown passed). For the fleet's members it adds Pick, a
+  plain product select (USDC first, then the products open to picks in order), an
+  optional reason box under `KeyfleetWeb.BoxLimit` (500 characters, counted as typed)
+  and Lock, and Picks, the season under way's picks in lock order, ten a page from
+  `Seasons.picks_page/5` with More. Lock goes through `Seasons.pick/4` as the person's
+  Key (`Polls.voter`'s choice, as the agent's pick), and each refusal is a few plain
+  words beside the button (season closed, product not open, list not read, reason, no
+  Key). The season taking picks shows only its number, how many Keys locked and the
+  person's own pick; no other Key's pick of it is read for the page.
+- `Keyfleet.Seasons.Season`'s `:running` read is open to anyone, as `:settled` is: its
+  holding and captain follow from the record of the season settled as it started. Its
+  picks stay the members' (`SeasonPick` `:in_season`). The only agent answer that moves:
+  `seasons_picks` for a number not under way, asked by an agent without a Key's
+  standing, answers 404 `season_unknown` where it answered 403 `season_needs_key`.
+- The page hears a turn on `Seasons.topic/1` and a lock on `Seasons.season_topic/1`
+  through the Ash notifications the engine already sends; a lock by another Key rereads
+  only the count. Visitors and people without a Key get the panel's public part from
+  `KeyfleetWeb.FleetNow`, the fleet's one shared reading, which now listens to the
+  seasons topic too. No new timer, job, process or polling.
+- `/docs` (Seasons), `docs/agent-parity.md` (the Page column, and K18: the season under
+  way is public only on the page) and `verification/features.yml` (`seasons-panel`) say
+  the same.
+- Tests: `SeasonPanelTest` locks and changes a pick with every refusal, refuses a pick
+  sent after its season started, shows visitors and people without a Key the season
+  but no form and no pick, proves another Key's pick of the season taking picks is in
+  neither the page nor the page's process, updates open pages on a lock and on a turn,
+  and pages the picks ten at a time, keeping the last hundred of 101.
+
+## 2026-11-18 — A fleet's record of settled seasons is a page
+
+- New fleet page `/:fleet/:number/seasons` (route id `:seasons`, title "Seasons"),
+  drawn inside the fleet page under its bar like the Worldline and the Atlas, with no
+  tab of its own; the Season panel's Record opens it. `KeyfleetWeb.SeasonsLive` reads
+  `Seasons.settled_page/2` as the page opens: a table of settled seasons, newest first,
+  twenty with More (Season with its start time, Holding, Captain, Result, Picks). A row
+  opens to that season's picks from `Seasons.settled_picks_page/4`, 100 with More (Key,
+  product, result, reason); one row is open at a time. With none settled it says "No
+  season has ended yet." The Coinbase line under the panel is
+  `KeyfleetWeb.SeasonPanel.terms/1`, under both now.
+- "24h" above the table is `Keyfleet.Seasons.Rules.compounded/1` over the newest eight
+  settled seasons, or as many as there are: the product of each season's holding close
+  over open, less one, taken as whole numbers and divided once; a holding without both
+  prices counts as no change, and no seasons is nil. Its tests cover one season, a rise
+  and equal fall, missing prices and exactness (a third and its inverse come back to 0,
+  eight seasons of 45000.5 to 45001 equal the one division).
+- The route is in the route catalog (110 routes), its handoff files, the router's
+  gate coverage, the page titles, the site map (each open fleet's record beside its
+  page), `/docs` (Seasons and the site map line), `docs/agent-parity.md` and
+  `verification/features.yml` (`seasons-record-page`).
+- Tests: `SeasonsPageTest` reads only settled seasons signed out with the day over the
+  newest eight, opens the record from the hall's Record, shows the day over fewer and
+  the empty page, pages twenty seasons, keeps the last hundred of 101 seasons with one
+  open at a time, and opens a season of 201 picks a hundred at a time, keeping the last
+  two hundred; `PublicPagesControllerTest` finds the record in the site map.
+- Not done: the page doesn't hear a turn; a season settled while it is open shows
+  when it is opened again.
+
+## 2026-11-18 — A walk locks a pick on the Season panel and reads the record
+
+- `platform/test/browser/seasons.spec.ts`, in the tracked walks
+  (`playwright.chain.config.ts`, kept out of `playwright.config.ts`), at 390 and 1280
+  wide: a Key holder signed in reads the season under way (SOL-USD at $143.27, Key 1,
+  the last season's +10.00% with the crown kept) and its picks, locks ETH-USD with a
+  reason and is told "Locked.", then Record opens `/syndicate/1/seasons`: 24h
+  +114.36% over 8 seasons, nine settled rows, and the ninth opening to its one pick
+  with its +5.00% and reason. Neither page scrolls sideways and nothing on them fails.
+  `Keyfleet.BrowserChain.seasons!/2` plays the seasons through the domain thirty hours
+  ahead of the clock, since a Key picks only before its season starts, then moves
+  every season back to its own time.
+- The walk server starts again. Its list of products a pick may name
+  (`Keyfleet.Seasons.CoinList`) is read as the server starts, where nothing stood in
+  for Coinbase, so the read raised, the reader restarted until the application shut
+  down, and every walk in `playwright.chain.config.ts` waited out its three minutes.
+  In that server only (config/runtime.exs, the browser-test branch) Coinbase is now
+  answered by `Keyfleet.BrowserCoinbase`: SOL-USD and ETH-USD beside USDC.
+- On the record, a product's name no longer breaks at its hyphen on a phone
+  ("SOL-" over "USD"): the table's cells stay on one line, the picks under a row wrap.
+
 ## 2026-11-19 — idna 8.0: a long "xn--" name no longer holds the server
 
 - Advisory EEF-CVE-2026-117678 (medium, published 19 Nov 2026 05:36Z): idna 7.1.0 spends
@@ -13320,6 +13601,189 @@ step's report).
   `platform/priv/tool_manifest.json` name regents-cli 1.10.33 (tag commit `c12d8563`), the
   newest release, published while the idna release was being checked. Its tag commit
   was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+
+## 2026-11-19 — Captain Seasons after its second review
+
+- A season opened again on the record page before the browser has let its list go
+  shows its picks. `KeyfleetWeb.SeasonsLive` numbers each opening
+  (`System.unique_integer/1`) and gives it to the season's two rows as `opened`, nil
+  while closed, in place of `open?`; `KeyfleetWeb.Components.SeasonPicks` reads its
+  first hundred again, with `reset: true`, whenever `opened` changes (`changed?/2` after
+  `assign/2`), and reads nothing when the row is only drawn again. Before, a component
+  that still had its number read nothing, so a list the browser had dropped came back
+  empty and More added only pick 101. Two ways a browser gets there, both walked in
+  Chromium at 390 and 1280 wide, failing on the old code and passing now: another
+  season and then this one pressed back to back, and this one closed and opened again
+  while the browser's word that the list is gone is still on its way, as on a slow
+  connection. One button pressed twice before its first answer does not reach the
+  server twice in a browser: LiveView's script drops a press on a button still waiting
+  for its answer. `SeasonsPageTest` presses a season twice, and another season then
+  this one, before the page answers, and finds the first hundred both times.
+- A product's price at a boundary is the newest one-minute close of the season that
+  ended there, not of the last 15 minutes, so a holding still listed and trading is no
+  longer let go for one quiet quarter hour. `Keyfleet.Seasons.Coinbase.price/2` asks
+  for the season's minutes in its one request, the length from
+  `Keyfleet.Seasons.season_hours/0`; Coinbase's reference for Get Public Product
+  Candles gives 350 as the most a request answers, and a season is 180. Only a product
+  with no trade all season, or one Coinbase no longer knows, has no price. Late turns
+  and catch-ups read the same history as before. `Keyfleet.CoinbaseStub` answers no
+  more than those 350. `CoinbaseTest` prices a product quiet for 97 minutes and one
+  whose only trade is the season's first minute, and finds none for one whose last
+  trade is the minute before the season; it fails on the old reading. The docs and
+  the feature list say so.
+- The reason rule takes ordinary writing and refuses what draws nothing.
+  `Keyfleet.Seasons.Validations.Reason`'s `:plain` takes a zero-width joiner or
+  non-joiner, soft hyphen, or left-to-right or right-to-left mark standing alone
+  between two characters that are neither format characters nor spaces (Persian's
+  half-space, Sinhala's "Sri", Bengali's ra plus ya, a soft hyphen from a web page),
+  which also covers the joiner inside an emoji, so its own branch is gone. It refuses
+  the characters drawn as nothing (`@nothing`: every default-ignorable one, U+2800 and
+  U+1D159) anywhere but in their place: those five, a variation selector directly
+  after a character it can vary (U+FE0E and U+FE0F after an emoji, U+E0100 to U+E01EF
+  after an ideograph, Mongolian's free variation selectors after a Mongolian letter,
+  U+FE00 to U+FE0D after a letter, digit, punctuation mark or symbol) and the tags of
+  the England, Scotland and Wales flags. So one character that shows no longer carries
+  499 that draw nothing, and a reason only of Hangul fillers is refused as not plain
+  rather than blank. The named set is the only list: `:blank` no longer names it,
+  since `:plain` has refused every one of them that is a letter, digit, punctuation
+  mark, symbol or unassigned. `:blank` counts a character Unicode has not yet assigned
+  (by the patterns' Unicode 16), noncharacters aside, as one that shows, so a newer
+  emoji alone is taken. The bidirectional embeddings, overrides and isolates and the
+  Arabic letter mark stay refused, as does every other format character. A
+  right-to-left mark typed just before a space, as in the review's Hebrew example, is
+  still refused: the rule takes none beside a space. `ReasonError`'s `:plain` sentence,
+  the docs, the contract, the feature list, the command guide and the public changelog
+  say what the rule takes. Crafted 500-unit reasons take 13 to 84 µs each. Two
+  properties in `SeasonsTest`: a taken reason with any of the five added alone between
+  two characters stays taken, and one with a character of the set out of its place is
+  refused as not plain; both fail on the old rule.
+- Three sentences made true. The feature list's Coinbase gap said a turn makes about
+  one request plus two per coin; at each boundary it makes one list request for the
+  starting season's picks (none for USDC alone, one a page past the first, and a list
+  past twenty pages fails the turn) and one price request for each distinct product
+  other than USDC whose price decides something, so at worst twenty list requests and
+  one price request for each Key's pick in the two seasons plus the holding, once for
+  each boundary a late turn catches up. This changelog called the listed `maxLength`
+  of 500 the most any reason the rule takes can have; the rule counts after trimming,
+  so 500 letters wrapped in spaces are taken. The Season panel said "Crown passed"
+  when the crown went to USDC with no Key taking it; `KeyfleetWeb.SeasonPanel` now
+  says "Crown dropped" there, and `SeasonPanelTest` finds it for a visitor and a
+  member.
+- The two agent doors differ on purpose about an optional input sent as null: the
+  connector counts it as left out, and empty text too unless the input says what
+  empty does, while the signed request takes only what its published schema allows
+  and refuses a null the schema has no null for. Models send explicit nulls for
+  optional inputs, and the connector keeps taking them for every tool
+  (`KeyfleetWeb.AgentTools.SignedRequest.params/2` leaves them out, as it did before
+  this review). Claude's guide and the feature list say so. `McpConnectorTest` locks a
+  pick through the connector with its reason sent as null and as empty text, and finds
+  each with no reason.
+- A reason refused as not plain says so in one short sentence (`ReasonError`), and the
+  contract's reason, the command guide, the command list, the docs and the public
+  changelog say the rule in the same plain words; the full rule is in
+  `Keyfleet.Seasons.Validations.Reason`'s module note.
+- A variation selector directly after a character Unicode has not yet assigned, a
+  noncharacter aside, is taken, so an emoji newer than the patterns know followed by
+  U+FE0F is taken alone and in a joined emoji (one alternative in `:plain`). `SeasonsTest`
+  takes both and refuses U+FE0F after a noncharacter; it fails without the alternative.
+  Crafted 500-unit reasons built on it take 65 to 71 µs.
+- A turn reads Coinbase's whole spot list and keeps the products its picks name
+  (`Keyfleet.Seasons.Coinbase.eligible_among/1` over `eligible/0`), so its request no
+  longer grows with every product asked; it still reads nothing when the picks name
+  only USDC. Measured on 19 November 2026 the list was one page of 923 products, 50
+  of them open to picks: 1.2 MB of JSON, about 70 KB sent compressed, some 65 ms to
+  fetch and 17 ms to decode, the same read the site makes every ten minutes for picks.
+  The feature list's Coinbase gap says the new worst case. `CoinbaseTest` keeps the
+  asked products from a list on many pages, and asks nothing for USDC alone while
+  Coinbase is down.
+
+## 2026-11-19 — Captain Seasons after its third review
+
+- The reason rule is simpler: it no longer polices where a harmless invisible
+  character stands, since each round of placing them refused another living script.
+  `Keyfleet.Seasons.Validations.Reason`'s `:plain` takes the soft hyphen, zero-width
+  space, non-joiner and joiner, the left-to-right, right-to-left and Arabic letter
+  marks, the Mongolian vowel separator and the word joiner anywhere, with nothing
+  asked of what stands beside them; the lookbehind and lookahead around the joiners
+  are gone. It still refuses control characters, line and paragraph separators and
+  every other format or drawn-as-nothing character, so the embeddings, overrides and
+  isolates, the tags outside the England, Scotland and Wales flags, the Hangul
+  fillers, blank Braille and the null notehead stay out; variation selectors are taken
+  where they were. So Khmer as its standard keyboard types it, Thai and Burmese with a
+  zero-width space, Mongolian with its vowel separator, a joiner ending a Malayalam or
+  Bengali word, and a direction mark beside a space in Hebrew or Arabic are taken.
+  `:marks` counts a tower through the characters taken anywhere, so "a" with 426
+  accents and a joiner after every sixth is refused, while an Indic word, where a
+  letter follows the joiner, is taken; its pattern reads each run between two marks
+  once, possessively. The refusal says "A reason is one line of ordinary text.", and
+  the contract's reason in both copies, the command guide, the command list, the docs,
+  the feature list and the public changelog say the rule in plain words. The module
+  note records what is known and accepted: a direction mark can change the order digits
+  show in within that one reason, and each reason is drawn as its own block (a grid or
+  flex cell on all three pages), so nothing outside it turns. `SeasonsTest` takes the
+  review's 40 scripts, an Arabic letter mark and its 22 kinds of emoji, and has two
+  properties: a taken reason stays taken with characters taken anywhere put at any
+  place but between a variation selector or flag tag and what it follows, and a reason
+  holding any refused character anywhere, or a variation selector out of its place, is
+  refused as not plain. The battery, the first property and the tower examples fail on
+  the old rule. The worst 500-unit reasons, the review's and ones aimed at the new
+  count, take 10 to 76 µs each.
+- A bad close in the newest minute no longer hides an older good one:
+  `Keyfleet.Seasons.Coinbase.price/2` drops closes of 0, below 0 or not a number before
+  it chooses the newest of the season's minutes, so a product whose last minute closed
+  at 0 is priced at the good close before it, and only a season with no good close
+  gives none. The module note, the docs and the feature list say so. `CoinbaseTest`
+  prices products whose newest close is 0, below 0, not a number or empty at the good
+  close before it; it fails on the old reading.
+- A page of Coinbase's list that says more follow but names no next page (its cursor
+  empty or missing) fails the read at once with `:no_next_cursor`. Before, an empty
+  cursor asked for the same first page twenty times and then failed, while a missing
+  one read that one page as the whole list. `next_page/4` follows a
+  cursor only when it is non-empty text. `CoinbaseTest` answers such a page three ways
+  and finds one request and the error each time. The feature list's season gaps add
+  two: a turn trusts Coinbase's list to be whole, so a list cut short without saying
+  more follow would void picks on the products it leaves out, and a coin with no trade
+  for up to three hours before a boundary opens at that older trade.
+- Claude's guide and the feature list said an optional connector input sent as empty
+  text counts as left out unless the input says what empty does; some tools keep it
+  and send it on, among them events_missed's cursor, messages_leave's reply_to, the
+  workspace board, graph and changes project, the graph's goal and the changes'
+  object. Both now say only what holds for every tool: an optional input sent as
+  null counts as left out. No tool's behaviour changed, and `McpConnectorTest` still
+  locks a pick through the connector with its reason sent as null and as empty text,
+  each with no reason.
+
+## 2026-11-19 — Captain Seasons after its fourth review
+
+- The reason rule's public sentences say only what is true. The contract's reason in
+  both copies, the command guide, the command list, the docs, the feature list and the
+  public changelog now say the same short thing: a reason is one line of ordinary
+  text, up to 500 characters, an emoji counting as two or more; joined emoji and flags
+  are welcome; line breaks, control characters and most invisible characters are
+  refused, and so is a reason with nothing visible or with more than six accents
+  stacked on one letter; a refused reason says why. They no longer promise every
+  language's writing (a few rare signs, such as Syriac's abbreviation mark, Arabic's
+  end-of-verse and number signs, a grapheme joiner, hieroglyph joiners and a leading
+  byte-order mark, are still refused) nor that characters hiding text or turning it
+  around are refused. The feature list's season gaps, and the rule's module note, say
+  that the nine invisible characters taken anywhere can hold a little text that does
+  not show (about 197 bytes at most) and that a direction mark can reorder digits
+  inside its own reason, while the tag characters a model would read stay refused. The
+  refusal still says "A reason is one line of ordinary text." The docs' price sentence
+  says a close of 0 or less, or one that is not a number, is passed over, and the
+  third review's line on a page with no next cursor says what the old code did with
+  an empty cursor and with a missing one.
+- Claude's guide and the feature list said an optional connector input sent as null
+  counts as left out, which holds only at the top of a tool's input. Both now say so,
+  and that a null inside an input is sent as it is, so the tool's own rules decide:
+  fleets_sync with graph.project or run.blocker sent as null is refused, and taken
+  when they are left out. No tool's behaviour changed.
+- A candle whose close is not text (null, a bare number or anything else) is passed
+  over like any other bad close, wherever it stands in Coinbase's answer, where
+  before it raised and so failed the whole price. `Coinbase.above_zero/1` reads only
+  text, and every other close is no price. `CoinbaseTest` prices a product whose
+  newest closes are null, a number and an object, and one with a null close older
+  than the one taken.
 
 ## 2026-11-19 — A room opens at its newest post; the sender line offers profile, copy and mute
 

@@ -92,6 +92,9 @@ defmodule KeyfleetWeb.PublicDocuments do
        "Quick questions {fleet}'s Keys answer together: the active ones, then the past ones."},
     :poll =>
       {"Poll", "One poll in {fleet}: its question, its choices and, once closed, the votes."},
+    :seasons =>
+      {"Seasons",
+       "{fleet}'s seasons on Keyfleet: what it held each season, its captain, how the holding did and every Key's pick."},
     :search =>
       {"Search", "Search {fleet}'s rooms, messages, workspace and notebooks on Keyfleet."},
     :worldline =>
@@ -314,8 +317,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   end
 
   @doc """
-  Every public page, each open fleet's page among them, or while the site is
-  closed only the pages still open.
+  Every public page, each open fleet's page and its record of seasons among
+  them, or while the site is closed only the pages still open.
   """
   def sitemap do
     lastmod = DateTime.to_iso8601(@released_at)
@@ -324,7 +327,10 @@ defmodule KeyfleetWeb.PublicDocuments do
       if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
         do:
           @documents ++
-            Enum.map(Fleets.open_fleet_ids(), &Fleets.path/1) ++
+            Enum.flat_map(
+              Fleets.open_fleet_ids(),
+              &[Fleets.path(&1), KeyfleetWeb.SeasonsLive.seasons_path(&1)]
+            ) ++
             KeyfleetWeb.AgentGuides.paths(),
         else: KeyfleetWeb.Plugs.LaunchGate.open_pages()
 

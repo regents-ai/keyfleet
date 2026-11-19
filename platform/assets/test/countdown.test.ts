@@ -66,6 +66,18 @@ it("writes a proposal's hours, then its last hour in minutes", () => {
   expect(vi.getTimerCount()).toBe(0)
 })
 
+it("gives a season's hours its end words once its time runs out, and waits for the page", () => {
+  vi.setSystemTime(0)
+  const hook = mount({closesAt: String(3_660_000), now: "0", format: "hours", done: "Settling"})
+
+  expect(hook.el.textContent).toBe("1 hour left")
+  vi.advanceTimersByTime(3_601_000)
+  expect(hook.el.textContent).toBe("Less than a minute left")
+  vi.advanceTimersByTime(59_000)
+  expect(hook.el.textContent).toBe("Settling")
+  expect(vi.getTimerCount()).toBe(0)
+})
+
 it("stops counting when the poll leaves the page", () => {
   vi.setSystemTime(0)
   const hook = mount({closesAt: String(30_000), now: "0", format: "seconds"})
