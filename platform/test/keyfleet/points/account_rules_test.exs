@@ -5,7 +5,8 @@ defmodule Keyfleet.Points.AccountRulesTest do
   # so a save that rolls back offers nothing, a sign-in that changes nothing
   # offers nothing more, a social account that replaces another is offered as
   # newly linked, and a rule that is off offers nothing. Points asks the source
-  # when it checks the offer and again just before it writes the award.
+  # when it checks the offer and again just before it writes the award. An
+  # award is offered only for its own signal.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
@@ -14,7 +15,7 @@ defmodule Keyfleet.Points.AccountRulesTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.{Signals, VerifiedSession}
   alias Keyfleet.Actors.System
-  alias Keyfleet.Repo
+  alias Keyfleet.{PairingHelpers, Repo}
   alias RegentPoints.{Entry, Event, IntakeWorker, Rejection, Store}
 
   @rules ~w(account.activated social.x social.github social.farcaster agent.activated)
@@ -310,6 +311,38 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert %{failure: 0} = drain()
     assert entries(account.id) == []
     assert "rule_not_active" in rejections(to_string(account.id))
+  end
+
+  test "an award is offered only for its own signal; nobody, the system included, asks for one directly" do
+    paired = PairingHelpers.pair_wallet!(wallet())
+    offered = Enum.map(all_enqueued(worker: IntakeWorker), & &1.id)
+    id = Ash.UUIDv7.generate()
+
+    signals = [
+      account_registered: %Signals.AccountRegistered{
+        signal_id: id,
+        account_id: paired.human_account_id
+      },
+      social_linked: %Signals.SocialLinked{
+        signal_id: id,
+        provider: :github,
+        subject: social(:github).subject
+      },
+      agent_paired: %RegentAgents.Signals.AgentPaired{
+        signal_id: id,
+        paired_agent_id: paired.pairing_id,
+        privy_user_id: paired.privy_user_id
+      }
+    ]
+
+    for {action, signal} <- signals, actor <- [paired, %System{}] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keyfleet.Points.Award
+               |> Ash.ActionInput.for_action(action, %{signal: signal}, actor: actor)
+               |> Ash.run_action()
+    end
+
+    assert Enum.map(all_enqueued(worker: IntakeWorker), & &1.id) == offered
   end
 
   defp account(linked_socials \\ []) do

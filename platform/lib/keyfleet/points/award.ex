@@ -73,10 +73,18 @@ defmodule Keyfleet.Points.Award do
   end
 
   policies do
-    # Reached only through the signals above, after the action that emitted
-    # them was allowed; each records as the system, never as the actor.
-    policy always() do
-      authorize_if always()
+    # Each runs only as the listener of its own signal, after the action that
+    # emitted it was allowed; each records as the system, never as the actor.
+    policy action(:account_registered) do
+      authorize_if signal_in(Keyfleet.Accounts.Signals, :account_registered)
+    end
+
+    policy action(:social_linked) do
+      authorize_if signal_in(Keyfleet.Accounts.Signals, :social_linked)
+    end
+
+    policy action(:agent_paired) do
+      authorize_if signal_in(RegentAgents.Signals, :agent_paired)
     end
   end
 

@@ -14035,3 +14035,18 @@ step's report).
   `ash.codegen --check`, no changes; `make check-required-fixes`, passes. Commits
   d12a25161, 87959c54b, fd4649d65 and 064e60802, then the review fixes, with this
   entry.
+
+## 2026-11-19 — Points offers name their signal
+
+- Each Points listener action runs only for its own signal. `Keyfleet.Points.Award` has
+  one policy per action in place of its one open policy, each
+  `authorize_if signal_in(SignalsModule, :signal)`: `:account_registered` and
+  `:social_linked` from `Keyfleet.Accounts.Signals`, `:agent_paired` from
+  `RegentAgents.Signals`. This is the template's shape (ash-template v293, 6afa0ebe).
+  The same actions earn the same awards; no migration, no setting and no library change.
+- Proof: `test/keyfleet/points/account_rules_test.exs` gains one test: each action runs
+  only for its own signal, for a paired agent and for the system alike, and otherwise
+  queues no offer; with any one policy set back to `always()` it fails. The Points
+  tests and the sign-in, linked account and pairing tests pass (ten files, 96 tests).
+  Compile with warnings as errors, clean; format clean and `mix credo --strict` no
+  issues on the changed files.
