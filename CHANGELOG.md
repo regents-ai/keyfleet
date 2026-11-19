@@ -14642,3 +14642,85 @@ step's report).
   start time changed.
 - Checks: `make check` passes every gate, the SIWA version check among them; the
   compile-connected count stays 145.
+
+## 2026-11-19 — The graph machine is a private service
+
+- The site machine and the graph machine no longer run as one Erlang cluster.
+  The site reaches the fleets' writers over plain HTTP on the graph machine's
+  private listener, port 4400 (`Keyfleet.Graph.Listener`), at
+  `KEYFLEET_GRAPH_URL`, the graph process group's private name. The listener is
+  no Fly service; Fly's own check of the graph machine reads its `/healthz`,
+  the one route that needs no pass, carries nothing and runs nothing. A
+  release now waits for that check.
+- Each request carries a pass that lasts 30 seconds, for its one fleet and
+  route (write, check or await), signed with the hubs' signing keys under its
+  own audience, `keyfleet-graph` (`Keyfleet.Graph.Pass`). A write names who it
+  is for by identifiers only, an account id or an agent's wallet and pairing,
+  and the rule that decides it by name (`Keyfleet.Graph.Authority`); the graph
+  machine reads that person's or agent's standing from the database when the
+  write's turn comes, as before. Nothing a request carries becomes code. A
+  write, a check and an await mean what they meant: the writer's same time
+  limits, the same "try again", "outcome unknown" and wait-ran-out answers, and
+  the same refusals. The site now waits a second longer for each answer, and
+  up to a second to connect; a connection not made in that second answers
+  "outcome unknown". It holds at most 50 connections to the graph machine at
+  once, and a request that finds none free within a second answers "try
+  again". Each request not sent, or refused by the graph machine, is logged on
+  the site with its fleet, its route and the reason or status.
+- The graph machine tells the site that a fleet's read tables moved on, and
+  that something notable happened, through the database (`pg_notify`, heard by
+  the listener for shared changes, `Keyfleet.Graph.Notices`), so open pages
+  refresh as before.
+- The job queue's notices travel through the database
+  (`Oban.Notifiers.Postgres`), so from the release after this one, pausing a
+  queue reaches both site machines while a release overlaps them.
+- Erlang distribution stays on each machine's loopback, so
+  `bin/keyfleet rpc` and `remote` work as before on the machine they run on;
+  the port mapper takes no connection from another machine. The sign-in
+  library's token cache, which the cluster had copied between machines, is now
+  each machine's own, and the site's PubSub no longer reaches across the two
+  site machines of a release's overlap minute.
+- Releases go site machine first, bluegreen with the migrations as before, and
+  then the graph machine with no release command (`scripts/deploy.sh`). A site
+  machine asks whichever graph machine is running, so from the release after
+  this one a workspace write answers "try again" and writes nothing only while
+  the graph machine restarts: until its listener answers, about 20 to 40
+  seconds by estimate, and then while each fleet's graph reads its log again,
+  up to 60 seconds. This release takes longer, about one to two minutes: the
+  graph machine it replaces has no listener, so writes answer "try again" from
+  the new site machine taking over until each fleet has read its log on the new
+  graph machine. A write sent just as the graph machine stops can come back
+  with its outcome unknown, and sending the same command id again is safe. If
+  the graph machine's deploy fails after the site machine's succeeded, every
+  workspace write answers "try again" until the graph machine is released; the
+  script then says so, prints the one command that releases the graph machine
+  alone on the image already pushed, and stops with an error, without trying
+  again.
+- Settings, none of them secret. Added: `KEYFLEET_GRAPH_URL` in `fly.toml` and
+  `fly.staging.toml`, `config :keyfleet, :graph_listener` (all addresses, port
+  4400) and the graph's `pass_ttl_seconds` (30) and `url`. Removed:
+  `DNS_CLUSTER_QUERY`, `config :keyfleet, :dns_cluster_query`, the
+  `dns_cluster` dependency and the requirement for `RELEASE_COOKIE`, which
+  machines now take from the release itself. Changed: the job queue's notifier.
+- The Fly secret `RELEASE_COOKIE` is unused from this release on and stays:
+  rolling back to an earlier release needs it, with that release's own
+  `fly.toml`.
+- Database connections on the shared database: a site machine holds 7 (its
+  pool of 5, the listener for shared changes, and the job queue's notifier), up
+  from 6, plus 2 for the Claude connector's sign-in while it is on, so 14
+  rather than 12 for the minute of a site release; the graph machine holds 3,
+  as before.
+- No migration, table or column; the graph host, the frames sent to it and the
+  read tables are unchanged.
+- The release smoke (`scripts/release.sh`) starts the two machines with no
+  cluster and proves, through the site's own code, that the listener refuses a
+  request with no pass, a code-store pass and a pass for another route; takes
+  one real write by a Key's owner; tells the site through the database; answers
+  the same command as a replay; refuses an account with no Key, with nothing
+  written; checks a write without making it; and keeps its port mapper closed.
+  Two timed drills follow: the graph machine frozen after a write was sent, and
+  the graph machine stopped.
+- Checks: `make check`'s platform gates pass (compile with warnings as errors,
+  unused locks, `mix hex.audit`, format, Credo, Sobelow, the Ash codegen, the
+  route handoff and the TypeScript typecheck), and the compile-connected count
+  stays 145. The contracts are unchanged.

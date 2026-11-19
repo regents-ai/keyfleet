@@ -4,9 +4,10 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   `op` names the operation and `body` the arguments that make up its body; an
   argument left out is left out of the body. A write carries the command the
-  writer stamps, at its turn, from the actor's standing on the key it acts as
-  and the state of each of the fleet's projects then (`command/5`): the
-  graph takes new work only into an active project.
+  writer stamps, at its turn, by the workspace command rule
+  (`Keyfleet.Graph.Authority`): the actor's standing on the key it acts as
+  and the state of each of the fleet's projects then. The graph takes new
+  work only into an active project.
   When that standing cannot be read at the write's turn, because the database
   failed or ran out of time, the write is answered as unavailable: nothing was
   sent to the graph.
@@ -21,7 +22,8 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   place in the log, `head_seq`, or once the projector's wait has run out;
   see `Keyfleet.Graph.Projector.await/3`. The answer's `watermark` says how
   far along the write's log the tables were known to be: at or past
-  `head_seq`, a read made now includes the write.
+  `head_seq`, a read made now includes the write. All three reach the graph
+  through `Keyfleet.Graph.Client`.
 
   A new write by an agent is recorded as its latest contribution to the
   fleet: taking a task, handing one in, a review, or another workspace write. The write
@@ -30,19 +32,14 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   """
   use Ash.Resource.Actions.Implementation
 
-  require Logger
-
-  alias Keyfleet.Actors.System
-  alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Graph.Authority
+  alias Keyfleet.Graph.Client
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Graph.Errors.RefusedError
   alias Keyfleet.Graph.Errors.UnavailableError
-  alias Keyfleet.Graph.Projector
-  alias Keyfleet.Graph.Writer
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Projects
 
   @impl true
   def run(input, opts, context) do
@@ -51,31 +48,16 @@ defmodule Keyfleet.Graph.Workspace.Relay do
     fleet_id = arguments.fleet_id
 
     body = Map.take(arguments, Keyword.fetch!(opts, :body))
-
-    authorize =
-      {__MODULE__, :command, [context.actor, fleet_id, arguments.as_key, arguments.command_id]}
+    authority = Authority.workspace_command(context.actor, arguments.as_key, arguments.command_id)
 
     case input.context do
       %{input_check: true} ->
-        fleet_id |> Writer.check(op, body, authorize) |> check_reply(fleet_id)
+        fleet_id |> Client.check(op, body, authority) |> check_reply(fleet_id)
 
       _write ->
         fleet_id
-        |> Writer.command(op, body, authorize)
+        |> Client.command(op, body, authority)
         |> write_reply(fleet_id, context.actor, kind(op, arguments))
-    end
-  end
-
-  @doc """
-  The command a write carries, read at the write's turn: the actor's standing
-  on the Key it acts as (`Keyfleet.Graph.Checks.KeyActor.command/5`) and
-  `projects`, each of the fleet's projects that is not deleted by name, with
-  its state, `active` or `archived`.
-  """
-  def command(actor, fleet_id, as_key, command_id, within) do
-    with {:ok, command} <- KeyActor.command(actor, fleet_id, as_key, command_id, within),
-         {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
-      {:ok, Map.put(command, :projects, Map.new(projects, &{&1.name, &1.state}))}
     end
   end
 
@@ -85,7 +67,7 @@ defmodule Keyfleet.Graph.Workspace.Relay do
          actor,
          kind
        ) do
-    watermark = Projector.await(fleet_id, run_id, head_seq)
+    watermark = Client.await(fleet_id, run_id, head_seq)
     unless reply["replayed"], do: Keyfleet.Agents.record_contribution(actor, fleet_id, kind)
 
     {:ok,
@@ -120,26 +102,11 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   defp refused({:error, :unavailable}, fleet_id), do: unavailable(fleet_id)
 
-  # The actor's standing, refused at the write's turn.
+  # The actor's standing, refused at the write's turn. One that could not be
+  # read then is answered as unavailable (`Keyfleet.Graph.Authority`).
   defp refused({:error, %NotKeyHolderError{} = error}, _fleet_id), do: {:error, error}
   defp refused({:error, %EditsRestrictedError{} = error}, _fleet_id), do: {:error, error}
   defp refused({:error, %OwnershipRefreshingError{} = error}, _fleet_id), do: {:error, error}
-
-  # The actor's standing could not be read at the write's turn.
-  defp refused({:error, error}, fleet_id) do
-    Logger.warning(
-      "graph write for #{fleet_id} not sent: its ownership check failed: " <> reason(error)
-    )
-
-    unavailable(fleet_id)
-  end
-
-  # What went wrong, on one line: an error that gathers others, as Ash's do,
-  # by each error it holds, and each error by the first line of its message,
-  # which names its kind, without the trail of where it was passed along.
-  defp reason(%{errors: [_ | _] = errors}), do: Enum.map_join(errors, "; ", &reason/1)
-  defp reason(%{bread_crumbs: [_ | _]} = error), do: reason(%{error | bread_crumbs: []})
-  defp reason(error), do: error |> Exception.message() |> String.split("\n", parts: 2) |> hd()
 
   defp unavailable(fleet_id), do: {:error, UnavailableError.exception(fleet_id: fleet_id)}
 end

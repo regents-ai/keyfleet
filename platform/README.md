@@ -94,6 +94,7 @@ production.
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. The Claude connector's sign-in and its `/mcp` address are at `https://PHX_HOST` too, and each of its tokens is bound to that address as it is issued. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development defaults to a local siwa-server on port 4100. |
+| `KEYFLEET_GRAPH_URL` | Yes on the site machine in production | The graph machine's private listener, `http://graph.process.<app>.internal:4400`; `fly.toml` sets it. Not a secret. |
 | `KEYFLEET_RPC_URL` | For the fleet reader | The Base node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets take Base from Privy's own list of networks. Unset, the fleet reader does not run and sent steps are read from Base's public node. |
 | `KEYFLEET_PRESENCE_TIMER_KEY` | Yes in production | The timer wallet's private key, `0x` and 64 hex digits. It marks presence for Keys whose owners gave it a shard (`Keyfleet.Keys.PresenceTimer`). Only ever stored on Fly. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
@@ -112,9 +113,19 @@ production.
 Each fleet's shared work graph is a file on the `/data` volume, written by one
 graph process per fleet. In production the app runs two machines
 (`fly.toml`): the site machine serves every page, and the graph machine holds
-the volume and runs only the fleets' writers and projectors. The two join one
-cluster through the app's private DNS name, and a workspace write on the site
-machine is made by its fleet's writer on the graph machine. **The graph
+the volume and runs only the fleets' writers and projectors. The two share no
+Erlang cluster. A workspace write on the site machine is made by its fleet's
+writer on the graph machine, which the site reaches over plain HTTP on the
+graph machine's private listener (port 4400, `Keyfleet.Graph.Listener`, at
+`KEYFLEET_GRAPH_URL`). Each request carries a pass for its one fleet and route
+that lasts 30 seconds, signed with the same keys as the hubs' passes
+(`Keyfleet.Graph.Pass`), and names who the write is for by identifiers only;
+the graph machine reads that person's or agent's standing from the database
+when the write's turn comes (`Keyfleet.Graph.Authority`). The listener is no
+Fly service, and only `/healthz`, which Fly's check of the graph machine reads,
+answers without a pass. The graph machine tells the site machine that a
+fleet's read tables moved on through the database (`Keyfleet.Graph.Notices`).
+**The graph
 machine must stay one machine** (deploy with `--ha=false`): a second would
 mount its own empty volume and the graphs would split without any error. In
 development one machine runs everything, and
@@ -291,7 +302,9 @@ are read on each member's page.
 does (`Keyfleet.Health`), so a pool that stays full fails the machine's health
 check. On the database every Regent site shares, the site machine serves from
 five connections, with two more for the Claude connector's sign-in while it is
-on and one that listens for shared changes; the graph machine serves from three
+on, one that listens for shared changes and the graph machine's notices, and
+one that carries the job queue's notices between site machines
+(`Oban.Notifiers.Postgres`); the graph machine serves from three
 (`Keyfleet.DatabaseConfig`). After a deploy, open pages reconnect
 spread over a moment rather than all at once (`assets/js/app.ts`).
 
@@ -356,8 +369,8 @@ any commit not on `origin/main` and any commit that does not contain the one
 live (the running image's tag), so two releases that cross cannot take live
 work out. It assembles the context folder for amd64
 from that commit, builds and pushes the image with Fly's remote builder,
-labelling it with the short commit, and then switches the graph machine and
-then the site machine to it:
+labelling it with the short commit, and then switches the site machine and
+then the graph machine to it:
 
 ```sh
 fly deploy <folder> --config <folder>/platform/fly.toml \
@@ -365,28 +378,47 @@ fly deploy <folder> --config <folder>/platform/fly.toml \
   --build-only --push --remote-only --image-label <short commit> \
   --build-arg SOURCE_COMMIT=<commit>
 fly deploy --config <folder>/platform/fly.toml \
-  --image registry.fly.io/keyfleet:<short commit> --ha=false --process-groups graph
-fly deploy --config <folder>/platform/fly.toml \
   --image registry.fly.io/keyfleet:<short commit> --ha=false \
   --process-groups site --strategy bluegreen
+fly deploy --config <folder>/platform/fly.toml \
+  --image registry.fly.io/keyfleet:<short commit> --ha=false \
+  --process-groups graph --skip-release-command
 ```
 
 Two deploys of one app take turns: the script runs itself under
 `lockf -k /tmp/regent-release-<app>.lock` (`keyfleet` or `keyfleet-staging`)
 for the whole run, a lock no other site takes. The build waits on nothing
-else. Each switch runs the migrations and briefly adds a machine's connections
-to the production database every Regent site shares, which fits two switches
-at once, so each takes `/tmp/regent-shared-db-release.lock` when it is free
-and otherwise waits for `/tmp/regent-shared-db-release-2.lock`. Never wrap the
-script in `lockf` yourself: it would wait on its own lock.
+else. The site machine's switch runs the migrations and briefly adds a site
+machine's connections to the production database every Regent site shares,
+which fits two switches at once, so it takes
+`/tmp/regent-shared-db-release.lock` when it is free and otherwise waits for
+`/tmp/regent-shared-db-release-2.lock`. The graph machine's switch runs no
+migrations and adds no connections, since its old machine stops before the new
+one starts, so it takes neither. Never wrap the script in `lockf` yourself: it
+would wait on its own lock.
 
-The graph machine stops and starts again, and for those seconds a workspace
-write answers "try again". The site machine is released bluegreen: a new one
-starts, answers `/healthz`, and only then does the old one stop, so pages are
-answered throughout. For that minute the two site machines and the graph
-machine can run different releases. A write whose ownership check the graph
-machine's code does not have answers "try again" and writes nothing
-(`Keyfleet.Graph.Writer`).
+The site machine is released bluegreen: a new one starts, answers `/healthz`,
+and only then does the old one stop, so pages are answered throughout. The
+graph machine then stops and starts again, and Fly waits for its listener's
+`/healthz`. A site machine asks whichever graph machine is running, of its own
+release or not, so a workspace write answers "try again" and writes nothing
+only while the graph machine restarts: until its listener answers, about 20 to
+40 seconds by estimate, and then while each fleet's graph reads its log again
+before it answers, as after any restart, up to 60 seconds (`:hello_timeout`).
+The first release with the listener (19 November 2026) takes longer, about one
+to two minutes: the graph machine it replaces has no listener, so a workspace
+write answers "try again" from the moment the new site machine takes over,
+through the old site machine's stop and the graph machine's stop, image pull
+and start, until each fleet has read its log again. A write sent just as the
+graph machine stops can come back with its outcome unknown; sending the same
+command id again is safe, since the graph answers a command it already made as
+it did the first time.
+
+If the graph machine's deploy fails after the site machine's succeeded, every
+workspace write answers "try again" until the graph machine is released. The
+script then says so, prints the one command that releases the graph machine
+alone on the image already pushed, and stops with an error; it does not try
+again.
 
 The image can only be built from that context folder, so a plain `fly deploy`
 from `platform/` cannot work.
@@ -431,10 +463,21 @@ ordinary fast-forward (21 October 2026); rebuild the commit on the newest
 When another change reaches `main` first, rebase onto it, run
 `make check-change` again and deploy; the deploy script refuses a commit that
 does not contain the live one. To roll back, `fly releases -a keyfleet
---image` names the previous image, and from the monorepo root
-`fly deploy --config platform/fly.toml --ha=false --image <that image> --process-groups graph`,
-then the same with `--process-groups site --strategy bluegreen`, runs it
-again.
+--image` names the previous image, and from the monorepo root these run it
+again:
+
+```sh
+fly deploy --config platform/fly.toml --ha=false --image <that image> \
+  --process-groups site --strategy bluegreen
+fly deploy --config platform/fly.toml --ha=false --image <that image> \
+  --process-groups graph --skip-release-command
+```
+
+Roll back with the `fly.toml` of the
+commit the image was built from (its tag): a release from before the
+CHANGELOG entry "The graph machine is a private service" (19 November 2026)
+runs its two machines as one Erlang cluster, which needs that file's
+`DNS_CLUSTER_QUERY` and the `RELEASE_COOKIE` secret, kept on Fly for this.
 
 Anything signed in Safe{Wallet}, a contract change, a write to production
 data, moving money, and a first change to sign-in, the wallet or the side
@@ -459,14 +502,28 @@ enters it, and tags it `keyfleet:<commit>`. The smoke check starts a throwaway
 PostgreSQL at the version `.tool-versions` names, and stops unless the server
 reports exactly that version, on its own Docker network, answering to the
 staging database hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
-`bin/migrate` and `bin/pending-migrations` (which must print `none`), then the
-server with an empty `/data`, whose `/healthz`, home page, fingerprinted
-stylesheet, graph host Python and own database connection it checks. The
-server gets no chain node or Privy app, and stand-in addresses for the sign-in
-server and the other services it needs that never resolve. It removes the
-database, the network and the context afterwards, keeps the image, and prints the app commit, the
-shared-library commits from `mix.lock`, the graph host supply and the image
-digest. It never deploys.
+`bin/migrate` and `bin/pending-migrations` (which must print `none`). It
+seeds the few rows one workspace write needs (a fleet deployed on a chain the
+server has no node for, its key ownership freshly read, one Key and its
+owner's account, an account with no Key, and an active project), then starts
+production's two machines, which share no cluster: the graph machine with an
+empty `/data`, answering to its process group's private name, and the site
+machine, whose `/healthz`, home page, fingerprinted stylesheet, own database
+connection and the graph host's Python it checks. Through the site's own code
+it then proves that the graph machine's listener refuses a request with no
+pass or with a pass for another use, takes one real write by the Key's owner,
+tells the site of it through the database, answers the same command again as
+a replay, refuses an account that holds no Key with nothing written, checks a
+write without making it, and keeps its port mapper closed to the site machine.
+Two timed drills end it: the graph machine frozen after a write was sent (the
+site answers that the outcome is unknown in about 13 seconds, and the same
+command sent again is made once), and the graph machine stopped (the site
+answers "try again" at once). The server gets no chain node or Privy app, a
+signing key made for the run, and stand-in addresses for the sign-in server
+and the other services it needs that never resolve. It removes the machines,
+the database, the network and the context afterwards, keeps the image, and
+prints the app commit, the shared-library commits from `mix.lock`, the graph
+host supply, the image digest and the drills' times. It never deploys.
 
 ## License
 

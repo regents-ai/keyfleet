@@ -11,24 +11,37 @@
 # amd64, which Fly runs: `git archive` of this commit's platform/ folder plus the
 # graph host's sealed Python supply, checked against its checksums. Fly's remote
 # builder builds the image from it, labelled with the short commit. Every deploy
-# runs /app/bin/migrate as its release command (platform/README.md, Deployment).
+# runs /app/bin/migrate as its release command once, with the site machine
+# (platform/README.md, Deployment).
 #
 # The app has two machines (platform/fly.toml). Fly's remote builder first
 # builds and pushes the image, labelled with the short commit, holding no
-# place on the shared database. The graph machine, which holds the volume, then
-# takes the image: it stops and starts again, and for those seconds a workspace
-# write answers "try again". The site machine then takes the same image
-# bluegreen, so a page is answered throughout.
+# place on the shared database. The site machine then takes the image
+# bluegreen, after the migrations, so a page is answered throughout. The graph
+# machine, which holds the volume, takes the same image next: it stops and
+# starts again. A site machine asks whichever graph machine is running, so a
+# workspace write answers "try again" only while the graph machine restarts:
+# until its listener answers, about 20 to 40 seconds by estimate, and then
+# while each fleet's graph host reads its log again, up to 60 seconds, as
+# after any restart. The site goes first because this way the window holds
+# only the graph machine's restart, not the site's start and checks as well.
+# The first release with the listener takes about one to two minutes instead:
+# the graph machine it replaces has none, so writes answer "try again" from
+# the new site taking over. If the graph machine's release fails, the script
+# says so, prints the command that releases it alone, and stops; it does not
+# try again.
 #
 # Two deploys of this app take turns, from any checkout, or the two machines can
 # end up on different commits (21 October 2026): the script runs itself again
 # under lockf(1) on /tmp/regent-release-<app>.lock, which other sites never
 # take, and the system lets go of it when the script ends, however it ends.
-# Every site shares one production database, and a switch to a new image runs
-# the migrations and briefly adds a machine's connections to it, which fits two
-# switches at once across all sites. Each switch takes whichever of the two
-# places is free, /tmp/regent-shared-db-release.lock or
-# /tmp/regent-shared-db-release-2.lock, or waits for the second.
+# Every site shares one production database, and the site's switch runs the
+# migrations and briefly adds a site machine's connections to it, which fits
+# two switches at once across all sites. It takes whichever of the two places
+# is free, /tmp/regent-shared-db-release.lock or
+# /tmp/regent-shared-db-release-2.lock, or waits for the second. The graph
+# machine's switch runs no migrations and adds no connections, since its old
+# machine stops before the new one starts, so it takes no place.
 set -euo pipefail
 
 case "${1:-}" in
@@ -95,18 +108,28 @@ fly deploy "$context" \
   --image-label "${commit:0:7}" \
   --build-arg SOURCE_COMMIT="$commit"
 
-# Switches the machines of one process group to the new image, in whichever
-# place on the shared database is free, or waiting for the second.
-switch() {
-  local place=/tmp/regent-shared-db-release.lock
-  lockf -k -s -t 0 "$place" true || place=/tmp/regent-shared-db-release-2.lock
-  echo "==> Deploying ${commit:0:7} to the $1 machine (waits for $place if it is taken)"
-  lockf -k "$place" fly deploy \
-    --config "$context/$config" \
-    --image "registry.fly.io/$app:${commit:0:7}" \
-    --ha=false \
-    --process-groups "$@"
-}
+# Switches the site machine to the new image bluegreen, after the migrations,
+# in whichever place on the shared database is free, or waiting for the second.
+place=/tmp/regent-shared-db-release.lock
+lockf -k -s -t 0 "$place" true || place=/tmp/regent-shared-db-release-2.lock
+echo "==> Deploying ${commit:0:7} to the site machine (waits for $place if it is taken)"
+lockf -k "$place" fly deploy \
+  --config "$context/$config" \
+  --image "registry.fly.io/$app:${commit:0:7}" \
+  --ha=false \
+  --process-groups site \
+  --strategy bluegreen
 
-switch graph
-switch site --strategy bluegreen
+# Then the graph machine, on the same image, with the migrations already run.
+echo "==> Deploying ${commit:0:7} to the graph machine"
+if ! fly deploy \
+  --config "$context/$config" \
+  --image "registry.fly.io/$app:${commit:0:7}" \
+  --ha=false \
+  --process-groups graph \
+  --skip-release-command; then
+  echo "The graph machine's deploy failed after the site machine's succeeded: every workspace write answers \"try again\" until the graph machine is released." >&2
+  echo "Release the graph machine alone on the image already pushed:" >&2
+  echo "  fly deploy --config $root/$config --image registry.fly.io/$app:${commit:0:7} --ha=false --process-groups graph --skip-release-command" >&2
+  exit 1
+fi

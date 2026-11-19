@@ -183,8 +183,9 @@ if config_env() == :prod do
     formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
 
   unless migrating? do
-    # bin/site and bin/graph name the machine; the machines of one app find
-    # each other through its private DNS name (fly.toml).
+    # bin/site and bin/graph name the machine. The site machine reaches the
+    # graph machine's private listener at KEYFLEET_GRAPH_URL, the graph process
+    # group's private name (fly.toml), which is not a secret.
     machine =
       case System.fetch_env!("KEYFLEET_MACHINE") do
         "site" -> :site
@@ -193,7 +194,9 @@ if config_env() == :prod do
 
     config :keyfleet, :machine, machine
 
-    config :keyfleet, :dns_cluster_query, System.fetch_env!("DNS_CLUSTER_QUERY")
+    if machine == :site do
+      config :keyfleet, :graph, url: System.fetch_env!("KEYFLEET_GRAPH_URL")
+    end
 
     config :keyfleet, Keyfleet.Keys.PresenceTimer,
       key: System.fetch_env!("KEYFLEET_PRESENCE_TIMER_KEY")

@@ -273,6 +273,9 @@ config :keyfleet, :machine, :site
 # rows at its turn, which takes milliseconds. Each fleet's read tables are
 # copied from its log after every write, and every :catch_up_interval anyway;
 # a write waits up to :projection_wait for its change to be readable.
+# :enabled runs the writers beside the site, as development does; otherwise
+# the site asks the graph machine at :url (config/runtime.exs) under a pass
+# lasting :pass_ttl_seconds (Keyfleet.Graph.Client).
 config :keyfleet, :graph,
   enabled: false,
   data_dir: Path.expand("../tmp/graph", __DIR__),
@@ -283,15 +286,18 @@ config :keyfleet, :graph,
   restart_min: 1_000,
   restart_max: 30_000,
   catch_up_interval: 5_000,
-  projection_wait: 2_000
+  projection_wait: 2_000,
+  pass_ttl_seconds: 30
 
 # Background work, in this site's own schema of the shared database. AshOban
 # adds the jobs of each resource's triggers (`AshOban.config/2` at start).
-# Queues hear about new jobs through Erlang process groups.
+# Queues hear about new jobs through the database (LISTEN/NOTIFY on a
+# connection of Oban's own, on channels named by the schema), so the two site
+# machines a release runs for a minute hear each other with no cluster.
 config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
-  notifier: Oban.Notifiers.PG,
+  notifier: Oban.Notifiers.Postgres,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.

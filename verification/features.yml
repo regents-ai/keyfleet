@@ -964,10 +964,15 @@ features:
     what: >-
       A release of keyfleet.ai answers every page throughout. The site machine
       takes a release bluegreen, the new one answering before the old one
-      stops, while the graph machine, which keeps the fleets' graph logs on its
-      volume, stops and starts again; for those seconds a workspace write
-      answers "try again" and nothing is written twice. A workspace write on the
-      site machine is made by its fleet's writer on the graph machine.
+      stops, and then the graph machine, which keeps the fleets' graph logs on
+      its volume, stops and starts again; while it restarts, until its listener
+      answers (about 20 to 40 seconds by estimate) and each fleet has read its
+      log again (up to 60 seconds), a workspace write answers "try again" and
+      nothing is written twice. The first release with the listener takes
+      about one to two minutes, since the graph machine it replaces has none.
+      If the graph machine's deploy fails, the deploy script stops and prints
+      the command that releases it alone. A workspace write
+      on the site machine is made by its fleet's writer on the graph machine.
     who: person
     level: protected
     paths:
@@ -977,6 +982,7 @@ features:
       - platform/rel/overlays/bin/site
       - platform/rel/overlays/bin/graph
       - platform/Dockerfile
+      - platform/config/config.exs
       - platform/config/runtime.exs
       - platform/config/prod.exs
       - platform/lib/keyfleet/application.ex
@@ -984,6 +990,8 @@ features:
       - platform/lib/keyfleet/graph/projector.ex
       - platform/lib/keyfleet/graph/projectors.ex
       - platform/lib/keyfleet/graph/supervisor.ex
+      - platform/lib/keyfleet/graph/client.ex
+      - platform/lib/keyfleet/graph/listener.ex
       - scripts/deploy.sh
       - scripts/release.sh
     entry:
@@ -991,8 +999,41 @@ features:
     proofs:
       - scripts/release.sh
     gaps:
-      - The two-step release was tried on a throwaway Fly app with a stand-in server, not yet on keyfleet.ai.
+      - The release order, site first and then the graph machine with no release command, has not run on keyfleet.ai; the 20 to 40 seconds is an estimate from the graph machine's restart, and the first release's one to two minutes an estimate from the steps it spans. Whether Fly's deploy waits for the graph machine's private check before it reports done is not proven.
+      - The release smoke freezes and stops the graph machine with Docker; a machine Fly stops mid-write is not tried.
       - For the minute a site release takes, two site machines run, so announcements from other Regent sites reach open pages twice.
+
+  - id: graph-private-service
+    what: >-
+      The graph machine takes a workspace write only from the site machine.
+      Each request to its private listener carries a pass for its one fleet
+      and route that lasts 30 seconds, and names who the write is for by
+      account or agent identifiers only; the writer reads that person's or
+      agent's standing from the database when the write's turn comes. A
+      request with no pass, a pass for anything else, or for someone who holds
+      no Key is refused with nothing written. The site hears that a fleet's
+      read tables moved on through the database.
+    who: person
+    level: protected
+    paths:
+      - platform/lib/keyfleet/graph/listener.ex
+      - platform/lib/keyfleet/graph/pass.ex
+      - platform/lib/keyfleet/graph/client.ex
+      - platform/lib/keyfleet/graph/authority.ex
+      - platform/lib/keyfleet/graph/actor_ref.ex
+      - platform/lib/keyfleet/graph/notices.ex
+      - platform/lib/keyfleet/graph/workspace/relay.ex
+      - platform/lib/keyfleet/notebooks/pass.ex
+      - platform/lib/keyfleet/shared_changes.ex
+    entry:
+      - route: POST /fleets/{fleet_id}/write
+      - route: POST /fleets/{fleet_id}/check
+      - route: POST /fleets/{fleet_id}/await
+    proofs:
+      - scripts/release.sh
+    gaps:
+      - The release smoke writes as a person; an agent's write, whose pairing the graph machine reads again, is not tried through the listener.
+      - The routes are the graph machine's own on port 4400, not keyfleet.ai's.
 
   - id: notebook-makers-only
     what: >-

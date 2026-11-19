@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
 
-# Serves keyfleet.ai and reaches the fleets' graph writers on the graph machine.
+# Serves keyfleet.ai and reaches the fleets' graph writers through the graph
+# machine's private listener.
 KEYFLEET_MACHINE=site exec "$(dirname "$0")/keyfleet" start

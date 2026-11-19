@@ -29,17 +29,18 @@ defmodule Keyfleet.Application do
 
   # In production the site runs on two kinds of machine (fly.toml). The graph
   # machine keeps the fleets' graph logs on its volume and runs only their
-  # writers and projectors; the site machine runs everything else and reaches
-  # the writers over the cluster. Anywhere else, one machine runs the site.
+  # writers and projectors, which the site machine reaches through the graph's
+  # private listener (Keyfleet.Graph.Client). The two machines share no
+  # cluster. Anywhere else, one machine runs the site and the writers.
   defp children(:graph) do
     [
       Keyfleet.Repo,
-      cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
-      graph_processes_child(),
       {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
-      Keyfleet.Graph.Supervisor,
-      Keyfleet.Graph.Projectors
+      graph_writers(),
+      # Last: it takes requests once the writers have started, and stops
+      # taking them first.
+      Keyfleet.Graph.Listener
     ]
   end
 
@@ -48,9 +49,7 @@ defmodule Keyfleet.Application do
       KeyfleetWeb.Telemetry,
       {Keyfleet.Accounts.RequestRateLimiter, []},
       Keyfleet.Repo,
-      cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
-      graph_processes_child(),
       # Failures a page read rescued, saved beside the page; past this many at
       # once, a failure is only logged.
       {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
@@ -72,7 +71,7 @@ defmodule Keyfleet.Application do
       # The share pictures last drawn, by what each shows.
       KeyfleetWeb.SharePictures,
       # After the repository and PubSub: a pairing made or ended on any Regent
-      # site reaches the pages showing it.
+      # site, and a fleet's workspace copied on, reach the pages showing them.
       Keyfleet.SharedChanges,
       # A key's profile reads its rewards wherever the site runs.
       Keyfleet.Chain.RewardsWaiting,
@@ -93,17 +92,6 @@ defmodule Keyfleet.Application do
       metrics_child()
     ]
   end
-
-  # The machines of one release find each other by their app's private DNS
-  # name, so PubSub and the graph's writers reach across them.
-  defp cluster_child do
-    if query = Application.get_env(:keyfleet, :dns_cluster_query),
-      do: {DNSCluster, query: query}
-  end
-
-  # The group the fleets' writers and projectors join, wherever they run.
-  defp graph_processes_child,
-    do: %{id: Keyfleet.Graph.Processes, start: {:pg, :start_link, [Keyfleet.Graph.Processes]}}
 
   # Background work lives in the database, so it starts with it. AshOban adds a
   # queue and a sweep for every trigger in the site's domains.
@@ -149,11 +137,24 @@ defmodule Keyfleet.Application do
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)
 
-  # The projectors read each fleet's log through its writer, so they start
-  # after the writers.
+  # The site runs the writers itself only where the graph is enabled, which is
+  # development; in production they run on the graph machine, and the site
+  # keeps its connections to it.
   defp graph_children do
     if Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :enabled),
-      do: [Keyfleet.Graph.Supervisor, Keyfleet.Graph.Projectors]
+      do: graph_writers(),
+      else: Keyfleet.Graph.Client
+  end
+
+  # The fleets' writers and projectors, found by fleet in the registry of the
+  # machine they run on. The projectors read each fleet's log through its
+  # writer, so they start after the writers.
+  defp graph_writers do
+    [
+      {Registry, keys: :unique, name: Keyfleet.Graph.Processes},
+      Keyfleet.Graph.Supervisor,
+      Keyfleet.Graph.Projectors
+    ]
   end
 
   # Tell Phoenix to update the endpoint configuration

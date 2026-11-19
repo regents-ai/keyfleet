@@ -13,17 +13,22 @@ defmodule Keyfleet.Graph.Projector do
   once with the site's errors (`Keyfleet.Graph.StalledError`) until a copy succeeds.
 
   It remembers which log, and how far along it, the tables reached last; a
-  place in one log says nothing about another. Each time that changes, it
-  says so to the fleet's members on `Keyfleet.Graph.head_topic/1`, and, when
-  what was copied holds a change the fleet's activity shows anyone, or the log
-  started over, on `Keyfleet.Graph.notable_topic/1`.
+  place in one log says nothing about another. Each time that changes, once
+  the copy is committed, it says so through the database
+  (`Keyfleet.Graph.Notices`), which the site repeats to the fleet's members on
+  `Keyfleet.Graph.head_topic/1`, and, when what was copied holds a change the
+  fleet's activity shows anyone, or the log started over, on
+  `Keyfleet.Graph.notable_topic/1`.
+
+  Each projector is found by its fleet in the `Keyfleet.Graph.Processes`
+  registry of the machine it runs on, as the writers are.
   """
   use GenServer
 
   require Logger
 
   alias Keyfleet.Graph
-  alias Keyfleet.Graph.{Projection, StalledError}
+  alias Keyfleet.Graph.{Notices, Projection, StalledError}
 
   # Twice the longest a new graph host takes to replay its log and answer
   # (`:hello_timeout`), so a host starting after a deploy is no stall.
@@ -33,7 +38,10 @@ defmodule Keyfleet.Graph.Projector do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
   end
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+  def start_link(opts),
+    do: GenServer.start_link(__MODULE__, opts, name: name(Keyword.fetch!(opts, :fleet_id)))
+
+  defp name(fleet_id), do: {:via, Registry, {Keyfleet.Graph.Processes, {__MODULE__, fleet_id}}}
 
   @doc """
   Waits, up to `:projection_wait`, until the fleet's read tables reach `seq`
@@ -47,22 +55,17 @@ defmodule Keyfleet.Graph.Projector do
   """
   @spec await(String.t(), String.t(), non_neg_integer()) :: non_neg_integer()
   def await(fleet_id, run_id, seq) do
-    # The projector may run on another machine; see `Keyfleet.Graph.Writer`.
-    case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
-      [pid] -> GenServer.call(pid, {:await, run_id, seq}, wait())
-      [] -> 0
-    end
+    GenServer.call(name(fleet_id), {:await, run_id, seq}, wait())
   catch
     :exit, _reason -> 0
   end
 
-  defp wait, do: Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :projection_wait)
+  @doc "The longest `await/3` waits."
+  @spec wait() :: pos_integer()
+  def wait, do: Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :projection_wait)
 
   @impl true
   def init(opts) do
-    :ok =
-      :pg.join(Keyfleet.Graph.Processes, {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, self())
-
     state = %{
       fleet_id: Keyword.fetch!(opts, :fleet_id),
       interval: Keyword.fetch!(opts, :catch_up_interval),
@@ -142,19 +145,10 @@ defmodule Keyfleet.Graph.Projector do
   defp failed(state, _reason), do: state
 
   defp announce(%{fleet_id: fleet_id} = state, run_id, watermark) do
-    Phoenix.PubSub.broadcast(
-      Keyfleet.PubSub,
-      Graph.head_topic(fleet_id),
-      {:graph_head, fleet_id, run_id, watermark}
-    )
+    Notices.head(fleet_id, run_id, watermark)
 
     if run_id != state.run_id or notable_since?(fleet_id, state.watermark),
-      do:
-        Phoenix.PubSub.broadcast(
-          Keyfleet.PubSub,
-          Graph.notable_topic(fleet_id),
-          {:graph_notable, fleet_id}
-        )
+      do: Notices.notable(fleet_id)
   end
 
   # Whether the newest change the activity shows anyone was copied after

@@ -63,7 +63,12 @@ the values from their owners.
 | `LIGHTHOUSE_API_KEY` | Regent's Lighthouse account key; revealed keys' cards are kept on IPFS there. |
 | `PICTURES_PUBLIC_URL` | The address the bucket's objects are read from, `https://<bucket>.fly.storage.tigris.dev`. Pages may load pictures from it. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | Optional error reporting. |
-| `RELEASE_COOKIE` | A fresh random secret the site and graph machines share to join one cluster (`platform/rel/env.sh.eex`). Set it without showing it: `fly secrets set --stage RELEASE_COOKIE="$(openssl rand -hex 32)" > /dev/null`. Neither machine starts without it. |
+
+The two machines share no Erlang cluster and need no shared cookie. The
+`RELEASE_COOKIE` secret on `keyfleet` is unused from the release that ended
+the cluster (the CHANGELOG entry "The graph machine is a private service",
+19 November 2026); it stays only so a rollback to an earlier release can start
+(see [Deployment](../platform/README.md#deployment)).
 
 Sean creates both database logins at launch; neither exists before then.
 `keyfleet-runtime` reads and changes records but cannot create, change or drop
@@ -278,19 +283,37 @@ refuses anything but staging.
    ```sh
    fly deploy <folder> --config <folder>/platform/fly.toml \
      --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-     --remote-only --ha=false --image-label <short commit> --process-groups graph
+     --build-only --push --remote-only --image-label <short commit> \
+     --build-arg SOURCE_COMMIT=<commit>
    fly deploy --config <folder>/platform/fly.toml \
      --image registry.fly.io/keyfleet:<short commit> --ha=false \
      --process-groups site --strategy bluegreen
+   fly deploy --config <folder>/platform/fly.toml \
+     --image registry.fly.io/keyfleet:<short commit> --ha=false \
+     --process-groups graph --skip-release-command
    ```
-   The first builds the image with Fly's remote builder and releases the graph
-   machine: it stops and starts again, and for those seconds a workspace write
-   answers "try again". The second starts a new site machine on the same image,
-   waits for its health check, and only then stops the old one, so pages are
-   answered throughout. A plain `fly deploy` from `platform/` cannot work.
+   The first builds the image with Fly's remote builder. The second starts a
+   new site machine on it, waits for its health check, and only then stops the
+   old one, so pages are answered throughout. The third releases the graph
+   machine: it stops and starts again, and Fly waits for its listener's health
+   check. A site machine asks whichever graph machine is running, so a
+   workspace write answers "try again" and writes nothing only while the graph
+   machine restarts: until its listener answers, about 20 to 40 seconds by
+   estimate, and then while each fleet's graph reads its log again, up to 60
+   seconds. On the release that first brings the listener (19 November 2026),
+   the graph machine it replaces has none, so writes answer "try again" from
+   the new site machine taking over until each fleet has read its log on the
+   new graph machine, about one to two minutes. If the graph machine's deploy
+   fails after the site machine's
+   succeeded, every workspace write answers "try again" until the graph machine
+   is released. The script then says so, prints the one command that releases
+   the graph machine alone on the image already pushed, and stops with an
+   error; it does not try again. A plain `fly deploy` from `platform/` cannot
+   work.
    `--ha=false` keeps one graph machine: a second would get its own empty
    volume and the fleets' graphs would split without any error. The migration
-   step runs in both, before either machine starts:
+   step runs once, with the site machine's release, before its new machine
+   starts:
    it brings the database up to date and then puts the five fleets on the
    site, opening the Regents Club's rooms. The Regents Club is open, and
    Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 are coming soon,
@@ -316,9 +339,7 @@ commit that splits them, and in this order, because `scripts/deploy.sh` on
 that commit, run while the one machine is still in the `app` group, would
 start a second graph machine on a new, empty volume.
 
-1. Stage the cluster's secret, without showing it:
-   `fly secrets set --app keyfleet --stage RELEASE_COOKIE="$(openssl rand -hex 32)" > /dev/null`.
-2. Push the commit to `main`, assemble its context folder for amd64
+1. Push the commit to `main`, assemble its context folder for amd64
    (`platform/scripts/build-release-context.sh <folder> amd64`), and start the
    site machine first, from the monorepo root:
    ```sh
@@ -329,16 +350,16 @@ start a second graph machine on a new, empty volume.
    ```
    Fly creates the one site machine and leaves `d891115dbe7098` as it is, so
    both serve pages. Workspace writes made on the new machine answer "try
-   again" until step 4.
-3. Put the old machine in the graph group:
+   again" until step 3.
+2. Put the old machine in the graph group:
    `fly machine update d891115dbe7098 --app keyfleet --metadata fly_process_group=graph`.
    It starts again in a few seconds, still on its volume, while the site
    machine serves the pages.
-4. Release the graph machine on the same image:
-   `fly deploy --config platform/fly.toml --image registry.fly.io/keyfleet:<short commit> --ha=false --process-groups graph`.
-   It now runs only the fleets' writers, joins the site machine's cluster, and
-   takes no pages.
-5. Check `fly status --app keyfleet` shows one site and one graph machine,
+3. Release the graph machine on the same image:
+   `fly deploy --config platform/fly.toml --image registry.fly.io/keyfleet:<short commit> --ha=false --process-groups graph --skip-release-command`.
+   It now runs only the fleets' writers, answers the site machine on its
+   private listener, and takes no pages.
+4. Check `fly status --app keyfleet` shows one site and one graph machine,
    `https://keyfleet.ai/healthz` answers, and a workspace write succeeds.
    From now on every release is `scripts/deploy.sh production`.
 

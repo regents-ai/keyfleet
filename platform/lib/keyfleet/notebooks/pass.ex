@@ -24,8 +24,8 @@ defmodule Keyfleet.Notebooks.Pass do
 
   @doc """
   `claims` signed by this site's first key, with its issuer and a life of
-  `ttl_seconds` from now. The fleets' code store takes passes signed the same
-  way (`Keyfleet.Code.Pass`).
+  `ttl_seconds` from now. The fleets' code store and the graph machine take
+  passes signed the same way (`Keyfleet.Code.Pass`, `Keyfleet.Graph.Pass`).
   """
   def sign(claims, ttl_seconds) do
     [signer | _published] = keys()
@@ -44,6 +44,36 @@ defmodule Keyfleet.Notebooks.Pass do
       |> JOSE.JWS.compact()
 
     token
+  end
+
+  @doc """
+  The claims of `token` when one of this site's keys signed it with ES256, for
+  `audience`, by this site's issuer, and it has not run out; `:error` for
+  anything else.
+  """
+  @spec verify(String.t(), String.t()) :: {:ok, map()} | :error
+  def verify(token, audience) do
+    issuer = Notebooks.config()[:issuer]
+    now = System.system_time(:second)
+
+    case Enum.find_value(keys(), &signed_claims(&1, token)) do
+      %{"aud" => ^audience, "iss" => ^issuer, "exp" => exp} = claims
+      when is_integer(exp) and exp > now ->
+        {:ok, claims}
+
+      _unsigned_or_not_for_audience ->
+        :error
+    end
+  end
+
+  # JOSE raises on a token that is not a compact JWS at all.
+  defp signed_claims(key, token) do
+    case JOSE.JWT.verify_strict(JOSE.JWK.to_public(key), ["ES256"], token) do
+      {true, %JOSE.JWT{fields: claims}, _jws} -> claims
+      _unsigned -> nil
+    end
+  rescue
+    _not_a_token -> nil
   end
 
   @doc "Who a pass for the fleet's hub is for."

@@ -19,10 +19,15 @@ config :keyfleet, :metrics_listener, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 9091
 
 # The graph files sit on the graph machine's volume; the image carries the
 # host. Only the graph machine runs the writers (Keyfleet.Application), so the
-# site machine leaves the graph off.
+# site machine leaves the graph off and asks the graph machine instead.
 config :keyfleet, :graph,
   data_dir: "/data/graph",
   python: "/opt/graph_host/.venv/bin/python"
+
+# The graph machine's private listener (Keyfleet.Graph.Listener). fly.toml
+# declares no service on this port, so Fly routes no public traffic to it; it
+# listens on every address so Fly's own check of the graph machine reaches it.
+config :keyfleet, :graph_listener, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4400
 
 # Regent Points: the start is the shared program's start, the same moment on
 # every Regent site; it never moves, because everything Points counts is

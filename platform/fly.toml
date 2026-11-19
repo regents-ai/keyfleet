@@ -15,14 +15,18 @@ kill_timeout = "60s"
   PORT = "4000"
   KEYFLEET_DEPLOYMENT_ROLE = "production"
   KEYFLEET_SIWA_URL = "https://siwa.regents.sh"
-  DNS_CLUSTER_QUERY = "keyfleet.internal"
+  # The graph machine's private listener, by its process group's private name.
+  KEYFLEET_GRAPH_URL = "http://graph.process.keyfleet.internal:4400"
 
-# Two kinds of machine, in one Erlang cluster (rel/env.sh.eex). The graph
-# machine keeps each fleet's work graph as a file on its volume and runs the
-# fleets' graph writers; it serves no pages. The site machine has no volume and
-# serves keyfleet.ai, so scripts/deploy.sh can release it bluegreen: the new
-# one answers its health check before the old one stops. Each group runs on
-# exactly one machine: a second graph machine would get its own, empty volume.
+# Two kinds of machine, which share no Erlang cluster (rel/env.sh.eex). The
+# graph machine keeps each fleet's work graph as a file on its volume and runs
+# the fleets' graph writers; it serves no pages, and the site machine reaches
+# the writers through its private listener on port 4400, which is declared
+# here as no service, so Fly routes no public traffic to it. The site machine
+# has no volume and serves keyfleet.ai, so scripts/deploy.sh can release it
+# bluegreen: the new one answers its health check before the old one stops.
+# Each group runs on exactly one machine: a second graph machine would get its
+# own, empty volume.
 [processes]
   site = "/app/bin/site"
   graph = "/app/bin/graph"
@@ -93,3 +97,16 @@ kill_timeout = "60s"
 
   [http_service.checks.headers]
     Host = "localhost"
+
+# The graph machine's own check, of its private listener's health answer, so a
+# release waits for the listener. It is private: Fly reaches the machine
+# directly, and the listener is no service.
+[checks.graph]
+  processes = ["graph"]
+  type = "http"
+  port = 4400
+  method = "get"
+  path = "/healthz"
+  grace_period = "30s"
+  interval = "10s"
+  timeout = "2s"

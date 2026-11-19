@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
 
-# Runs the fleets' graph writers beside their logs on this machine's volume.
+# Runs the fleets' graph writers beside their logs on this machine's volume,
+# and the private listener the site machine reaches them through.
 KEYFLEET_MACHINE=graph exec "$(dirname "$0")/keyfleet" start

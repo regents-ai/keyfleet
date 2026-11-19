@@ -6,9 +6,12 @@ defmodule Keyfleet.AccessCache do
   projects (`:hub_editor`), so the hub is not asked again. Only a yes is
   kept, with what the check found.
 
-  `end_access/3` clears one subject on every node at once and `end_fleet/2`
-  everyone in one place of a fleet; this process owns the table and hears
-  both.
+  `end_access/3` clears one subject at once and `end_fleet/2` everyone in one
+  place of a fleet, on this machine only; this process owns the table and
+  hears both. While a release runs two site machines, the other one keeps
+  what it let in until it checks again or stops: within `access_ttl_ms` (30
+  seconds) for notebooks and code, `editor_ttl_ms` (10 minutes) for a hub
+  editor.
   """
   use GenServer
 
@@ -31,11 +34,11 @@ defmodule Keyfleet.AccessCache do
     :ok
   end
 
-  @doc "Ends `subject`'s admission to `place` of the fleet on every node now."
+  @doc "Ends `subject`'s admission to `place` of the fleet on this machine now."
   def end_access(place, fleet_id, subject),
     do: Phoenix.PubSub.broadcast(Keyfleet.PubSub, @topic, {:end_access, place, fleet_id, subject})
 
-  @doc "Ends everyone's admission to `place` of the fleet on every node now."
+  @doc "Ends everyone's admission to `place` of the fleet on this machine now."
   def end_fleet(place, fleet_id),
     do: Phoenix.PubSub.broadcast(Keyfleet.PubSub, @topic, {:end_fleet, place, fleet_id})
 

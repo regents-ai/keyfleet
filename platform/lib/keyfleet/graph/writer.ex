@@ -24,11 +24,16 @@ defmodule Keyfleet.Graph.Writer do
   changed while it waited behind other requests, such as a key changing hands,
   counts. That check gets `:check_timeout` to read what it needs, and a caller
   waits for it on top of the reply.
+
+  Each writer is found by its fleet in the `Keyfleet.Graph.Processes` registry
+  of the machine it runs on. The site machine reaches the graph machine's
+  writers through `Keyfleet.Graph.Client`.
   """
   use GenServer
 
   require Logger
 
+  alias Keyfleet.Graph.Authority
   alias Keyfleet.Graph.StalledError
 
   @read_ops ~w(hello changes)
@@ -52,13 +57,19 @@ defmodule Keyfleet.Graph.Writer do
   @host_env [{~c"LANG", ~c"C.UTF-8"}]
 
   @type reply :: {:ok, map()} | {:error, map() | :indeterminate | :unavailable | Exception.t()}
-  @type authorize :: {module(), atom(), [term()]}
 
   def child_spec(opts) do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
   end
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+  def start_link(opts),
+    do: GenServer.start_link(__MODULE__, opts, name: name(Keyword.fetch!(opts, :fleet_id)))
+
+  defp name(fleet_id), do: {:via, Registry, {Keyfleet.Graph.Processes, {__MODULE__, fleet_id}}}
+
+  @doc "The operations that write, which `command/4` and `check/4` take."
+  @spec write_ops() :: [String.t()]
+  def write_ops, do: @write_ops
 
   @doc """
   Sends a read of the log itself (`hello` or `changes`) to the fleet's graph.
@@ -76,20 +87,18 @@ defmodule Keyfleet.Graph.Writer do
   @doc """
   Sends a write to the fleet's graph on behalf of a member.
 
-  `authorize` is `{module, function, args}`, called inside the writer when the
-  write's turn comes, just before the write reaches the host, with the
-  milliseconds it may spend added to `args`. It is a named function, not an
-  anonymous one, so a write still works while a release has the site and graph
-  machines on different code. It answers `{:ok, command}`, the command's
-  `:id`, `:principal`, `:auth` and the fleet's `:projects` as they stand at
-  that moment, or `{:error, error}`, which is returned as it is with nothing
-  sent; one that exits or raises is answered `{:error, :unavailable}`, also
-  with nothing sent.
+  `authority` names the rule that decides it (`Keyfleet.Graph.Authority`),
+  run inside the writer when the write's turn comes, just before the write
+  reaches the host, with `:check_timeout` to spend. The rule answers the
+  command, its `:id`, `:principal`, `:auth` and the fleet's `:projects` as
+  they stand at that moment, or a refusal, which is returned as it is with
+  nothing sent; a rule that exits or raises is answered `{:error,
+  :unavailable}`, also with nothing sent.
   """
-  @spec command(String.t(), String.t(), map(), authorize()) :: reply()
-  def command(fleet_id, op, body, authorize) when op in @write_ops do
+  @spec command(String.t(), String.t(), term(), Authority.t()) :: reply()
+  def command(fleet_id, op, body, authority) when op in @write_ops do
     with {:ok, json} <- encode(body) do
-      send_to_writer(fleet_id, {:command, op, json, authorize})
+      send_to_writer(fleet_id, {:command, op, json, authority})
     end
   end
 
@@ -100,38 +109,42 @@ defmodule Keyfleet.Graph.Writer do
   would get. The host writes nothing for a check and keeps no record of its
   command id, so the write itself may follow under the same id.
   """
-  @spec check(String.t(), String.t(), map(), authorize()) :: reply()
-  def check(fleet_id, op, body, authorize) when op in @write_ops do
+  @spec check(String.t(), String.t(), term(), Authority.t()) :: reply()
+  def check(fleet_id, op, body, authority) when op in @write_ops do
     with {:ok, json} <- encode(body) do
-      send_to_writer(fleet_id, {:check, op, json, authorize})
+      send_to_writer(fleet_id, {:check, op, json, authority})
     end
   end
 
-  # Bodies are encoded here, in the caller's process, so one that JSON cannot
-  # express is refused before it reaches the writer.
-  defp encode(term) do
+  @doc """
+  A write's body as JSON, or the refusal the host gives a frame it cannot
+  parse. Bodies are encoded in the caller's process, so one that JSON cannot
+  express is refused before it reaches the writer.
+  """
+  @spec encode(term()) :: {:ok, String.t()} | {:error, map()}
+  def encode(term) do
     with {:error, _reason} <- Jason.encode(term), do: {:error, @unencodable}
   end
 
-  # The writer may run on another machine: it joins its fleet's group in the
-  # `Keyfleet.Graph.Processes` scope, which every machine of the site shares.
-  defp send_to_writer(fleet_id, request) do
-    case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
-      [pid] -> call_writer(pid, request, turn() + @reap_ms + 1_000)
-      [] -> {:error, :unavailable}
-    end
-  end
+  defp send_to_writer(fleet_id, request), do: call_writer(name(fleet_id), request, call_timeout())
 
-  # The longest a writer spends on one request once it is that request's turn.
-  defp turn do
+  @doc """
+  The longest a caller waits for a writer: the longest it spends on one
+  request once it is that request's turn, a killed host's reaping, and a
+  second more.
+  """
+  @spec call_timeout() :: pos_integer()
+  def call_timeout do
     graph = Application.fetch_env!(:keyfleet, :graph)
-    Keyword.fetch!(graph, :check_timeout) + Keyword.fetch!(graph, :reply_timeout)
+
+    Keyword.fetch!(graph, :check_timeout) + Keyword.fetch!(graph, :reply_timeout) + @reap_ms +
+      1_000
   end
 
-  # A writer that is gone before the call reaches it has done nothing; one
-  # that does not answer in time may yet run the request.
-  defp call_writer(pid, request, timeout) do
-    GenServer.call(pid, request, timeout)
+  # A writer that is not running has done nothing; one that does not answer
+  # in time may yet run the request.
+  defp call_writer(name, request, timeout) do
+    GenServer.call(name, request, timeout)
   catch
     :exit, {:noproc, _} -> {:error, :unavailable}
     :exit, _reason -> {:error, :indeterminate}
@@ -140,9 +153,6 @@ defmodule Keyfleet.Graph.Writer do
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
-
-    :ok =
-      :pg.join(Keyfleet.Graph.Processes, {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, self())
 
     state = %{
       fleet_id: Keyword.fetch!(opts, :fleet_id),
@@ -173,17 +183,17 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
-  def handle_call({:command, op, body, authorize}, from, %{host: %{ready?: true}} = state),
-    do: send_command(%{v: 1, op: op}, body, authorize, from, state)
+  def handle_call({:command, op, body, authority}, from, %{host: %{ready?: true}} = state),
+    do: send_command(%{v: 1, op: op}, body, authority, from, state)
 
   # A check is the write's own frame, marked `check`.
-  def handle_call({:check, op, body, authorize}, from, %{host: %{ready?: true}} = state),
-    do: send_command(%{v: 1, op: op, check: true}, body, authorize, from, state)
+  def handle_call({:check, op, body, authority}, from, %{host: %{ready?: true}} = state),
+    do: send_command(%{v: 1, op: op, check: true}, body, authority, from, state)
 
   def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
 
-  defp send_command(message, body, authorize, from, state) do
-    case stamp(authorize, state) do
+  defp send_command(message, body, authority, from, state) do
+    case stamp(authority, state) do
       {:ok, command} ->
         message = Map.merge(message, %{command: command, body: Jason.Fragment.new(body)})
         handle_call({:send, Jason.encode!(message)}, from, state)
@@ -197,8 +207,8 @@ defmodule Keyfleet.Graph.Writer do
   # in the ownership check raises; either would stop the writer, so an
   # ownership check that exits or raises is answered as unavailable, with
   # nothing sent.
-  defp stamp({module, function, args}, state) do
-    apply(module, function, args ++ [state.check_timeout])
+  defp stamp(authority, state) do
+    Authority.command(authority, state.fleet_id, state.check_timeout)
   rescue
     error ->
       Logger.warning(
