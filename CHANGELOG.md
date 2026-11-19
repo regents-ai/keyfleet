@@ -13364,3 +13364,76 @@ step's report).
   `DmsPageTest` and `ShellLiveTest`, 205 passed; vitest, 551 passed in 42 files; tsc,
   format, Credo strict on the changed Elixir files and compile with warnings as errors,
   clean. Commits d5f78e312, 788c9bdea, dbd5f1cfe and afc4bc82b.
+
+## 2026-11-19 — Keyfleet on the shared library ChatGPT signs in with
+
+- `@elixir_utils_ref` moves from `2ebfd300` to `0a9467f9`, elixir-utils main with the
+  ChatGPT sign-in work. `2ebfd300` is not an ancestor: its two extra commits (the SIWA
+  empty body and the declined network switch) are on main as twins. Of the packages
+  Keyfleet uses, privy, identity, agent_access, siwa, format, http, ens, mcp_agents and
+  credo_ash are unchanged at this pin; oauth, agents, chain and points change. The idna
+  line stays `~> 7.1` until the security release's `~> 8.0` reaches this branch from
+  main, when the pin moves on to `caba486c` (ens on idna 8, and the mcp_agents log line).
+- oauth: an app known by its published identity may sign its token request with its own
+  key (`private_key_jwt`, RS256 or ES256, `RegentOAuth.ClientAssertion`): each assertion is
+  spent once, kept as an `oauth_tokens` row; it is addressed to the issuer or the token
+  endpoint and good for at most an hour; the app's key set is read from its published
+  address and kept five minutes in Boruta's cache, read again at most once a minute.
+  Discovery lists `none` and `private_key_jwt`. Allow and Cancel answer a 200 page whose
+  link and refresh lead to the app's callback, so the consent page's `form-action 'self'`
+  holds and the library no longer touches the page's CSP. The consent page lists each
+  permission and what the app never does (`permission`, the `keyfleet.agent` line and
+  `never` in config.exs); its button is Allow. A sign-in request's details may take 2,048
+  bytes as JSON, and `ui_locales` is dropped. Refusals carry `error_description`, and a
+  failure logs "oauth failed" with its endpoint and exception. `connected_clients` adds
+  `connected_at`. config.exs filters `client_assertion` from logs.
+- Migration 20261119120000_oauth_long_values.exs runs the library's V4:
+  `oauth_tokens.state` and `redirect_uri`, `oauth_clients.name` and `jwks_uri` become
+  `text`, and `oauth_clients.redirect_uris` `varchar[]`; they were `varchar(255)` from
+  the first connector migration. No row changes and no table is rewritten; each table is
+  locked while its type changes, waiting at most five seconds (`SET LOCAL lock_timeout`).
+  Without it a 600-character state answered 503 at Allow (a Postgrex error on the code's
+  insert), seen with the old types in a scratch copy of the consent test. Release order
+  (scripts/deploy.sh): the graph machine runs it as its release command, then the site
+  switches; in between, the old site machine fails each sign-in query it prepared once on
+  each database connection, then prepares it afresh.
+- agents: hello cards. `POST /api/agents/v1/pairing` (in `RegentAgents.HTTP`, already
+  forwarded) answers the SIWA service. `config :regent_agents, person: {Keyfleet.Agents,
+  :person}` gives a person's profile code (`RegentIdentity.profile_id/2`, nil before
+  their first sign-in with a wallet), and runtime.exs sets `siwa: [origin:]` to the site's
+  own address, the service token's audience; siwa-server asks `https://keyfleet.ai`, the
+  first of its Keyfleet origins, which is what `PHX_HOST` gives. `SignedAgent`'s admission
+  keeps a card that passes as `conn.assigns.hello_card` (`RegentAgents.HelloCard.put_card/2`),
+  on the API and at `/mcp` for an agent signing its own requests; nothing reads it.
+- chain: `Presses.failed/1` takes `wallet_refused`. Keyfleet's own failure lists
+  (telemetry.ex:51, visit_log/events.ex:27) don't, and its page script never sends it.
+  points: the adapter is asked again before an award is written; a summary's `done`
+  entries are `%{times:, here:}` and points_entries.ex reads `.times`; the catalog drops
+  `keyfleet.first_reveal` and `keyfleet.integration.twigpine` and adds rules (`Rules.listed/0`,
+  `Rules.groups/0`). Keyfleet tracks no rule in production (`approved_rules []`).
+- Tests: `OAuthConsentTest` (5) drives consent through the site's endpoint with ChatGPT's
+  published document and keys as fetched on 19 Nov: a 600-character state survives
+  consent, Allow and Cancel, and the return page leads to chatgpt.com's callback with code
+  and state intact; the signed token request gives 200 and its tools, while a missing
+  assertion, one signed by another key, one addressed elsewhere and a replayed one give
+  401 `invalid_client`, and an assertion addressed to the token endpoint works; a query of
+  2,048 bytes connects and one more byte gives 400; Claude's published identity and a
+  registered app connect, exchange and refresh. `HelloCardTest` (6) asks the pairing read
+  as the SIWA service (200 with exactly name, person and pairedAt; 404; 409; 401 for no
+  token, another site, another agent and an expired one) and sends cards beside a signed
+  read and a signed `/mcp` call: kept only for the agent's own wallet, the answer the same
+  either way; with `put_card` taken out, both card tests fail. points_page_test.exs names a
+  second rule, as the catalog changed.
+- Docs: agents.md and docs.md describe hello cards; the Claude guide says Allow;
+  features.yml's claude-connector row has the new migration, proof and gaps, and a
+  hello-cards row is new; docs/agent-feature-map.md has a row for each.
+- Found, outside this change: siwa-server's hosted signer lets a Keyfleet identity pair
+  only as `claude` (lib/siwa_server/hosted_requests.ex), so ChatGPT's pair_identity with
+  the `chatgpt` harness, once kf/seasons-1118 lists it, would be refused
+  `hosted_request_not_allowed` until siwa-server allows it. The library's hello-card key
+  read keeps nothing when it fails, so while SIWA's key address is down each signed
+  request carrying a card reads it again, up to seven seconds. At the 2,048-byte limit the
+  session cookie is 3,374 of its 4,096 bytes.
+- Not proven: real ChatGPT and real Claude have not connected; no browser here follows
+  the return page to another host (the template's Chromium walk does, on the same
+  library); siwa-server has never asked Keyfleet's pairing read.

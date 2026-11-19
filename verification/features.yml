@@ -1454,7 +1454,9 @@ features:
       sets its last contact on Account (not its check-in light), and the person
       can disconnect it from Connected apps. Each app a person connects keeps
       its own identity and pairs only with its own code, so a second app never
-      takes the first one's pairing. /mcp is the shared
+      takes the first one's pairing. Allow and Cancel answer a page that leads
+      back to the app's own callback, carrying a state of any length that fits
+      the 2,048 bytes allowed for the whole sign-in request. /mcp is the shared
       RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
       token, 120 requests a minute per connected account; before that a
       request without a token spends the /api per-address budget and one with
@@ -1487,9 +1489,11 @@ features:
       - platform/priv/public/llms.md
       - platform/priv/public/agents.md
       - platform/priv/repo/migrations/20261028180000_add_oauth_provider.exs
+      - platform/priv/repo/migrations/20261119120000_oauth_long_values.exs
     entry:
       - route: POST /mcp
       - route: GET /oauth/authorize
+      - route: POST /oauth/authorize
       - route: POST /oauth/token
       - route: GET /oauth/connections
       - route: GET /agents/claude
@@ -1497,16 +1501,49 @@ features:
       - platform/test/keyfleet_web/router_gate_coverage_test.exs
       - platform/test/keyfleet_web/rate_limit_test.exs
       - platform/test/keyfleet_web/mcp_connector_test.exs
+      - platform/test/keyfleet_web/oauth_consent_test.exs
     gaps:
       - The connector test runs /mcp through Keyfleet's endpoint with the hosted signer stubbed, so each app's own identity and its pairing are proven there, not against siwa-server. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
       - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
       - Nothing checks that runtime.exs stops the boot without SIWA_HOSTED_SIGNING_KEY, or that the issuer and resource follow PHX_HOST.
-      - The migration has not run anywhere. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
-      - Sign-in, consent, token exchange, refresh, disconnect and an /mcp call without, with and with a revoked token are unchecked on Keyfleet, as are the per-account 429, the 405 for a GET and a 401 when the account can't be read.
+      - The first migration runs with every release since it reached main. 20261119120000 (the library's V4, which lifts the 255-character limit off a code's state and callback and off an app's name, callbacks and key address) has run only on test databases; while the graph machine runs it, the site machine still serving fails each sign-in query it prepared once on each database connection. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
+      - Consent, Allow, Cancel, the code exchange, refresh and a tool list run through Keyfleet's own endpoint for Claude's published identity and for a registered app (oauth_consent_test), with the browser session set directly rather than through Privy's sign-in. The return page is checked as an answer; no browser here follows it to another host. Disconnecting, an /mcp call with a revoked token, the per-account 429, the 405 for a GET and a 401 when the account can't be read are unchecked on Keyfleet.
       - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
-      - The connector's packages are pinned to elixir-utils `d9440a4e` (branch mcp-agents/per-app-on-4e527975: main `4e527975` plus the per-app change `d89c69df`). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
-      - siwa-server limits what a hosted signer may sign (e9a822d) and holds Keyfleet's entry in v73, not yet deployed.
+      - The connector's packages are pinned to elixir-utils `0a9467f9` (main). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
+      - siwa-server (main, released through v104) limits what a hosted signer may sign (e9a822d) and lets it pair a Keyfleet identity only as `claude` (lib/siwa_server/hosted_requests.ex).
       - The browser walk does not open the Claude guide with the connector on; WebKit is not run on the Mac.
+  - id: hello-cards
+    what: >-
+      Before the SIWA sign-in server gives an agent a hello card naming
+      Keyfleet, it asks POST /api/agents/v1/pairing with its own service token
+      for this site's address. A paired agent is answered with exactly its
+      name, its person's shared profile code and when it paired; an agent not
+      paired here 404 not_paired_here; a paired agent whose person has never
+      signed in here with a wallet 409 person_has_no_profile; no token, or one
+      for another site, another agent or an expired one, 401
+      service_token_invalid. A card an agent shows in the x-siwa-hello-card
+      header beside its own signed request, on the API or at /mcp, is kept on
+      the request only when it passes for that agent's wallet; any other card
+      is ignored and the request answered as without it. Nothing reads a kept
+      card yet.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/mix.exs
+      - platform/config/config.exs
+      - platform/config/runtime.exs
+      - platform/lib/keyfleet/agents.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/priv/public/agents.md
+      - platform/priv/public/docs.md
+    entry:
+      - route: POST /api/agents/v1/pairing
+    proofs:
+      - platform/test/keyfleet_web/hello_card_test.exs
+    gaps:
+      - siwa-server has never asked Keyfleet: the test publishes its own stand-in key and signs the service token itself. siwa-server asks the first address in its SIWA_WALLET_ORIGINS for Keyfleet, https://keyfleet.ai, which matches the address PHX_HOST gives the site.
+      - A read of the sign-in server's published keys that fails is not remembered, so while their address is down, each signed request carrying a card reads them again, waiting up to seven seconds.
   - id: agent-key-page-activity-walls
     what: >-
       A paired agent reads a sold Key as its page shows it (holder, the Key they

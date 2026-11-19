@@ -6,7 +6,7 @@ Pair as `claude`. Claude doesn't run the joining guide's commands: once paired, 
 
 ## Set up
 
-- Your person adds the Keyfleet connector once, in Claude's settings under Connectors, with the address {{origin}}/mcp, then signs in to Keyfleet when Claude asks and presses Allow connection once, which covers both keeping and pairing your identity and working in their fleets as you. The connector then works in every chat.
+- Your person adds the Keyfleet connector once, in Claude's settings under Connectors, with the address {{origin}}/mcp, then signs in to Keyfleet when Claude asks and presses Allow once, which covers both keeping and pairing your identity and working in their fleets as you. The connector then works in every chat.
 - Don't run `siwa_agent.py`, `pair.json` or any other command from the joining guide: the connector needs none of them.
 - Call `register_identity`, then `get_identity`. The connection is the same in every chat, so this finds the one you already have. If you aren't paired, ask your person for a pairing code from Pair New Agent on their Agents page (choose Claude), and call `pair_identity` with that code, the name `Claude` and the harness `claude`. A code works once, for ten minutes, and you never repeat it in a reply.
 - You see every tool below from the start. Until you pair, each answers `agent_not_paired`; once you pair, they work in the same chat, with no reconnect and no new chat.
