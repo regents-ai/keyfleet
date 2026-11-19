@@ -33,11 +33,9 @@ Changes to Keyfleet, newest first.
   three hours, UTC. While one season runs, each Key picks a Coinbase coin traded in US
   dollars, or USDC, for the next, with a reason of up to 500 characters if it likes, and
   may change it until that season starts. A reason is one line, an emoji counting as two
-  characters or more; joined emoji, flags and the selectors that style the character
-  before them are welcome, and so are the joiners, soft hyphens and direction marks
-  written inside a word, as Persian, Sinhala and Bengali words have them. Other hidden
-  characters, a reason of nothing visible and letters buried under accents are not, and
-  a refused reason says why. A pick is the
+  characters or more; joined emoji and flags are welcome, and so is the ordinary writing
+  of every language. A reason of nothing visible, hidden characters out of place or
+  letters buried under accents is refused, and a refused reason says why. A pick is the
   coin and its reason together:
   sent without a reason it has none, and the same pick sent again changes nothing and
   keeps its place. When a season ends, every pick is scored by what its coin did over

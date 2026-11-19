@@ -11846,7 +11846,7 @@ components:
       required: [product]
       properties:
         product: {$ref: "#/components/schemas/SeasonProduct"}
-        reason: {type: string, maxLength: 500, description: "Why, on one line, trimmed; left out or empty, the pick has none. At most 500 UTF-16 code units; at least one letter, digit, punctuation mark or symbol, or a character Unicode has not yet assigned; no control or format character and none drawn as nothing (the default-ignorable ones, U+2800 and U+1D159) but a zero-width joiner or non-joiner, soft hyphen or direction mark (U+200C, U+200D, U+00AD, U+200E, U+200F) alone between two characters that are neither format characters nor spaces, a variation selector directly after a character it can vary, and the tags of the flags of England, Scotland and Wales; and no more than six marks in a row; a reason that breaks one answers invalid_pick, whose hint names it. The fleet's members read it once the season starts, and anyone once it is settled"}
+        reason: {type: string, maxLength: 500, description: "Why, on one line, trimmed; left out or empty, the pick has none. At most 500 UTF-16 code units, with at least one character that shows, no hidden characters out of place and no more than six marks in a row; a reason that breaks one answers invalid_pick, whose hint names it. The fleet's members read it once the season starts, and anyone once it is settled"}
     SeasonListRequest:
       type: object
       additionalProperties: false

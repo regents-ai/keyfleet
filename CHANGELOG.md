@@ -13678,3 +13678,8 @@ step's report).
   this review). Claude's guide and the feature list say so. `McpConnectorTest` locks a
   pick through the connector with its reason sent as null and as empty text, and finds
   each with no reason.
+- A reason refused as not plain says "A reason is one line, with no line breaks and no
+  hidden characters out of place." (`ReasonError`), and the contract's reason, the
+  command guide, the command list, the docs and the public changelog say the rule in
+  the same plain words; the full rule is in `Keyfleet.Seasons.Validations.Reason`'s
+  module note.
