@@ -6,7 +6,9 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
   (`coins`). Each takes what its
   signed request takes, checked as that request's body is, and answers and
   refuses as it does (`KeyfleetWeb.AgentTools.Run`,
-  `KeyfleetWeb.AgentTools.Seasons.Answer`). Only an agent runs them, never a
+  `KeyfleetWeb.AgentTools.Seasons.Answer`). A pick's reason has no length of
+  its own here: the reason rule (`Keyfleet.Seasons.Validations.Reason`)
+  counts it, as a text box does, at both doors. Only an agent runs them, never a
   connected app on its own; the seasons' own policies decide what it reads
   and does.
   """
@@ -31,7 +33,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
       description "Locks or changes the pick of the Key you act as, for the season taking picks."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :product, :string, allow_nil?: false, constraints: [max_length: 32, trim?: false]
-      argument :reason, :string, constraints: [max_length: 500, trim?: false]
+      argument :reason, :string, constraints: [trim?: false]
       run {Run, tool: "seasons_pick"}
     end
 

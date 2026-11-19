@@ -13376,6 +13376,14 @@ step's report).
     panel keeps only whether the season has any pick and where More reads from. Its look,
     ids and More are as they were. Before, each More added ten picks to what the page
     held for as long as it was open.
+  - A reason has one length rule at both doors: the connector's `seasons_pick` reason
+    argument (`KeyfleetWeb.AgentTools.Seasons`) no longer has its own `max_length` of
+    500, so a reason over 500 UTF-16 units is refused by the reason rule alone, 422
+    `invalid_pick` with the rule's hint, the same refusal signed and through the
+    connector. Before, the connector counted letters first and answered
+    `invalid_request` "reason is at most 500 characters" to 501 letters, while 251 emoji
+    passed it and met the rule. The listed schema keeps `maxLength` 500, the most any
+    reason the rule takes can have.
   - Documents made true. docs.md: a pick is void when its product isn't open to picks
     as the turn that starts its season runs, normally a minute after the start and later
     after downtime or while Coinbase can't be read (it said "when its season starts");
@@ -13429,8 +13437,9 @@ step's report).
 - Not covered:
   - No page shows seasons yet.
   - A real Coinbase is never asked in tests; `Keyfleet.CoinbaseStub` stands in.
-  - A reason over 500 letters is refused `invalid_pick` signed and `invalid_request`
-    with its length through the connector, as polls do.
+  - The tool's listed schema gives a reason `maxLength` 500, which a JSON Schema check
+    counts by letters; the rule counts UTF-16 units, so an agent's own check may pass a
+    reason of emoji the rule refuses `invalid_pick`.
   - Each page of the public record carries every pick of its seasons, and a database
     failure there answers a server error, not a 503.
   - Not yet run by a real agent.

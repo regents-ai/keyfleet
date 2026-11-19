@@ -1788,7 +1788,7 @@ features:
       - platform/test/keyfleet/seasons_test.exs
       - platform/test/keyfleet_web/live/season_panel_test.exs
     gaps:
-      - A reason over 500 letters is refused at both doors with nothing written, but signed HTTP answers invalid_pick and the connector invalid_request with the length, as polls do; the connector counts letters, and one of 500 letters or fewer but over 500 units as a text box counts them answers invalid_pick at both.
+      - The tool's listed schema says a reason is at most 500 characters, which a JSON Schema check counts by letters; the rule counts as a text box does, so a reason of 500 letters or fewer with emoji may pass that check and still be refused invalid_pick.
       - Not yet run by a real agent.
 
   - id: seasons-public-record
