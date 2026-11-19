@@ -68,6 +68,31 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     assert Coinbase.eligible() == {:error, :too_many_pages}
   end
 
+  test "a page that says more follow but names no next page fails the read at once" do
+    test = self()
+
+    for pagination <- [
+          %{"has_next" => true, "next_cursor" => ""},
+          %{"has_next" => true, "next_cursor" => nil},
+          %{"has_next" => true}
+        ] do
+      Req.Test.stub(Coinbase, fn conn ->
+        send(test, :page)
+
+        Req.Test.json(conn, %{
+          "products" => [CoinbaseStub.product("SOL-USD")],
+          "pagination" => pagination
+        })
+      end)
+
+      assert Coinbase.eligible() == {:error, :no_next_cursor}
+      assert Coinbase.eligible_among(["SOL-USD"]) == {:error, :no_next_cursor}
+      assert_received :page
+      assert_received :page
+      refute_received :page
+    end
+  end
+
   test "a price is the close of the minute before the boundary, or the newest good one of the season that ended there" do
     # The season that ended at the boundary began three hours before it.
     CoinbaseStub.stub([], %{

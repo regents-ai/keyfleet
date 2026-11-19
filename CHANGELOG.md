@@ -13735,3 +13735,11 @@ step's report).
   gives none. The module note, the docs and the feature list say so. `CoinbaseTest`
   prices products whose newest close is 0, below 0, not a number or empty at the good
   close before it; it fails on the old reading.
+- A page of Coinbase's list that says more follow but names no next page (its cursor
+  empty or missing) fails the read at once with `:no_next_cursor`, where before it
+  asked for the same first page twenty times and then failed. `next_page/4` follows a
+  cursor only when it is non-empty text. `CoinbaseTest` answers such a page three ways
+  and finds one request and the error each time. The feature list's season gaps add
+  two: a turn trusts Coinbase's list to be whole, so a list cut short without saying
+  more follow would void picks on the products it leaves out, and a coin with no trade
+  for up to three hours before a boundary opens at that older trade.

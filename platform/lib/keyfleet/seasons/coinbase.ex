@@ -8,7 +8,9 @@ defmodule Keyfleet.Seasons.Coinbase do
   trading (not disabled, trading not disabled, not view-only, not cancel-only,
   not limit-only, not in auction mode), with at least 1,000,000 US dollars
   traded over the last 24 hours (`approximate_quote_24h_volume`). `USDC`
-  always may. A list that goes on past twenty pages is not read.
+  always may. A list that goes on past twenty pages is not read, nor one with a
+  page that says more follow but names no next page (its cursor empty or
+  missing).
 
   A product's price at boundary T is the newest good close among the
   one-minute candles of the season that ended at T
@@ -142,10 +144,14 @@ defmodule Keyfleet.Seasons.Coinbase do
     end
   end
 
-  defp next_page(products, %{"has_next" => true, "next_cursor" => cursor}, params, pages_left) do
+  defp next_page(products, %{"has_next" => true, "next_cursor" => cursor}, params, pages_left)
+       when is_binary(cursor) and cursor != "" do
     with {:ok, rest} <- products(Keyword.put(params, :cursor, cursor), pages_left),
          do: {:ok, products ++ rest}
   end
+
+  defp next_page(_products, %{"has_next" => true}, _params, _pages_left),
+    do: {:error, :no_next_cursor}
 
   defp next_page(products, _last_page, _params, _pages_left), do: {:ok, products}
 
