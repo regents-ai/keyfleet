@@ -188,7 +188,8 @@ defmodule Keyfleet.SeasonsTest do
   end
 
   # Each reason refused names the one rule it broke; the joined emoji and
-  # flags people type, and letters of any script with their marks, are taken.
+  # flags people type, and letters of any script with their marks and the
+  # joiners their words hold, are taken.
   test "a reason is one line that shows, of at most 500 units as a box counts them" do
     for {reason, rule} <- [
           {String.duplicate("a", 501), :too_long},
@@ -196,17 +197,28 @@ defmodule Keyfleet.SeasonsTest do
           {"Line one\nline two", :plain},
           {"Zero\u{200B}width", :plain},
           {"Turned \u{202E}around", :plain},
-          {"Joined a\u{200D}b", :plain},
+          {"Isolated \u{2067}around\u{2069}", :plain},
+          {"Arabic \u{061C}mark", :plain},
           {"Tagged a\u{E0067}\u{E0062}\u{E007F}", :plain},
+          {"Doubled a\u{200C}\u{200C}b", :plain},
+          {"Paired a\u{200C}\u{200D}b", :plain},
+          {"Spaced a\u{200D} b", :plain},
+          {"Last a\u{00AD}", :plain},
+          {"\u{200F}First", :plain},
+          {"Plain x\u{FE0F}", :plain},
+          {"Twice \u{2764}\u{FE0F}\u{FE0F}", :plain},
+          {"Up \u{1F680}\u{3164}", :plain},
+          {"Up\u{2800}down", :plain},
+          {"\u{3164}", :plain},
+          {"\u{115F}\u{1160}", :plain},
+          {"\u{034F}", :plain},
+          {"\u{FE0F}", :plain},
+          {"Unassigned \u{2065}", :plain},
           {<<0xED, 0xA0, 0xBD>>, :plain},
           {<<0xF0, 0x9F>>, :plain},
-          {"\u{3164}", :blank},
-          {"\u{2800}", :blank},
-          {"\u{115F}\u{1160}", :blank},
-          {"\u{FFA0}", :blank},
-          {"\u{034F}", :blank},
-          {"\u{FE0F}", :blank},
           {"\u{0301}", :blank},
+          {"\u{E000}", :blank},
+          {"\u{FFFF}", :blank},
           {"a" <> String.duplicate("\u{0301}", 499), :marks},
           {"a" <> String.duplicate("\u{0301}", 7), :marks}
         ] do
@@ -228,9 +240,88 @@ defmodule Keyfleet.SeasonsTest do
           "Scotland \u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
           "Japan \u{1F1EF}\u{1F1F5}",
           "Burmese \u{1000}\u{103C}\u{103D}\u{1031}\u{1037}",
-          "a" <> String.duplicate("\u{0301}", 6)
+          "a" <> String.duplicate("\u{0301}", 6),
+          # "I want" in Persian, with its half-space.
+          "\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}",
+          # "Sri Lanka" in Sinhala, and "RAB" in Bengali.
+          "\u{0DC1}\u{0DCA}\u{200D}\u{0DBB}\u{0DD3} \u{0DBD}\u{0D82}\u{0D9A}\u{0DCF}",
+          "\u{09B0}\u{200D}\u{09CD}\u{09AF}\u{09BE}\u{09AC}",
+          "Krypto\u{00AD}w\u{00E4}hrung",
+          "SOL\u{200E}10%",
+          "Joined a\u{200D}b",
+          "Keycap 1\u{FE0F}\u{20E3}",
+          "Kanji \u{845B}\u{E0100}",
+          "Mongolian \u{1820}\u{180B}",
+          "Zero 0\u{FE00}",
+          # An emoji newer than the patterns know (Unicode 17).
+          "\u{1FAEA}"
         ] do
       assert %{reason: ^reason} = pick!(human("a"), "SOL-USD", reason)
+    end
+  end
+
+  # The characters drawn as nothing, as the rule names them.
+  @nothing for cp <- 0..0x10FFFF,
+               cp not in 0xD800..0xDFFF,
+               Regex.match?(~r/[\p{DI}\x{2800}\x{1D159}]/u, <<cp::utf8>>),
+               do: <<cp::utf8>>
+
+  @selectors Enum.filter(@nothing, &Regex.match?(~r/\p{Variation_Selector}/u, &1))
+  @joiners ["\u{200C}", "\u{200D}", "\u{00AD}", "\u{200E}", "\u{200F}"]
+
+  # A reason the rule takes, with no joiner or tag at either end: words of
+  # letters, digits, marks and emoji, with spaces between.
+  defp taken_reason do
+    shown =
+      one_of([
+        string(:alphanumeric, min_length: 1, max_length: 8),
+        member_of(["😀", "❤\u{FE0F}", "👩\u{200D}💻", "é", "日本", "ශ්\u{200D}රී", "#\u{FE0F}\u{20E3}"])
+      ])
+
+    gen(
+      all words <- list_of(shown, min_length: 1, max_length: 12),
+          do: Enum.join(words, " ")
+    )
+  end
+
+  property "a reason taken stays taken with a joiner alone between two characters added" do
+    check all reason <- taken_reason(),
+              joiner <- member_of(@joiners),
+              left <- member_of(["a", "9", "\u{0645}", "\u{0DCA}", "😀", "."]),
+              right <- member_of(["b", "0", "\u{062E}", "\u{09CD}", "🔥", ","]),
+              max_runs: 60 do
+      assert taken?(reason)
+
+      for wrapped <- [reason <> " " <> left <> joiner <> right, left <> joiner <> right <> reason],
+          do: assert(taken?(wrapped), inspect(wrapped))
+    end
+  end
+
+  property "a reason holding a character drawn as nothing out of its place is refused as not plain" do
+    check all reason <- taken_reason(),
+              at <- integer(0..String.length(reason)),
+              {hidden, place} <-
+                one_of([
+                  # Anywhere, one never let through.
+                  tuple({member_of(@nothing -- (@joiners ++ @selectors)), constant(:anywhere)}),
+                  # First, after a space or after another: a variation selector.
+                  tuple({member_of(@selectors), member_of([:first, :spaced, :doubled])}),
+                  # First, last, beside a space or doubled: a joiner.
+                  tuple({member_of(@joiners), member_of([:first, :last, :spaced, :doubled])})
+                ]),
+              max_runs: 100 do
+      {before, after_} = String.split_at(reason, at)
+
+      held =
+        case place do
+          :anywhere -> before <> hidden <> after_
+          :first -> hidden <> reason
+          :last -> reason <> hidden
+          :spaced -> reason <> " " <> hidden <> "a"
+          :doubled -> reason <> " 😀" <> hidden <> hidden <> "b"
+        end
+
+      assert rule(held) == :plain, inspect(held)
     end
   end
 
@@ -300,6 +391,16 @@ defmodule Keyfleet.SeasonsTest do
 
   defp pick!(actor, product, reason),
     do: Seasons.pick!(@fleet, 1, %{product: product, reason: reason}, actor: actor)
+
+  defp taken?(reason), do: rule(reason) == :ok
+
+  # `:ok` for a reason taken, or the rule that refused it.
+  defp rule(reason) do
+    case Seasons.pick(@fleet, 1, %{product: "SOL-USD", reason: reason}, actor: human("a")) do
+      {:ok, _pick} -> :ok
+      {:error, %Ash.Error.Invalid{errors: [%ReasonError{rule: rule}]}} -> rule
+    end
+  end
 
   defp season!(number, starts_at) do
     Season

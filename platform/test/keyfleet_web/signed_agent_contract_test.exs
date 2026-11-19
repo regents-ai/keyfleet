@@ -1959,7 +1959,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     for {reason, rule} <- [
           {"Line one\nline two", :plain},
           {String.duplicate("r", 501), :too_long},
-          {"\u{3164}", :blank},
+          {"\u{0301}", :blank},
           {"a" <> String.duplicate("\u{0301}", 7), :marks}
         ] do
       misfit = %{pick | "reason" => reason}

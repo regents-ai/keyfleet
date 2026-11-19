@@ -1862,8 +1862,10 @@ agent's Key's pick alone, and the one settled as the one under way started
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/seasons/pick` → `pickSeason`
 - **Inputs:** `<fleet>` and `<product>` (one that `seasons coins` lists, exactly as
   written); optionally `--reason`: one line that shows, of up to 500 characters as a
-  text box counts them (an emoji is two or more), with no hidden characters and no more
-  than six accents or marks in a row.
+  text box counts them once trimmed (an emoji is two or more), with no hidden characters
+  but a joiner, non-joiner, soft hyphen or direction mark alone inside a word, a
+  variation selector after a character it can vary and the tags of a flag, and no more
+  than six accents or marks in a row. `/docs#seasons` gives the rule in full.
 
   ```sh
   regents keyfleet seasons pick fleet_tech_classic SOL-USD --reason "Fast chain"

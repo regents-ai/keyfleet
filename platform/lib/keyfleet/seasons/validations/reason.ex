@@ -4,18 +4,29 @@ defmodule Keyfleet.Seasons.Validations.Reason do
   checked once Ash has trimmed it. The first rule it breaks refuses it
   (`Keyfleet.Seasons.Errors.ReasonError`, whose `rule` is the one named here):
 
-    * `:plain`: valid UTF-8 on one line, with no control character and no
-      format character, which draws nothing or turns the text around, but the
-      joiner between two emoji of one (a family, the rainbow flag) and the tags
-      of the flags of England, Scotland and Wales;
+    * `:plain`: valid UTF-8 on one line, with no control character, no format
+      character (which draws nothing or turns the text around) and none of
+      the characters drawn as nothing, though Unicode files some of them as
+      letters or symbols: every default-ignorable one (the Hangul fillers and
+      the variation selectors among them), the blank Braille pattern and the
+      null notehead. Only these are let through, each in its place:
+        - a zero-width joiner or non-joiner, soft hyphen, or left-to-right or
+          right-to-left mark, standing alone between two characters that are
+          neither format characters nor spaces, as Persian, Sinhala and
+          Bengali words hold them and the emoji of a family are joined;
+        - a variation selector directly after a character it can vary: an
+          emoji's (U+FE0E, U+FE0F) after an emoji, an ideograph's (U+E0100 to
+          U+E01EF) after an ideograph, a Mongolian free variation selector
+          after a Mongolian letter, and any other (U+FE00 to U+FE0D) after a
+          letter, digit, punctuation mark or symbol;
+        - the tags of the flags of England, Scotland and Wales;
     * `:too_long`: at most `longest/0` UTF-16 units, as a text box counts what
       is typed (`KeyfleetWeb.BoxLimit`): one for most letters, two for an
       emoji, and an emoji joined from several counts them all;
-    * `:blank`: at least one letter, digit, punctuation mark or symbol that
-      shows, so neither only spaces and marks nor only the characters drawn as
-      nothing though Unicode files them as letters or symbols (the Hangul
-      fillers, the variation selectors, the blank Braille pattern, the null
-      notehead);
+    * `:blank`: at least one character that shows: a letter, digit,
+      punctuation mark or symbol, or a character Unicode has not yet assigned,
+      such as an emoji newer than the patterns know, so not only spaces and
+      marks;
     * `:marks`: no more than six marks, such as accents, in a row, so no letter
       carries a tower of them over the lines around it.
 
@@ -28,20 +39,30 @@ defmodule Keyfleet.Seasons.Validations.Reason do
 
   @longest 500
 
-  # One line of text drawn as it reads, the joiners and tags inside an emoji
-  # aside.
+  # The characters drawn as nothing, though Unicode files some of them as
+  # letters or symbols.
+  @nothing ~S"\p{DI}\x{2800}\x{1D159}"
+
+  # One line of text drawn as it reads: no control, format or line-separating
+  # character, and none drawn as nothing but those let through in their place.
   @plain ~r/
     \A(?:
-      [^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]
-      | (?<=[\p{Extended_Pictographic}\x{FE0F}\p{Emoji_Modifier}]) \x{200D}
-        (?=\p{Extended_Pictographic})
+      [^\p{Cc}\p{Cf}\p{Zl}\p{Zp}#{@nothing}]
+      | (?<=[^\p{Cf}\p{Z}]) [\x{200C}\x{200D}\x{00AD}\x{200E}\x{200F}] (?=[^\p{Cf}\p{Z}])
+      | (?<=\p{Emoji}) [\x{FE0E}\x{FE0F}]
+      | (?<=\p{Ideographic}) [\x{E0100}-\x{E01EF}]
+      | (?<=\p{Mongolian}) (?<=\p{L}) [\x{180B}-\x{180D}\x{180F}]
+      | (?<=[\p{L}\p{N}\p{P}\p{S}]) [\x{FE00}-\x{FE0D}]
       | (?<=\x{1F3F4}) \x{E0067}\x{E0062}
         (?:\x{E0065}\x{E006E}\x{E0067} | \x{E0073}\x{E0063}\x{E0074} | \x{E0077}\x{E006C}\x{E0073})
         \x{E007F}
-    )*\z
+    )*+\z
   /ux
 
-  @shows ~r/(?![\p{DI}\x{2800}\x{1D159}])[\p{L}\p{N}\p{P}\p{S}]/u
+  # A character that shows. `:plain` has already refused every character drawn
+  # as nothing but those it lets through, and none of those is a letter, digit,
+  # punctuation mark, symbol or unassigned, so none is taken here for one.
+  @shows ~r/[\p{L}\p{N}\p{P}\p{S}] | (?!\p{Noncharacter_Code_Point})\p{Cn}/ux
   @tower ~r/\p{M}{7}/u
 
   @doc "The most UTF-16 units a reason holds."

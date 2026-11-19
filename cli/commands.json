@@ -1927,7 +1927,7 @@
           "type": "string",
           "in": "body",
           "field": "reason",
-          "description": "The reason, one line that shows, of up to 500 characters as a text box counts them (an emoji is two or more), with no hidden characters and no more than six accents or marks in a row; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
+          "description": "The reason, one line that shows, of up to 500 characters as a text box counts them once trimmed (an emoji is two or more), with no hidden characters but a joiner, non-joiner, soft hyphen or direction mark alone inside a word, a variation selector after a character it can vary and the tags of a flag, and no more than six accents or marks in a row; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
         }
       ]
     },

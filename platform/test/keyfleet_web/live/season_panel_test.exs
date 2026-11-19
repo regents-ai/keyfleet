@@ -129,7 +129,7 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
 
     for {reason, rule} <- [
           {"Line one\nline two", :plain},
-          {"\u{3164}", :blank},
+          {"\u{0301}", :blank},
           {String.duplicate("😀", 251), :too_long}
         ] do
       view

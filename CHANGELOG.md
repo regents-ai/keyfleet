@@ -13629,3 +13629,29 @@ step's report).
   whose only trade is the season's first minute, and finds none for one whose last
   trade is the minute before the season; it fails on the old reading. The docs and
   the feature list say so.
+- The reason rule takes ordinary writing and refuses what draws nothing.
+  `Keyfleet.Seasons.Validations.Reason`'s `:plain` takes a zero-width joiner or
+  non-joiner, soft hyphen, or left-to-right or right-to-left mark standing alone
+  between two characters that are neither format characters nor spaces (Persian's
+  half-space, Sinhala's "Sri", Bengali's ra plus ya, a soft hyphen from a web page),
+  which also covers the joiner inside an emoji, so its own branch is gone. It refuses
+  the characters drawn as nothing (`@nothing`: every default-ignorable one, U+2800 and
+  U+1D159) anywhere but in their place: those five, a variation selector directly
+  after a character it can vary (U+FE0E and U+FE0F after an emoji, U+E0100 to U+E01EF
+  after an ideograph, Mongolian's free variation selectors after a Mongolian letter,
+  U+FE00 to U+FE0D after a letter, digit, punctuation mark or symbol) and the tags of
+  the England, Scotland and Wales flags. So one character that shows no longer carries
+  499 that draw nothing, and a reason only of Hangul fillers is refused as not plain
+  rather than blank. The named set is the only list: `:blank` no longer names it,
+  since `:plain` has refused every one of them that is a letter, digit, punctuation
+  mark, symbol or unassigned. `:blank` counts a character Unicode has not yet assigned
+  (by the patterns' Unicode 16), noncharacters aside, as one that shows, so a newer
+  emoji alone is taken. The bidirectional embeddings, overrides and isolates and the
+  Arabic letter mark stay refused, as does every other format character. A
+  right-to-left mark typed just before a space, as in the review's Hebrew example, is
+  still refused: the rule takes none beside a space. `ReasonError`'s `:plain` sentence,
+  the docs, the contract, the feature list, the command guide and the public changelog
+  say what the rule takes. Crafted 500-unit reasons take 13 to 84 µs each. Two
+  properties in `SeasonsTest`: a taken reason with any of the five added alone between
+  two characters stays taken, and one with a character of the set out of its place is
+  refused as not plain; both fail on the old rule.
