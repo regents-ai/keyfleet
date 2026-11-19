@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.AgentTools.Run do
     Public,
     Publications,
     Rooms,
+    Seasons,
     SignedRequest,
     Workspace
   }
@@ -50,5 +51,6 @@ defmodule KeyfleetWeb.AgentTools.Run do
   defp answer(Public), do: Public.Answer
   defp answer(Publications), do: Publications.Answer
   defp answer(Rooms), do: Rooms.Answer
+  defp answer(Seasons), do: Seasons.Answer
   defp answer(Workspace), do: Workspace.Answer
 end

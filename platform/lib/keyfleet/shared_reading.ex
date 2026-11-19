@@ -48,8 +48,9 @@ defmodule Keyfleet.SharedReading do
   Every kind also states `within`: the seconds inside which a working producer
   reads each of its keys again, whether or not anything changed. A reader of an
   outside clock does so on its own interval. A producer that rereads on notice
-  does so when `heal/1` asks, each minute (`Keyfleet.SharedReading.Heal`),
-  which is also what mends a notice that was lost. A key older than its kind's
+  does so when `heal/1` asks, on its kind's schedule line, each minute unless
+  the line says otherwise (`Keyfleet.SharedReading.Heal`), which is also what
+  mends a notice that was lost. A key older than its kind's
   `within` is late, whatever the kind.
 
   ## Measurements
@@ -215,6 +216,20 @@ defmodule Keyfleet.SharedReading do
       keys: 1,
       bytes: 65_536,
       within: 150
+    },
+    season_coins: %{
+      audience:
+        "every visitor: which Coinbase products a season's pick may name is read from " <>
+          "Coinbase's own public list of products, which anyone may read " <>
+          "(Keyfleet.Seasons.CoinList)",
+      keys: 1,
+      # One id of at most 14 characters for each of the 406 products quoted in
+      # US dollars on 18 Nov 2026, were every one of them open to picks, is
+      # about 10 KB.
+      bytes: 16_384,
+      # Read again every ten minutes: a season's start checks every pick
+      # against a list read then.
+      within: 720
     }
   }
 

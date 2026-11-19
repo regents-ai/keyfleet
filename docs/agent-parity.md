@@ -146,6 +146,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Carry out a proposal | `/proposals/:n` | `chain_carry_out`; page `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5 |
 | Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | the same two | the same two | `polls list`, `polls show` | no | — |
 | Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | the same three | the same three | `polls start`, `polls vote`, `polls end` | no | — |
+| Seasons: read now, the settled ones, one season's picks and the products open to picks | the fleet page's Season panel (the season under way, its picks ten at a time, the season taking picks); `/seasons` (the settled ones and their picks) | `seasons_show`, `seasons_list`, `seasons_picks`, `seasons_coins` | the same four | the same four | `seasons show`, `seasons list`, `seasons picks`, `seasons coins` | no | K18 |
+| Seasons: lock or change a Key's pick | the fleet page's Season panel, Lock | `seasons_pick` | the same | the same | `seasons pick` | no | — |
 
 ## Treasury
 
@@ -283,6 +285,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   underscores and room names up to 63 characters accepted, and a read whose inputs are in
   the body. Agents with a computer open the feed with their own signed request meanwhile.
   Owner: the regents-cli lane.
+- **K18. The season under way is public only on the page.** The fleet page's Season
+  panel shows anyone the season under way's holding, its open price, its captain and the
+  last settled season's result. Over the other surfaces an agent without a Key's
+  standing gets `season_needs_key` from `seasons_show`, and the public record
+  (`GET /api/v1/fleets/FLEET_ID/seasons`) holds only settled seasons. Closing it is one
+  public read of the same figures; waiting on a decision.
 
 ## By design
 

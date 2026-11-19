@@ -139,7 +139,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   # The pages every fleet has, each under the fleet's own address
   # (`Keyfleet.Fleets.path/1`): the fleet's page itself, whose hall also opens
   # its rooms (`?room=`), then its workspace and its code, each project's page,
-  # proposals, treasury and polls, its search, and each of its Keys' pages and messages.
+  # proposals, treasury, polls and record of seasons, its search, and each of
+  # its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
     {"/workspace", :workspace, %{}},
@@ -154,6 +155,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/treasury", :treasury, %{}},
     {"/polls", :polls, %{}},
     {"/polls/:poll_id", :poll, %{poll_id: :poll_id}},
+    {"/seasons", :seasons, %{}},
     {"/search", :search, %{}},
     {"/worldline", :worldline, %{}},
     {"/atlas", :atlas, %{}},
@@ -221,6 +223,7 @@ defmodule KeyfleetWeb.RouteCatalog do
       {:treasury, :product, "Keyfleet", "Treasury", "/", [:profile_actions], :product, %{}},
     polls: {:polls, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
     poll: {:poll, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
+    seasons: {:seasons, :product, "Keyfleet", "Seasons", "/", [:profile_actions], :product, %{}},
     search: {:search, :product, "Keyfleet", "Search", "/", [:profile_actions], :product, %{}},
     worldline:
       {:worldline, :product, "Keyfleet", "Worldline", "/", [:profile_actions], :product, %{}},

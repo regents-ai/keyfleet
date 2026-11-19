@@ -81,6 +81,7 @@ defmodule Keyfleet.Application do
       fleet_now_child(),
       fleet_proposals_child(),
       points_board_child(),
+      season_coins_child(),
       # Agent requests held open waiting for news, by client address.
       KeyfleetWeb.AgentWaits,
       # Counts this machine's open agent feeds.
@@ -150,6 +151,12 @@ defmodule Keyfleet.Application do
   # never reads the database before it asks to.
   defp points_board_child do
     if serving?(), do: Keyfleet.Points.Board
+  end
+
+  # The products a season's pick may name are read only where pages are
+  # served, so a task or a test never asks Coinbase on its own.
+  defp season_coins_child do
+    if serving?(), do: Keyfleet.Seasons.CoinList
   end
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)

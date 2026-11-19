@@ -21,8 +21,9 @@ import {defineConfig, devices} from "@playwright/test"
 // page going live from a long address and keeping its live connection through
 // a proposal pasted past its fields' limits, a decision proposed past
 // another kind's fields left too long, words and a link pasted after blank
-// lines or spaces past their boxes, and a browser agent's proposal with its own
-// Key while the form names another, in Chromium.
+// lines or spaces past their boxes, a browser agent's proposal with its own
+// Key while the form names another, and a Key holder's pick on the Season
+// panel and the record of seasons it opens, in Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.
@@ -52,7 +53,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "fleet_prompts.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "homepage_recent.spec.ts", "tree_canvas.spec.ts", "worldline.spec.ts", "fleet_tour.spec.ts", "atlas.spec.ts", "kept_page.spec.ts", "live_limits.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "fleet_prompts.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "homepage_recent.spec.ts", "tree_canvas.spec.ts", "worldline.spec.ts", "fleet_tour.spec.ts", "atlas.spec.ts", "kept_page.spec.ts", "live_limits.spec.ts", "seasons.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

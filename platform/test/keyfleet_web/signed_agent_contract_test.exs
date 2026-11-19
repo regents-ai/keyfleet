@@ -19,6 +19,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.SeasonHelpers
+  alias Keyfleet.Seasons.CoinList
+  alias Keyfleet.SharedReading
   alias KeyfleetWeb.Plugs.SignedAgent
   alias RegentChain.BuilderCode
 
@@ -71,6 +74,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @poll "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}"
   @poll_vote "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote"
   @poll_end "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/end"
+  @seasons "/api/v1/agent/fleets/{fleet_id}/seasons"
+  @season_pick "/api/v1/agent/fleets/{fleet_id}/seasons/pick"
+  @seasons_list "/api/v1/agent/fleets/{fleet_id}/seasons/list"
+  @season_picks "/api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks"
+  @season_coins "/api/v1/agent/seasons/coins"
   @dm_inbox "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms"
   @dm_blocks "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks"
   @dm "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/"
@@ -90,7 +98,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     "project" => "general",
     "poll_id" => "00000000-0000-4000-8000-000000000000",
     "advance_id" => "7",
-    "notebook_id" => "nb-0123456789abcdef"
+    "notebook_id" => "nb-0123456789abcdef",
+    "number" => "1"
   }
   @poll_question %{
     "question" => "Which door next?",
@@ -317,6 +326,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"GET", @poll, [], nil},
     {"POST", @poll_vote, [], %{"choice" => "Left door", "reason" => "r"}},
     {"POST", @poll_end, [], %{}},
+    {"GET", @seasons, [], nil},
+    {"POST", @season_pick, [], %{"product" => "SOL-USD", "reason" => "r"}},
+    {"POST", @seasons_list, [], %{"before" => "5"}},
+    {"POST", @season_picks, [], %{"after" => "5"}},
     {"POST", @notebook_create, [],
      %{
        "title" => "Log",
@@ -365,6 +378,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@key_send, Keyfleet.Rooms.Message, :send_to_key},
              {@poll_start, Keyfleet.Polls.Poll, :start},
              {@poll_vote, Keyfleet.Polls.Vote, :cast},
+             {@season_pick, KeyfleetWeb.AgentTools.Seasons, :pick},
+             {@seasons_list, KeyfleetWeb.AgentTools.Seasons, :list},
+             {@season_picks, KeyfleetWeb.AgentTools.Seasons, :picks},
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation},
              {@project_start, Keyfleet.Projects.Project, :start},
              {@project_archive, Keyfleet.Projects.Project, :archive},
@@ -764,6 +780,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # Asking the fleet's Keys one question.
     poll_routes(c, stranger)
 
+    # A fleet's seasons: read, picked for and settled.
+    season_routes(c, stranger)
+
     # Creating rooms: new, taken, a name taken, malformed, by an outsider, and
     # past the limit.
     room = %{"slug" => "survey-plans", "name" => "Survey plans"}
@@ -856,6 +875,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # without its vote (Grok Bot, 19 October 2026).
     for template <- [@polls, @poll],
         do: answer(c, c.signer, "GET", template, @address, nil, 503)
+
+    # Nor is a fleet's seasons read or a pick made, since who holds which
+    # Key decides whose pick a read carries.
+    assert answer(c, c.signer, "GET", @seasons, @address, nil, 503).body ==
+             refused("ownership_refreshing")
+
+    assert answer(c, c.signer, "POST", @season_pick, @address, %{"product" => "SOL-USD"}, 503).body ==
+             refused("ownership_refreshing")
+
+    running = Map.put(@address, "number", "2")
+
+    assert answer(c, c.signer, "POST", @season_picks, running, %{}, 503).body ==
+             refused("ownership_refreshing")
 
     # Every route: unsigned, too large, signed with a body that fits none of
     # them, signed by an unpaired agent, and with the sign-in check away.
@@ -1828,6 +1860,188 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, person_signer(5), "GET", @poll, at, nil, 200).body
   end
 
+  # The agent holds Key 2 and another agent Key 6. The fleet's seasons are
+  # played by its turns: season 1 is settled with both Keys' picks, season 2
+  # under way with Key 6's, and season 3 taking picks.
+  defp season_routes(c, stranger) do
+    second = new_signer()
+    record_owner(6, second.address)
+    [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
+
+    SeasonHelpers.coinbase!(%{
+      "SOL-USD" => [{b1, "100"}, {b2, "103"}],
+      "ETH-USD" => [{b1, "2000"}, {b2, "1990"}]
+    })
+
+    pick = %{"product" => "SOL-USD", "reason" => "Fast chain"}
+
+    # Before the fleet's first season, none takes picks.
+    assert answer(c, c.signer, "POST", @season_pick, @address, pick, 409).body["error"]["code"] ==
+             "season_closed"
+
+    assert %{"running" => nil, "taking_picks" => nil, "last_settled" => nil, "rules" => rules} =
+             answer(c, c.signer, "GET", @seasons, @address, nil, 200).body
+
+    assert rules == %{
+             "season_hours" => 3,
+             "switching_margin" => "0.01",
+             "volume_floor_usd" => "1000000"
+           }
+
+    SeasonHelpers.turn!(@fleet, b0)
+    answer(c, c.signer, "POST", @season_pick, @address, pick, 201)
+    answer(c, second, "POST", @season_pick, @address, %{"product" => "ETH-USD"}, 201)
+    SeasonHelpers.turn!(@fleet, b1)
+    following = %{"product" => "SOL-USD", "reason" => "Following"}
+    answer(c, second, "POST", @season_pick, @address, following, 201)
+    SeasonHelpers.turn!(@fleet, b2)
+
+    # Key 2 picks for season 3, and the same pick again changes nothing.
+    mine = answer(c, c.signer, "POST", @season_pick, @address, pick, 201).body["pick"]
+    assert %{"season" => 3, "key" => 2, "product" => "SOL-USD", "reason" => "Fast chain"} = mine
+    assert answer(c, c.signer, "POST", @season_pick, @address, pick, 200).body["pick"] == mine
+
+    # Key 6 reads the season under way with its first page of picks, and of
+    # the one taking picks only that one Key has locked, never whose or what.
+    now = answer(c, second, "GET", @seasons, @address, nil, 200).body
+
+    assert %{
+             "number" => 2,
+             "holding" => "SOL-USD",
+             "captain_key" => 2,
+             "holding_open_price" => "103",
+             "pick_count" => 1,
+             "picks" => [
+               %{
+                 "key" => 6,
+                 "product" => "SOL-USD",
+                 "reason" => "Following",
+                 "open_price" => "103",
+                 "void" => nil
+               }
+             ],
+             "next_after" => nil
+           } = now["running"]
+
+    assert %{"number" => 3, "my_pick" => nil, "keys_locked" => 1} = now["taking_picks"]
+
+    # SOL rose 3% while the holding, USDC, held still: by more than the margin.
+    assert now["last_settled"] == %{
+             "number" => 1,
+             "holding" => "USDC",
+             "holding_result" => "0",
+             "best_pick" => %{"key" => 2, "product" => "SOL-USD", "result" => "0.03"},
+             "crown_changed" => true
+           }
+
+    refute Jason.encode!(now) =~ "Fast chain"
+
+    assert answer(c, c.signer, "GET", @seasons, @address, nil, 200).body["taking_picks"][
+             "my_pick"
+           ] == mine
+
+    # An agent without a Key of the fleet reads none of it and picks nothing.
+    assert answer(c, stranger, "GET", @seasons, @address, nil, 403).body ==
+             refused("season_needs_key")
+
+    assert answer(c, stranger, "POST", @season_pick, @address, pick, 403).body ==
+             refused("season_needs_key")
+
+    # A product not open to picks, and a pick that breaks the rules.
+    assert answer(c, c.signer, "POST", @season_pick, @address, %{"product" => "DOGE-USD"}, 422).body ==
+             refused("product_not_open")
+
+    for misfit <- [
+          %{"product" => "sol-usd"},
+          %{pick | "reason" => "Line one\nline two"},
+          %{pick | "reason" => String.duplicate("r", 501)}
+        ] do
+      assert answer(c, c.signer, "POST", @season_pick, @address, misfit, 422).body ==
+               refused("invalid_pick")
+    end
+
+    # While the list of products open to picks isn't read, no pick is made.
+    SharedReading.degraded(CoinList.key())
+
+    assert answer(c, c.signer, "POST", @season_pick, @address, pick, 503).body ==
+             refused("coins_unread")
+
+    assert answer(c, c.signer, "GET", @season_coins, @address, nil, 503).body ==
+             refused("coins_unread")
+
+    :ok = CoinList.read()
+
+    assert %{"products" => products} =
+             answer(c, stranger, "GET", @season_coins, @address, nil, 200).body
+
+    assert Enum.sort(products) == ["ETH-USD", "SOL-USD", "USDC"]
+
+    # The settled seasons are the fleet's record, read by any paired agent:
+    # each with how many Keys picked and the best pick, its picks on their own.
+    assert %{
+             "seasons" => [
+               %{
+                 "number" => 1,
+                 "holding_close_price" => "1",
+                 "pick_count" => 2,
+                 "best_pick" => %{"key" => 2, "product" => "SOL-USD", "result" => "0.03"}
+               }
+             ],
+             "next_before" => nil,
+             "has_more" => false
+           } = answer(c, stranger, "POST", @seasons_list, @address, %{}, 200).body
+
+    assert answer(c, stranger, "POST", @seasons_list, @address, %{"before" => "1"}, 200).body[
+             "seasons"
+           ] == []
+
+    for before <- ["0", "01", "x", "9223372036854775808"] do
+      assert answer(c, c.signer, "POST", @seasons_list, @address, %{"before" => before}, 400).body ==
+               refused("invalid_season_cursor")
+    end
+
+    assert %{
+             "season" => 1,
+             "picks" => [
+               %{
+                 "key" => 2,
+                 "reason" => "Fast chain",
+                 "close_price" => "103",
+                 "result" => "0.03"
+               },
+               %{"key" => 6, "reason" => nil, "close_price" => "1990", "result" => "-0.005"}
+             ],
+             "next_after" => nil,
+             "has_more" => false
+           } = answer(c, stranger, "POST", @season_picks, @address, %{}, 200).body
+
+    for place <- ["0", "01", "x", "9223372036854775808"] do
+      assert answer(c, c.signer, "POST", @season_picks, @address, %{"after" => place}, 400).body ==
+               refused("invalid_season_cursor")
+    end
+
+    # The season under way's picks are its members' alone, with no result
+    # yet; a season taking picks, or none, has none to read here.
+    running = Map.put(@address, "number", "2")
+
+    assert %{
+             "season" => 2,
+             "picks" => [
+               %{"key" => 6, "reason" => "Following", "close_price" => nil, "result" => nil}
+             ]
+           } = answer(c, c.signer, "POST", @season_picks, running, %{}, 200).body
+
+    assert answer(c, stranger, "POST", @season_picks, running, %{}, 403).body ==
+             refused("season_needs_key")
+
+    for number <- ["3", "99"] do
+      at = Map.put(@address, "number", number)
+
+      assert answer(c, c.signer, "POST", @season_picks, at, %{}, 404).body ==
+               refused("season_unknown")
+    end
+  end
+
   # The Key's owner turns its agents' voting off, in the ownership it is in.
   defp agent_voting_off!(token_id) do
     %{ownership_epoch: epoch} = Keys.current_key!(@fleet, token_id)
@@ -1968,6 +2182,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"GET", @poll},
       {"POST", @poll_vote},
       {"POST", @poll_end},
+      {"GET", @seasons},
+      {"POST", @season_pick},
+      {"POST", @seasons_list},
+      {"POST", @season_picks},
+      {"GET", @season_coins},
       {"GET", @dm_inbox},
       {"GET", @dm_blocks},
       {"POST", @dm_changes}
@@ -1983,6 +2202,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp body_cap(@propose), do: 4_000 * 12 + 8 * 1024
   defp body_cap(@poll_start), do: (200 + 10 * 100 + 2_000) * 12 + 2 * 1024
   defp body_cap(@poll_vote), do: 500 * 12 + 2 * 1024
+  defp body_cap(@season_pick), do: 500 * 12 + 2 * 1024
   defp body_cap(_template), do: 4096
 
   # The least each route takes: a read takes no body.
@@ -2018,6 +2238,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@carry_out), do: %{"number" => 1}
   defp empty_or_minimal(@poll_start), do: @poll_question
   defp empty_or_minimal(@poll_vote), do: %{"choice" => "Left door"}
+  defp empty_or_minimal(@season_pick), do: %{"product" => "SOL-USD"}
 
   defp empty_or_minimal(@issue_shard),
     do: %{"keys" => "2", "wallet" => "0x" <> String.duplicate("b", 40), "days" => "30"}
@@ -2086,6 +2307,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           Keyfleet.Graph,
           Keyfleet.Proposals,
           Keyfleet.Polls,
+          Keyfleet.Seasons,
           Keyfleet.Projects
         ],
         &Ash.Domain.Info.resources/1

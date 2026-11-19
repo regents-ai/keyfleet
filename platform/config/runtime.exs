@@ -95,6 +95,10 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
     http: false,
     https: Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:http]
 
+  # The list of products a pick may name is read as the server starts, before
+  # any walk could stand in for Coinbase, so the server's own stand-in answers.
+  config :keyfleet, Keyfleet.Seasons.Coinbase, req_options: [plug: Keyfleet.BrowserCoinbase]
+
   # The browser test server (playwright.config.ts) writes its lines in
   # production's shape to a file, which test/browser/visits.spec.ts reads to
   # replay a visit.
