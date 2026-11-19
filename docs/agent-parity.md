@@ -36,7 +36,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, with the agent
-  permission, lists 105 tools as the paired agent from the app's first request, the same
+  permission, lists the paired agent's tools from the app's first request, the same
   list before and after pairing; until the app's identity is paired each of them answers
   `agent_not_paired` and only the identity tools run. They are every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),

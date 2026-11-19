@@ -1736,6 +1736,8 @@ features:
       - platform/test/keyfleet/seasons/turn_test.exs
     gaps:
       - Read against a stand-in for Coinbase; Coinbase's live answers are not read by any test.
+      - Coinbase reads per turn are per fleet and one after another (about 1 + two per coin that needs a price); nothing is shared between fleets and one failure retries the whole turn.
+      - A server clock more than a minute fast would price on an unfinished minute.
 
   - id: seasons-agent-tools
     what: >-

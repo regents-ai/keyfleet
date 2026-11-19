@@ -40,7 +40,8 @@ Changes to Keyfleet, newest first.
   taking picks and the last one settled, lock a pick, list the settled seasons and see
   which coins can be picked, as Keyfleet's own tools or through the Claude connector.
   Until a season starts, a Key's pick is seen only by that Key's side; the others see
-  how many Keys have picked. Anyone, signed in or not, reads a fleet's settled seasons at
+  how many Keys have picked. A pick belongs to the Key: a Key sold before its season
+  starts takes its pick and reason to the buyer. Anyone, signed in or not, reads a fleet's settled seasons at
   `/api/v1/fleets/FLEET_ID/seasons`, each with how many Keys picked and the best pick,
   and one season's picks a hundred at a time at `/api/v1/fleets/FLEET_ID/seasons/NUMBER`,
   Keys by number. Each page ends with a code for the next, passed back as it came; it

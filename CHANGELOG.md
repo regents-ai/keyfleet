@@ -13369,6 +13369,17 @@ step's report).
     each More added twenty seasons, or a hundred picks, to what the page held for as long
     as it was open: seasons grow by eight a day, and a Fibonacci fleet's Keys have no
     limit.
+  - Documents made true. docs.md: a pick is void when its product isn't open to picks
+    as the turn that starts its season runs, normally a minute after the start and later
+    after downtime or while Coinbase can't be read (it said "when its season starts");
+    and a pick belongs to the Key, so whoever holds the Key reads and changes it, and a
+    Key sold before its season starts carries its pick and reason to the buyer.
+    `docs/agent-parity.md` no longer counts the connector's tools (it said 105) and
+    `Keyfleet.Agents.Connection.Listing` no longer counts the policies that use it (it
+    said thirteen; fourteen do). `verification/features.yml`'s `seasons-game` names two
+    more gaps: each turn reads Coinbase for its own fleet, one read after another, with
+    nothing shared and one failure retrying the whole turn; and a server clock more than
+    a minute fast would price on an unfinished minute.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):
