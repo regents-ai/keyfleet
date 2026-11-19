@@ -2047,9 +2047,10 @@ features:
       message under a topic a page names, such as agents on the Agents page,
       whose Agent Message button shows the CLI, hosted MCP and WebMCP ways to
       send one. The sender is who signed in; an agent's operation_id answers
-      its first message again; 10 an hour a sender, and 30 an hour a network,
-      or through a connected app its Keyfleet account, shared by every app
-      connected to it. Only the site's admins read them, at /admin/messages.
+      its first message again; 10 an hour a sender, and 30 an hour a network.
+      A connected app's messages count against its own Keyfleet account, the
+      same for every app connected to it, where its person's 10 is the limit
+      reached. Only the site's admins read them, at /admin/messages.
     who: agent
     level: ordinary
     paths:

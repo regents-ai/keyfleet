@@ -14249,17 +14249,20 @@ step's report).
 ## 2026-11-19 — Connector allowances
 
 - A connected app's messages for the team (`messages_leave`) count against its own
-  Keyfleet account's allowance of 30 an hour, the same for every app connected to that
-  account: `KeyfleetWeb.ClientAddress.client_key/1` keys a connected app's waiter,
+  Keyfleet account, the same for every app connected to that account:
+  `KeyfleetWeb.ClientAddress.client_key/1` keys a connected app's waiter,
   `{:mcp, account}`, by its account. An agent that signs its own requests still counts
-  against its address, at `/mcp` as under `/api`. docs.md says so beside "each network
-  30", as do features.yml's `agent-message` row and docs/agent-feature-map.md. The one
+  against its address, at `/mcp` as under `/api`. Every app on an account acts for the
+  one person, so that person's 10 an hour is the limit a connected app reaches; docs.md
+  says so beside "each network 30", as do features.yml's `agent-message` row and
+  docs/agent-feature-map.md. The one
   other use of a connected app's waiter, the hold on syncs waiting for news
   (`KeyfleetWeb.AgentWaits`), already keyed by the whole `{:mcp, account}`.
   McpConnectorTest proves both callers.
-- Input `register_identity`, `get_identity` or `check_in` can't take is refused as every
-  tool refuses it, `invalid_request`, before the sign-in service is asked, and no longer
-  with the words for a call that could not be completed (`KeyfleetWeb.ToolErrors`). A
+- Input `register_identity`, `get_identity` or `check_in` can't take is refused as
+  `invalid_request`, before the sign-in service is asked, with a hint that the tool takes
+  no input, and no longer with the words for a call that could not be completed
+  (`KeyfleetWeb.ToolErrors`). A
   wait the sign-in service or this site names now reaches the tool's error as
   `too_many_requests`, in `RegentMCPAgents.Tools.wait/1`'s words, with its seconds in
   `retry_after`; `Keyfleet.Agents.Connection` passed it on as a failed call before. The

@@ -21,7 +21,8 @@ defmodule KeyfleetWeb.ToolErrors do
   (`check_input/3`, the router's `tool_argument_transformer`), as the action
   itself would refuse it, with the actor and context it would run with: a
   pairing's as `invalid_request` in the library's words
-  (`RegentMCPAgents.pairing_input_refusal/0`), a fleet tool's with the refusal
+  (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's as
+  `invalid_request` with the hint that it takes no input, a fleet tool's with the refusal
   its signed request answers (an unknown fleet as `fleet_unknown`), or else as
   `invalid_request`, whose hint tells text longer than its input takes how
   long it may be and how long it is. A workspace write that names a coming-soon fleet is
@@ -43,6 +44,8 @@ defmodule KeyfleetWeb.ToolErrors do
 
   @pair_first "Ask your person for a one-use code from Pair New Agent on their Agents page, " <>
                 "call pair_identity with it, then call this tool again."
+
+  @no_input "This tool takes no input. Call it again with none."
 
   @doc """
   Casts a tool's `input` as its action takes it. Input it takes goes on to
@@ -88,6 +91,9 @@ defmodule KeyfleetWeb.ToolErrors do
 
   defp refused(Connection, :pair_identity, _errors),
     do: Jason.encode!(%{error: RegentMCPAgents.pairing_input_refusal()})
+
+  defp refused(Connection, _identity, _errors),
+    do: text(Refusal.body("invalid_request", @no_input))
 
   defp refused(resource, action, errors) do
     {_status, body} =
