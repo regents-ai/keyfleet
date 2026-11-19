@@ -13946,3 +13946,8 @@ step's report).
   says the same.
 - The live database server is not changed by this. No migration, no library, no
   setting and no page or answer changes.
+- `platform/test/keyfleet/release_test.exs`: the release test's throwaway database and
+  its migrations folder take a name that is unique across test runs, not only within
+  one. The full check for this step failed once on `{:error, :already_up}`: the name
+  came from a counter that restarts with every run, so it met a database another run
+  had made. Test code only.

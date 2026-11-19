@@ -371,7 +371,7 @@ defmodule Keyfleet.ReleaseTest do
     config = [
       hostname: "127.0.0.1",
       port: 5432,
-      database: "keyfleet_release_#{System.unique_integer([:positive])}",
+      database: "keyfleet_release_#{run_unique()}",
       username: System.fetch_env!("USER"),
       password: nil,
       pool_size: 2
@@ -406,12 +406,13 @@ defmodule Keyfleet.ReleaseTest do
     config
   end
 
+  # Unique across test runs, not only within one: a run beside this one, or one
+  # cut short before it cleaned up, never meets this run's database or folder.
+  defp run_unique, do: Base.encode16(:crypto.strong_rand_bytes(6), case: :lower)
+
   defp migrations_directory(files) do
     directory =
-      Path.join(
-        System.tmp_dir!(),
-        "keyfleet-release-migrations-#{System.unique_integer([:positive])}"
-      )
+      Path.join(System.tmp_dir!(), "keyfleet-release-migrations-#{run_unique()}")
 
     File.mkdir_p!(directory)
     on_exit(fn -> File.rm_rf!(directory) end)
