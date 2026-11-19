@@ -13930,3 +13930,19 @@ step's report).
   for related field policies in filters and for "can read" checks with exists (3.37.4,
   3.37.5); Ash AI update and destroy tools take a read action and write decimals out
   in full (1.5.5).
+
+## 2026-11-19 — Node 26.13.1 and PostgreSQL 17.12, the refresh's second step
+
+- `platform/.tool-versions` names Node 26.13.1 (from 26.12.0) and PostgreSQL 17.12 (from
+  17.7), as ash-template runs live as v291 (54a58195). Erlang 29.1.2 and Elixir
+  1.20.4 stay where they are.
+- `platform/Dockerfile`: the Node stage is `node:26.13.1-bookworm-slim`, by digest
+  (sha256:5df79989…b0f1). The template's stage is the trixie build of the same Node;
+  Keyfleet's other stages are bookworm, so its Node stage stays bookworm too.
+- `scripts/release.sh`: the smoke's throwaway database starts at the PostgreSQL
+  version `.tool-versions` names, in place of the floating `postgres:17`, which on a
+  machine holding an older copy meant an older 17. It stops unless the server reports
+  exactly that version and prints the version in its summary. `platform/README.md`
+  says the same.
+- The live database server is not changed by this. No migration, no library, no
+  setting and no page or answer changes.
