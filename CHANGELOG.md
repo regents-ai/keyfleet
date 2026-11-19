@@ -13280,3 +13280,36 @@ step's report).
     a host may be typed with are taken after the @ only since 334528b6d.
   - "Poll choices past their box are refused as too long": its note now reads "2,009
     characters at most", since c3f9b6285.
+
+## 2026-11-19 — idna 8.0: a long "xn--" name no longer holds the server
+
+- Advisory EEF-CVE-2026-117678 (medium, published 19 Nov 2026 05:36Z): idna 7.1.0 spends
+  seconds to minutes of CPU on a very long "xn--" label. Measured here on 7.1.0 with the
+  early-access form's own call (`:idna.encode(host, [:uts46, :std3_rules])`): 4 ms at 245
+  letters, 284 ms at 1,000; the template chief measured 28 s at 4,000. Fixed in 8.0.0,
+  which refuses a label over 63 characters and a name over 253 before reading them.
+- Where Keyfleet calls it: the early-access form (`Keyfleet.Early.Signup.StoredEmail`),
+  which the address's 254-byte limit already kept to milliseconds; and the ENS package
+  (`ens_elixir`, read by `Keyfleet.Accounts.EnsIdentity.LookUp`), whose names come from
+  the chain and have no such limit here.
+- platform/mix.exs: `{:idna, "~> 8.0", override: true}` (ethers 0.8.0 and jsv 0.27.0
+  still ask for 7; the template chief read their calls and 8 keeps them). The shared
+  library pin moves from 2ebfd300 to 3bd29b2e (elixir-utils branch
+  eu/idna-8-on-keyfleet-pin-1119: the old pin plus one commit, in which ens asks for
+  idna 8 and normalizes with STD3 rules, as 8 would otherwise start taking underscore,
+  space, $, ' and * in an ASCII name). mix.lock: idna 7.1.0 to 8.0.0 and the thirteen
+  shared packages at the new commit; nothing else moves. `mix hex.audit` is clean.
+- What changes for a person:
+  - Early access: an address at a host written in ASCII for a symbol or emoji name
+    (xn--n3h.net) is now taken; typed as the symbol itself (☃.net) it is still refused
+    by the address's own rule. Every other host tried (bücher.de, faß.de, foo_bar.com,
+    ab--cd.com, a..b.com, xn--abc-.com, mixed case) is answered as before. Refusals
+    still come as exits, which the form already catches.
+  - ENS names: a name holding an emoji, ¡ or ≠ is now read; a name with an empty part,
+    a malformed "xn--" part, or a digit-led part beside a Hebrew one is refused (the
+    template chief's measurements on 38 names, not repeated here).
+- Test: `EarlyTest` "a host is stored in ASCII, and one the rules can't write is
+  refused" keeps bücher.de as xn--bcher-kva.de and xn--n3h.net as typed, and refuses
+  foo_bar.com, ab--cd.com, xn--abc-.com and a 240-letter "xn--" part.
+- Not covered: no test times the long label; the ENS path was not exercised with a
+  long name against a real chain record.

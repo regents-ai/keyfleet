@@ -7,9 +7,11 @@ defmodule Keyfleet.Early.Signup.StoredEmail do
   fass.de. The Unicode and ASCII spellings of one address are then one entry
   on the list. A host with an empty part, or one those rules can't write in
   ASCII, is not an address; among them a few real hosts, such as
-  foo_bar.com, ab--cd.com, and ☃.net in either spelling (xn--n3h.net). The
-  attribute's own rule then holds the stored
-  address, as it held the typed one.
+  foo_bar.com and ab--cd.com. A host named with a symbol or an emoji is
+  refused as typed, by the address's own rule (`Keyfleet.Early.Signup`), and
+  taken in its ASCII spelling: ☃.net is not an address, xn--n3h.net is. The
+  attribute's own rule then holds the stored address, as it held the typed
+  one.
   """
 
   use Ash.Resource.Change

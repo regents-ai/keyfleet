@@ -2,6 +2,14 @@
 
 Changes to Keyfleet, newest first.
 
+## 19 November 2026
+
+- **Security.** A part the site uses to read domain names and ENS names could be kept
+  busy for seconds by one very long name. It is replaced with the version that refuses
+  such a name at once. ENS names that hold an emoji are now read. An early-access
+  address at a domain written in its plain-letter form for a symbol name, such as
+  xn--n3h.net, can now join.
+
 ## 18 November 2026
 
 - **Early access.** The email field takes 256 characters, and anything typed in it
