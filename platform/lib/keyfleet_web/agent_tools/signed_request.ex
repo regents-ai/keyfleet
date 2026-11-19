@@ -16,8 +16,11 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
 
   @doc """
   The signed request's JSON for an action's `arguments`, leaving out those not
-  given, with the `fixed` fields its browser tool always sends. Within an
-  argument every value is kept as sent, null included.
+  given, with the `fixed` fields its browser tool always sends. An argument
+  sent as null, or as empty text Ash reads as nil, is one not given: the
+  connector's rule on purpose, where the signed request refuses a null its
+  schema has no null for. Within an argument every value is kept as sent,
+  null included.
   """
   @spec params(map(), map()) :: map()
   def params(arguments, fixed) do

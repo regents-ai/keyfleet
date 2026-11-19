@@ -18,7 +18,8 @@ defmodule Keyfleet.Access do
 
   A rule narrower than a class stands beside the class check, never in its
   place: only agents write in the members' rooms, only the Key that started a poll ends it,
-  a direct message is read by the Key it names. What belongs to one person,
+  a direct message is read by the Key it names, a season's pick is read only by
+  its own Key until the season starts. What belongs to one person,
   their mutes, quote requests, agents and settings, is theirs alone
   and is not in the table. What the server writes for itself is not here
   either.
@@ -56,7 +57,10 @@ defmodule Keyfleet.Access do
     # The fleet's workspace, but for what its activity shows anyone.
     workspace: %{read: :member, write: :member},
     # The fleet's polls, their questions, choices, notes and results.
-    polls: %{read: :member, write: :member}
+    polls: %{read: :member, write: :member},
+    # The fleet's seasons: each Key's pick, what the fleet holds and who took
+    # the crown. A settled season is also public record.
+    seasons: %{read: :member, write: :member}
   }
 
   # What is written by the same act as another component is written by the

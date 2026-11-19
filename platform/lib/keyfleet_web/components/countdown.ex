@@ -21,7 +21,12 @@ defmodule KeyfleetWeb.Components.Countdown do
         "or `clock`, hours, minutes and seconds after `lead`, then `done`"
 
   attr :lead, :string, default: nil, doc: "a `clock`'s words before its time"
-  attr :done, :string, default: nil, doc: "a `clock`'s words once its time runs out"
+
+  attr :done, :string,
+    default: nil,
+    doc:
+      "the words once its time runs out; without them a `clock` writes none, and the others their last count"
+
   attr :class, :string, default: nil
 
   def countdown(assigns) do
@@ -39,7 +44,8 @@ defmodule KeyfleetWeb.Components.Countdown do
     """
   end
 
-  defp words(%{format: "clock", done: done}, seconds) when seconds <= 0, do: done
+  defp words(%{done: done}, seconds) when seconds <= 0 and is_binary(done), do: done
+  defp words(%{format: "clock"}, seconds) when seconds <= 0, do: nil
 
   defp words(%{format: "clock", lead: lead}, seconds),
     do:

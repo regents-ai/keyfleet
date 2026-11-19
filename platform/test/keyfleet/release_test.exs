@@ -254,6 +254,8 @@ defmodule Keyfleet.ReleaseTest do
              "room_read_marks",
              "rooms",
              "schema_migrations",
+             "season_picks",
+             "seasons",
              "session_authorities",
              "shard_events",
              "treasury_asset_details",

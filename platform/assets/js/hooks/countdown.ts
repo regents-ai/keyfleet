@@ -15,11 +15,12 @@ type CountdownHook = {el: HTMLElement; gap: number; seen: string | undefined; ti
  * a reader who asked for less motion sees the same as everyone. A clock's
  * countdown (`seconds`) says "Closing…" when the time runs out and waits;
  * the page itself draws what closed a moment later. A `clock` writes hours,
- * minutes and seconds after its lead words, then its own words once it runs out.
+ * minutes and seconds after its lead words. Given `done`, any of them writes
+ * those words once its time runs out, until the page sends a new time.
  */
 function words(seconds: number, {format, lead, done}: DOMStringMap) {
+  if (seconds <= 0 && (done !== undefined || format === "clock")) return done ?? ""
   if (format !== "clock") return left(seconds, format)
-  if (seconds <= 0) return done ?? ""
   return `${lead} ${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`
 }
 
@@ -39,7 +40,7 @@ const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`
 
 function draw(hook: CountdownHook) {
   window.clearTimeout(hook.timer)
-  const {closesAt, now, format} = hook.el.dataset
+  const {closesAt, now, format, done} = hook.el.dataset
 
   // The gap between this clock and the page's is taken again only when the
   // page sends a new reading of its own clock.
@@ -53,9 +54,10 @@ function draw(hook: CountdownHook) {
   const written = words(seconds, hook.el.dataset)
   if (hook.el.textContent !== written) hook.el.textContent = written
 
-  // Under a minute the words in hours or minutes no longer change, and nor
-  // do a clock's once it runs out.
-  if (seconds <= 0 || (format !== "seconds" && format !== "clock" && seconds < 60)) return
+  // Under a minute the words in hours or minutes no longer change until
+  // `done`, if given, takes over, and none change once the time runs out.
+  const unchanging = format !== "seconds" && format !== "clock" && seconds < 60 && done === undefined
+  if (seconds <= 0 || unchanging) return
 
   // The next whole second of what is left, when the words may change.
   hook.timer = window.setTimeout(() => draw(hook), (remaining % 1000) + 1)

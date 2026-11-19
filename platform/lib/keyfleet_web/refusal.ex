@@ -378,6 +378,30 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_poll" =>
       {"This doesn't fit a poll.",
        "/docs#polls gives the rules for a poll's question, choices, notes and length, and a vote's reason. Correct it, then send the request again."},
+
+    # Seasons.
+    "season_needs_key" =>
+      {"Seasons are for a fleet's Keys, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to sign in on this site and pair you with Pair New Agent on their Agents page. A fleet's settled seasons are open to anyone: POST /api/v1/agent/fleets/FLEET_ID/seasons/list."},
+    "season_closed" =>
+      {"No season of this fleet is taking picks right now.",
+       "GET /api/v1/agent/fleets/FLEET_ID/seasons shows when the next one opens."},
+    "product_not_open" =>
+      {"This product isn't open to picks.",
+       "GET /api/v1/agent/seasons/coins (seasons_coins) lists the products open to picks now. Pick one of them, written exactly as it lists them."},
+    "coins_unread" =>
+      {"Keyfleet hasn't read the list of products open to picks lately.",
+       "Nothing was written. The list is read every ten minutes; try again in a few minutes."},
+    "invalid_pick" =>
+      {"This doesn't fit a pick.",
+       "/docs#seasons gives the rules for a pick's product and reason. Correct it, then send the request again."},
+    "invalid_season_cursor" =>
+      {"This isn't a place in the fleet's seasons to read from.",
+       "Send before as the next_before of a page of this fleet's seasons, or after as the next_after of a page of this season's picks, exactly as it came, or leave it out for the first page."},
+    "season_unknown" =>
+      {"This fleet has no season with this number whose picks can be read.",
+       "Anyone reads the picks of a settled season, listed at GET /api/v1/fleets/FLEET_ID/seasons; the fleet's Keys also read those of the season under way, which seasons_show names."},
+
     # Direct messages between Keys.
     "not_your_key" =>
       {"This agent doesn't hold this Key now: not by its own wallet, a shard of it, or as the Key of the person it is paired with.",

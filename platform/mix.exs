@@ -295,7 +295,10 @@ defmodule Keyfleet.MixProject do
         # three records, and the Thing record to Keyfleet.Access.Check. The
         # connector listing each fleet tool's browser input adds one: the router
         # hands AshAi `KeyfleetWeb.ToolSchemas.definition/3` as it compiles.
-        "xref graph --label compile-connected --fail-above 138",
+        # Seasons add four: lib/keyfleet/seasons.ex to its two records, and each
+        # record to Keyfleet.Access.Check. The season tools add two: the
+        # AgentTools Seasons record, with that Run.
+        "xref graph --label compile-connected --fail-above 144",
         "ash.codegen --check",
         "usage_rules.sync --check",
         "keyfleet.route_handoff --check",

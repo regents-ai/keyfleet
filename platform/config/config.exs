@@ -118,6 +118,12 @@ config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
 # good (`Keyfleet.Lighthouse`). Production sets its `api_key`.
 config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage", req_options: []
 
+# Coinbase's public market data, read with no account or key, for the seasons'
+# picks and prices (`Keyfleet.Seasons.Coinbase`).
+config :keyfleet, Keyfleet.Seasons.Coinbase,
+  url: "https://api.coinbase.com/api/v3/brokerage",
+  req_options: []
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks
@@ -184,6 +190,7 @@ config :keyfleet,
     Keyfleet.Fleets,
     Keyfleet.Rooms,
     Keyfleet.Polls,
+    Keyfleet.Seasons,
     Keyfleet.Dms,
     Keyfleet.Agents,
     Keyfleet.Keys,
@@ -299,6 +306,8 @@ config :keyfleet, Oban,
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
+  # Each fleet's season turn waits on Coinbase for its prices, so the turns
+  # have their own queue, one fleet at a time (`Keyfleet.Seasons.Turn`).
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -307,7 +316,8 @@ config :keyfleet, Oban,
     avatars: 2,
     key_art: 1,
     chain: 10,
-    ens: 3
+    ens: 3,
+    seasons: 1
   ],
   cron: [
     crontab: [
@@ -321,6 +331,10 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.Atlas.Fill},
       {"29 * * * *", Keyfleet.Atlas.ReadHubs},
       {"7 * * * *", Keyfleet.Keys.PresenceTimer},
+      # Every ten minutes from a minute past the hour: the first after a
+      # season boundary follows its last closed minute, and a turn that gave
+      # up is queued again (`Keyfleet.Seasons.Turns`).
+      {"1-59/10 * * * *", Keyfleet.Seasons.Turns},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_now"}},
@@ -329,7 +343,8 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "share_card"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "project_cards"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}},
+      {"*/10 * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

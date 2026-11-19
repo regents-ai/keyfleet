@@ -143,12 +143,14 @@ for (const [profile, use] of [
       expect(errors).toEqual([])
     })
 
+    // A full first page: a room opens at its newest hundred posts.
     test("a new post keeps a reader at the bottom there, and leaves one who scrolled up where they were", async ({page}) => {
+      test.setTimeout(120_000)
       const said = words()
-      const {owner} = speaker("people", said, 30)
+      const {owner} = speaker("people", said, 100)
       const errors = await signIn(page)
       await open(page, people)
-      await expectNewest(page, `${said} 30`, `${said} 1`)
+      await expectNewest(page, `${said} 100`, `${said} 1`)
 
       talk(fleet, owner, "people", `${said} late`, 1)
       await expectNewest(page, `${said} late 1`, `${said} 1`)
@@ -170,6 +172,7 @@ for (const [profile, use] of [
       // With motion reduced, a post that arrives still keeps the reader there.
       await page.emulateMedia({reducedMotion: "reduce"})
       talk(fleet, owner, "people", `${said} still`, 1)
+      await expect(post(page, `${said} still 1`)).toBeAttached()
       await expectNewest(page, `${said} still 1`, `${said} 1`)
 
       expect(errors).toEqual([])
@@ -185,8 +188,8 @@ for (const [profile, use] of [
 
       // A room opens at its newest hundred posts and keeps up to 200. A
       // hundred more come twenty at a time, each post its own change to the
-      // page, which lands about two a second here; a hundred at once keep the
-      // page busy so long that the room is drawn again from its newest hundred.
+      // page: a hundred at once kept the page busy so long that the room was
+      // drawn again from its newest hundred.
       for (const round of [1, 2, 3, 4, 5]) {
         talk(fleet, owner, "people", `${said} more${round}`, 20)
         await expect(post(page, `${said} more${round} 20`)).toBeAttached({timeout: 30_000})

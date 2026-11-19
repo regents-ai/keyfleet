@@ -29,7 +29,10 @@ defmodule KeyfleetWeb.FleetNow do
       project since deleted, is left out;
     * `page`: the newest notebook page a Key made public in a project the
       fleet still has, by that project's title, cut as a title is, its Key and
-      the page's own address, which opens for anyone; nil while there is none.
+      the page's own address, which opens for anyone; nil while there is none;
+    * `season`: the season under way as anyone reads it, with the one settled
+      as it started (`KeyfleetWeb.SeasonPanel.face/1`), for the hall's
+      "Season" panel; nil while none is under way.
 
   Pages showing a fleet to a reader who isn't a member draw it from here: the
   homepage, the fleet hall and the harbour's sea; the header's "Buy Key"
@@ -40,8 +43,8 @@ defmodule KeyfleetWeb.FleetNow do
   This is a reread on notice, the second of the two shapes the `elixir-stack`
   skill lets keep a shared reading. It hears what an open page of a fleet hears
   as a non-member: the fleet's Keys, its public rooms, its notable workspace
-  changes and its proposals. A burst of notices is answered by one read of
-  each fleet named, a second after the first. Each minute
+  changes, its proposals and its seasons' turns. A burst of notices is
+  answered by one read of each fleet named, a second after the first. Each minute
   `Keyfleet.SharedReading.Heal` asks for every fleet again, which mends a lost
   notice and brings in a fleet's record when it opens; a coming-soon fleet
   costs that one read. Making something public, or taking it back, sends no
@@ -61,8 +64,8 @@ defmodule KeyfleetWeb.FleetNow do
   use GenServer
 
   alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Notebooks, Projects, Proposals, Rooms}
-  alias Keyfleet.SharedReading
-  alias KeyfleetWeb.{ActivityLines, FleetPage, HarbourCrew, PageRead, WorkspacePage}
+  alias Keyfleet.{Seasons, SharedReading}
+  alias KeyfleetWeb.{ActivityLines, FleetPage, HarbourCrew, PageRead, SeasonPanel, WorkspacePage}
   alias Phoenix.Socket.Broadcast
 
   # How many things made public the reading keeps: enough to run twice
@@ -96,7 +99,8 @@ defmodule KeyfleetWeb.FleetNow do
             Keys.topic(fleet_id),
             Rooms.topic(fleet_id, :public),
             Graph.notable_topic(fleet_id),
-            Proposals.topic(fleet_id)
+            Proposals.topic(fleet_id),
+            Seasons.topic(fleet_id)
           ],
           into: %{},
           do: {topic, fleet_id}
@@ -193,7 +197,8 @@ defmodule KeyfleetWeb.FleetNow do
       goal: goal(fleet_id),
       headline: Activity.headline(fleet_id, now),
       public: board.public |> Enum.flat_map(&public(fleet_id, &1)) |> Enum.take(@public_shown),
-      page: page(fleet_id, board.projects)
+      page: page(fleet_id, board.projects),
+      season: SeasonPanel.face(fleet_id)
     }
   end
 
