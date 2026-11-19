@@ -24,6 +24,14 @@ config :keyfleet, :graph,
   data_dir: "/data/graph",
   python: "/opt/graph_host/.venv/bin/python"
 
+# Regent Points: the start is the shared program's start, the same moment on
+# every Regent site; it never moves, because everything Points counts is
+# counted from it. Keyfleet earns from the release that approves these five
+# account rules, the one switch.
+config :regent_points,
+  starts_at: ~U[2026-11-16 17:00:00Z],
+  approved_rules: ~w(account.activated social.x social.github social.farcaster agent.activated)
+
 # Requests and outcomes are logged; database queries and debug detail are not.
 config :logger, level: :info
 
