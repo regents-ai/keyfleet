@@ -312,10 +312,12 @@ config :keyfleet, Oban,
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   # Each fleet's season turn waits on Coinbase for its prices, so the turns
   # have their own queue, one fleet at a time (`Keyfleet.Seasons.Turn`).
-  # Regent Points checks and awards what this site offers it: each job holds a
-  # connection while it runs, so `points` takes at most 2 of the site
-  # machine's 5 (Keyfleet.DatabaseConfig). `points_chain` takes the tally's
-  # Base reads, which only Regents queues.
+  # Regent Points checks and awards what this site offers it, two jobs at a
+  # time. No queue reserves connections: every job and every page draws on the
+  # site machine's one pool of 5 (Keyfleet.DatabaseConfig), and a job that finds
+  # none free waits for one like any other caller. A Points job holds its
+  # connection for the length of its transaction. `points_chain` takes the
+  # tally's Base reads, which only Regents queues.
   queues: [
     default: 5,
     notebook_hubs: 1,
