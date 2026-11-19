@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.ToolErrors do
   (`KeyfleetWeb.AgentTools.Refused`) is that request's body. A workspace
   refusal takes the workspace's words
   (`KeyfleetWeb.WorkspaceRefusal`), with its `details`. A connected app's
-  identity refusal takes this site's own code and words, or, when no answer
-  came, the words every Regent site gives it.
+  identity refusal takes this site's own code and words, a wait the sign-in
+  service or this site names with its `retry_after`, or, when no answer came
+  that it can pass on, the words every Regent site gives it.
 
   A connected app whose identity isn't its person's paired agent yet is
   listed that agent's tools (`Keyfleet.Agents.Connection.Listing`), and any
@@ -20,9 +21,8 @@ defmodule KeyfleetWeb.ToolErrors do
   (`check_input/3`, the router's `tool_argument_transformer`), as the action
   itself would refuse it, with the actor and context it would run with: a
   pairing's as `invalid_request` in the library's words
-  (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
-  words every Regent site gives it, a fleet tool's with the refusal its signed
-  request answers (an unknown fleet as `fleet_unknown`), or else as
+  (`RegentMCPAgents.pairing_input_refusal/0`), a fleet tool's with the refusal
+  its signed request answers (an unknown fleet as `fleet_unknown`), or else as
   `invalid_request`, whose hint tells text longer than its input takes how
   long it may be and how long it is. A workspace write that names a coming-soon fleet is
   refused once its input has the shape its signed request needs, as every
@@ -88,8 +88,6 @@ defmodule KeyfleetWeb.ToolErrors do
 
   defp refused(Connection, :pair_identity, _errors),
     do: Jason.encode!(%{error: RegentMCPAgents.pairing_input_refusal()})
-
-  defp refused(Connection, _identity, _errors), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
 
   defp refused(resource, action, errors) do
     {_status, body} =

@@ -50,9 +50,12 @@ config :keyfleet, Keyfleet.OAuth,
 config :regent_agents, :siwa, origin: site_url
 
 # The words after "The identity request could not be completed." when an
-# identity tool call fails with no refusal of this site's own, as when the
-# sign-in service that holds the app's signing key refuses it or does not
-# answer; a refusal this site gives is passed on in its own words.
+# identity tool call gets no answer it can pass on: the sign-in service that
+# holds the app's signing key refused it, did not answer or answered with
+# something unusable, this site's own answer could not be read, or the app's
+# sign-in ended meanwhile. A refusal this site gives is passed on in its own
+# words, a wait the service or this site names with its seconds, and input a
+# tool can't take is refused as an input error.
 config :regent_mcp_agents, :config,
   enabled?: claude_connector?,
   audience: "keyfleet",

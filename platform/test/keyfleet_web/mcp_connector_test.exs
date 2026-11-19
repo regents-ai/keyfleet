@@ -9,6 +9,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
   #   token: a second app of an account paired through the first stays the app;
   # - the account's budget is spent before the sign-in server is asked, so a
   #   request past it never reaches the server, even while that server is down;
+  # - a connected app's messages for the team count against its account's
+  #   allowance, and a signing agent's against its address;
+  # - an identity tool refuses input it can't take as an input error, and passes
+  #   on a wait the sign-in service names;
   # - a pairing that ends or changes hands while a tool runs replaces the answer;
   # - each agent tool answers and refuses exactly as its signed request does,
   #   since both run the same code.
@@ -525,6 +529,81 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     assert List.last(statuses).status == 429
     assert signer_asks() == 120
+  end
+
+  # Every person's apps call from the same servers, so the address says nothing
+  # about whose a message is: it is the account's.
+  test "a connected app's messages count against its own account's allowance, the same for each of its apps",
+       c do
+    two_messages_an_hour()
+    account = account!()
+    claude = messaging_app!(account, "Claude", c)
+    chatgpt = messaging_app!(account, "ChatGPT", c)
+    another = messaging_app!(account!(), "Claude", c)
+
+    assert leave(call(claude, "messages_leave", message(), c)) == :left
+    assert leave(call(chatgpt, "messages_leave", message(), c)) == :left
+    assert leave(call(claude, "messages_leave", message(), c)) == "invalid_message"
+    assert leave(call(chatgpt, "messages_leave", message(), c)) == "invalid_message"
+    assert leave(call(another, "messages_leave", message(), c)) == :left
+  end
+
+  test "an agent that signs its own messages counts them against its address, as its signed requests do",
+       c do
+    two_messages_an_hour()
+    pair!(account!(), c.signer.address)
+
+    {:ok, agent} =
+      Keyfleet.Agents.with_pairing(%Actors.Agent{
+        wallet_address: String.downcase(c.signer.address),
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      })
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Scout", declared_harness: "test"}, actor: agent)
+    manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+
+    assert leave(signed_call(c, "messages_leave", message())) == :left
+    assert http_twin(c, manifest["messages_leave"], message()).status == 201
+    assert leave(signed_call(c, "messages_leave", message())) == "invalid_message"
+  end
+
+  test "input an identity tool can't take is refused as an input error, before anything is asked",
+       c do
+    token = connect!(account!(), @identity_scope)
+    test = self()
+
+    Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+      send(test, :signer_asked)
+      Req.Test.json(conn, %{})
+    end)
+
+    for tool <- ["register_identity", "get_identity", "check_in"],
+        input <- [%{"surprise" => true}, "surprise"] do
+      assert %{"isError" => true, "content" => [%{"text" => text}]} =
+               result(call(token, tool, input, c))
+
+      assert Jason.decode!(text)["error"]["code"] == "invalid_request",
+             "#{tool} #{inspect(input)}"
+    end
+
+    assert signer_asks() == 0
+  end
+
+  test "a wait the sign-in service names is passed on with its seconds", c do
+    token = connect!(account!(), @identity_scope)
+
+    Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+      conn |> put_resp_header("retry-after", "7") |> put_status(429) |> Req.Test.json(%{})
+    end)
+
+    for tool <- ["register_identity", "get_identity", "check_in"] do
+      assert %{"isError" => true, "content" => [%{"text" => text}]} =
+               result(call(token, tool, %{}, c))
+
+      assert %{"code" => "too_many_requests", "retry_after" => 7} = Jason.decode!(text)["error"]
+    end
   end
 
   # Costly failure: a caller that hasn't proved who it is has its body
@@ -1225,6 +1304,49 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   defp person(subject), do: %RegentAgents.Person{privy_user_id: subject}
+
+  # Room for many messages a sender, and two an hour for each network or
+  # connected app's account, none spent yet.
+  defp two_messages_an_hour do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+
+    put_env(
+      :keyfleet,
+      :limits,
+      Keyword.merge(limits,
+        message: [limit: 100, window_seconds: 3600],
+        message_address: [limit: 2, window_seconds: 3600]
+      )
+    )
+
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
+  end
+
+  # An app of `subject`'s account, connected from the same servers as every
+  # other, paired as its own agent and with a profile to leave messages under.
+  defp messaging_app!(subject, name, c) do
+    wallet = new_wallet()
+    token = connect!(subject, @agent_scopes, wallet)
+    %{code: code} = RegentAgents.issue_pairing_code!(actor: person(subject))
+    RegentAgents.pair_agent!(code, name, :claude, actor: %RegentAgents.Agent{wallet: wallet})
+    joined = %{"name" => name, "declared_harness" => "claude"}
+    assert %{"isError" => false} = result(call(token, "agents_join", joined, c))
+    token
+  end
+
+  defp message,
+    do: %{"topic" => "agents", "body" => "Hello team", "operation_id" => Ecto.UUID.generate()}
+
+  # What messages_leave answered: :left, or the code it was refused with.
+  defp leave(answer) do
+    case result(answer) do
+      %{"isError" => false} ->
+        :left
+
+      %{"isError" => true, "content" => [%{"text" => text}]} ->
+        Jason.decode!(text)["error"]["code"]
+    end
+  end
 
   # The fleet's seasons played by its turns: season 1 settled with a pick of
   # `owner`'s Key, season 2 under way and season 3 taking picks.

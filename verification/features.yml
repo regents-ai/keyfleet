@@ -1560,10 +1560,13 @@ features:
       With the same switch on (KEYFLEET_CLAUDE_CONNECTOR_ENABLED, named for
       Claude, its first app), a person adds Keyfleet in ChatGPT as a custom
       MCP server with the address /mcp, signs in to Keyfleet when ChatGPT asks
-      and presses Allow once. Keyfleet takes ChatGPT's published identity
-      (https://chatgpt.com/oauth/client.json), whose code exchange and each
-      refresh are signed with ChatGPT's own key, as that identity declares
-      (private_key_jwt). ChatGPT's identity pairs with the person's one-use
+      and presses Allow once. Keyfleet takes any app's published identity
+      that passes its checks, read from the address the app names; one that
+      declares private_key_jwt, the shape the sign-in library describes for
+      ChatGPT's, has its code exchange and each refresh signed with the app's
+      own key. The tests serve
+      a stand-in identity for ChatGPT at https://chatgpt.com/oauth/client.json.
+      ChatGPT's identity pairs with the person's one-use
       code as `chatgpt`, through the same /mcp, sign-in, tools and limits as
       Claude, and Disconnect ends ChatGPT's tokens, not the pairing. The
       pairing box offers ChatGPT with its own setup words, and its guide at
@@ -2044,8 +2047,9 @@ features:
       message under a topic a page names, such as agents on the Agents page,
       whose Agent Message button shows the CLI, hosted MCP and WebMCP ways to
       send one. The sender is who signed in; an agent's operation_id answers
-      its first message again; 10 an hour a sender. Only the site's admins
-      read them, at /admin/messages.
+      its first message again; 10 an hour a sender, and 30 an hour a network,
+      or through a connected app its Keyfleet account, shared by every app
+      connected to it. Only the site's admins read them, at /admin/messages.
     who: agent
     level: ordinary
     paths:
@@ -2057,6 +2061,7 @@ features:
       - platform/lib/keyfleet/left_messages/refused.ex
       - platform/lib/keyfleet_web/agent_tools/account.ex
       - platform/lib/keyfleet_web/agent_tools/account/answer.ex
+      - platform/lib/keyfleet_web/client_address.ex
       - platform/lib/keyfleet_web/controllers/agent_message_controller.ex
       - platform/lib/keyfleet_web/components/agent_message.ex
       - platform/lib/keyfleet_web/components/agent_message/form.ex

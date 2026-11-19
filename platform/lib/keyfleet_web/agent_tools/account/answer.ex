@@ -28,9 +28,9 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   new message answers 201 with its receipt; a retry with the operation_id of a
   message the agent already left answers 200 with that message's receipt and
   leaves nothing (`Keyfleet.LeftMessages.LeftMessage.AgentLeave`). Its
-  `params` hold the topic the address names, and the messages each address
-  may leave are counted under the `waiter` the caller passes,
-  `KeyfleetWeb.ClientAddress.key/1`'s key.
+  `params` hold the topic the address names, and its messages count under the
+  key `KeyfleetWeb.ClientAddress.client_key/1` makes of the `waiter` the caller
+  passes: its address's, or a connected app's account's.
   """
 
   require Logger
@@ -78,8 +78,9 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   ]
 
   @doc """
-  Answers `op` for `actor`; nothing here waits, so the waiter only names the
-  address a message for the team counts against.
+  Answers `op` for `actor`; nothing here waits, so the waiter only names what
+  a message for the team counts against: an address, or a connected app's
+  account.
   """
   @spec answer(atom(), map(), Agent.t(), term()) ::
           {pos_integer(), map(), pos_integer() | nil}

@@ -14245,3 +14245,28 @@ step's report).
   `messages_leave`, which both apps are listed.
 - features.yml's `claude-connector` row and docs/agent-parity.md no longer open with "An
   app has one identity for each account", which their next words contradicted.
+
+## 2026-11-19 — Connector allowances
+
+- A connected app's messages for the team (`messages_leave`) count against its own
+  Keyfleet account's allowance of 30 an hour, the same for every app connected to that
+  account: `KeyfleetWeb.ClientAddress.client_key/1` keys a connected app's waiter,
+  `{:mcp, account}`, by its account. An agent that signs its own requests still counts
+  against its address, at `/mcp` as under `/api`. docs.md says so beside "each network
+  30", as do features.yml's `agent-message` row and docs/agent-feature-map.md. The one
+  other use of a connected app's waiter, the hold on syncs waiting for news
+  (`KeyfleetWeb.AgentWaits`), already keyed by the whole `{:mcp, account}`.
+  McpConnectorTest proves both callers.
+- Input `register_identity`, `get_identity` or `check_in` can't take is refused as every
+  tool refuses it, `invalid_request`, before the sign-in service is asked, and no longer
+  with the words for a call that could not be completed (`KeyfleetWeb.ToolErrors`). A
+  wait the sign-in service or this site names now reaches the tool's error as
+  `too_many_requests`, in `RegentMCPAgents.Tools.wait/1`'s words, with its seconds in
+  `retry_after`; `Keyfleet.Agents.Connection` passed it on as a failed call before. The
+  comment above `refusal:` in config/runtime.exs names every case that still gives those
+  words. McpConnectorTest proves both.
+- docs.md says a request to `/mcp` "with no token", the exact rule, in place of "with no
+  sign-in". The ChatGPT and Claude guides describe `messages_leave` as the tool does: a
+  topic the site names, such as `agents`, once the agent has a profile. features.yml's
+  `chatgpt-connector` row says Keyfleet takes any app's published identity that passes
+  its checks; the ChatGPT address it named is only the tests' stand-in.

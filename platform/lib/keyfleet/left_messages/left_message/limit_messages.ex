@@ -2,8 +2,9 @@ defmodule Keyfleet.LeftMessages.LeftMessage.LimitMessages do
   @moduledoc """
   Holds each sender to 10 messages an hour (`:message`, counted for the
   person, or for an agent whose person has not signed in here), and each
-  network to 30 (`:message_address`, counted for the client key the caller
-  passes as `context: %{client_key: key}`, `KeyfleetWeb.ClientAddress.client_key/1`).
+  network, or a connected app's Keyfleet account, to 30 (`:message_address`,
+  counted for the client key the caller passes as `context: %{client_key: key}`,
+  `KeyfleetWeb.ClientAddress.client_key/1`).
   A message counts when it is saved, not while it is typed, so checking a
   draft never spends the allowance.
   """

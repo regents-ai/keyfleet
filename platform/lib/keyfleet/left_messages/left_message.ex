@@ -3,8 +3,9 @@ defmodule Keyfleet.LeftMessages.LeftMessage do
   One message left for the site's team under a `topic` the site names, such
   as `agents`: its text, where the sender wants an answer (`reply_to`) and who
   left it. A signed-in person or a signed agent with a profile leaves one, a
-  few an hour at most, from each of them and from each network (`:message`
-  and `:message_address` in `Keyfleet.Limits`, `LimitMessages`). The sender is
+  few an hour at most, from each of them and from each network, or a connected
+  app's account (`:message` and `:message_address` in `Keyfleet.Limits`,
+  `LimitMessages`). The sender is
   the actor, never an input (`SetSender`). Only the site's admins read them
   (`RegentAgents.Checks.Admin`); the sender gets a receipt, `receipt/1`, and
   never reads them back.

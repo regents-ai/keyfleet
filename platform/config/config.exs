@@ -253,7 +253,8 @@ config :keyfleet, :limits,
   treasury_refresh: [limit: 1, window_seconds: 30],
   # A person's reads of their wallets on Base, such as the Points page's NFT bonus.
   wallet_read: [limit: 30, window_seconds: 60],
-  # Messages left for the site's team, by each sender and by each address.
+  # Messages left for the site's team, by each sender and by each address, or
+  # for a connected app by its account.
   message: [limit: 10, window_seconds: 3600],
   message_address: [limit: 30, window_seconds: 3600]
 
