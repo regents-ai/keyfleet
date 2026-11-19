@@ -13404,3 +13404,46 @@ step's report).
   `DmsPageTest` and `ShellLiveTest`, 205 passed; vitest, 551 passed in 42 files; tsc,
   format, Credo strict on the changed Elixir files and compile with warnings as errors,
   clean. Commits d5f78e312, 788c9bdea, dbd5f1cfe and afc4bc82b.
+- Repair: a room lost its end as posts arrived. What was wrong: the first `RoomThread`
+  judged the end by how far the column could scroll (`scrollHeight`) and counted any
+  scroll that left the column higher than the hook last put it as the reader leaving.
+  While `MotionList` moved the posts, anime.js held every element of every post placed
+  on its own and measured them all, and the column's scroll range doubled. The hook
+  scrolled into that empty range, the browser pulled the column back when the move
+  ended, the hook took that for the reader scrolling up, and the next post was not
+  followed. The walk with a full first page (100 posts) at 1280×720 showed it: 4 of 4
+  lost the end at the step after motion is reduced.
+- What is true now, as the comment at the top of assets/js/hooks/room_thread.ts says
+  once: the hook listens to no scrolling and guesses no direction. The end is the
+  bottom of `div.rooms-foot` where it is drawn, judged against the part of the room's
+  column the window shows. At every size change of the posts, the foot or the room, and
+  every time the server draws the posts again (a full room swaps its oldest post for a
+  new one of the same height, which changes no size), the room follows if the end was
+  on screen before the change or is now. Where the reader left it is read two ways, and
+  either will do: how far the first post on screen moved, which the browser holds in
+  place when posts above it come or go, and how far the room's posts scrolled, for the
+  changes the browser does not hold, as when a post gains the space and line under it
+  once a newer post lands below it. Following puts the foot's bottom at the column's
+  bottom with the column's own spacing under it (never `scrollTop = scrollHeight`), and
+  scrolls the page only when the room's bottom is off the screen. Opening the room, the
+  reader's own post and a reconnect go to the end.
+- A room fades in only its new post: `RoomPosts` (assets/js/hooks/room_posts.ts) takes
+  the place of `MotionList` on the room's list, and with motion reduced, or as the room
+  is drawn again on reconnect, a post is simply there. `MotionList` and its other lists
+  are unchanged. Page work per new post in the walk's Chromium at 1280×720: in a room of
+  110 posts about 0.8 s with `MotionList` (longest frame about 264 ms) and 168 ms now
+  (57 ms); in a full room of 200 about 1.57 s (560 ms) and 276 ms now (87 ms); with
+  motion reduced, 153 ms and 330 ms. The 240 ms per change noted above was measured with
+  `MotionList` moving the posts.
+- Proof: "a new post keeps a reader at the bottom" (100 posts) and "a full room of 200
+  posts", 20 repeats each at 1280×720 and on the phone, with the machine's load average
+  between 3.7 and 9: normal motion 80 of 80, motion reduced 80 of 80; the same with the
+  page's processor slowed four times, normal motion 80 of 80 and motion reduced 80 of
+  80. Before the room read the reader's
+  place two ways, the full room with motion reduced lost the end on the phone in 20 of
+  20. room_chat.spec.ts and room_mutes.spec.ts in the chain walk, 15 passed; vitest, 516
+  passed in 39 files; tsc and format clean; `RoomPageTest` and `FleetPageTest`, 121
+  passed; compile with warnings as errors, clean. The two holds stand: no copy on a post
+  an agent wrote as itself, and the box to write in is unchanged on a short wide screen.
+  Commits f471998ec, 1fc869e5d, ebc5afaeb, cd5b253eb, 6b420bc2f, a9a4bd3ce and
+  27b5c742d.
