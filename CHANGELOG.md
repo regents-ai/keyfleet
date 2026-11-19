@@ -14494,3 +14494,49 @@ step's report).
 - siwa-server v107 (cf107d1) lets a hosted signer pair a Keyfleet identity as `claude`
   or `chatgpt`; features.yml's `claude-connector` row says so in place of "only as
   `claude`".
+
+## 2026-11-19 — Points: what came after the start earns once, at its own time
+
+- The shared libraries move from elixir-utils b695c5a0 to 0e89c4fc, elixir-utils main,
+  all thirteen together; `platform/mix.lock` changes only in those entries. 0e89c4fc is
+  b695c5a0 plus two Points commits:
+  - The start run, `RegentPoints.StartAwards`, asks each start rule's source about the
+    run's own time instead of the start, and runs at most once a day where before it
+    ran once until Oban pruned it. An account, linked social account or paired agent
+    made after the Points start (16 Nov, 17:00 UTC) and before Keyfleet's release
+    switched Points on (19 Nov), which no save offered, is now recorded and earns once,
+    at its own time. What accounts had before the start still earns at the start, and
+    nothing Points has recorded is offered again.
+  - An award still waiting, or refused, blocks no later offer. A one-time rule stops
+    taking an account's offers only once that account has earned it; offers checked
+    together for one account end with one earned and the rest `capped`. A refused
+    event can be offered again, and the new facts replace the refused ones.
+- This corrects the entry "Points: an award goes only to the account its offer named"
+  above. A social account refused because it changed hands no longer earns for nobody:
+  its present holder earns it once, through its own link's offer or the next start run,
+  and only one account ever earns it.
+- Keyfleet's three sources already read the moment they are asked about, not the
+  configured start. `Keyfleet.Points.AccountActivated` lists the accounts made before
+  it, `Keyfleet.Points.LinkedSocial` the links made before it that are still there, and
+  `Keyfleet.Points.PairedAgent` each person's earliest pairing before it that is still
+  paired. Their argument is renamed `at`, with no change in behaviour. Their notes, the
+  comments on the two account reads and on the hourly line in
+  `platform/config/config.exs`, and features.yml's `points-account-awards` row now say
+  so. That row's gap for what came between the start and the release is closed, and
+  the `claude-connector` row names the new pin.
+- No migration, and no Points setting, rule, rate or start time changed.
+- Proof: `test/keyfleet/points/start_awards_test.exs` gains four tests. For each kind of
+  start rule (an account, an X account, an agent), something made after the start and
+  before the switch-on is offered once by the start run and earns once at its own
+  time; something a save already offered is not offered again; and a second run adds
+  nothing. In the fourth, a social account refused because it changed hands is offered
+  again by the next start run, its present holder earns it once and the first holder
+  never does. All four fail with b695c5a0's start run, and the fourth also fails with
+  f555affb's award code. Three existing tests now show what is true on this pin. The
+  start run offers a newly linked X account a second time while its first offer is
+  still waiting, and it earns once. An award refused for one account is earned once by
+  the present holder's own offer. A second pairing's two offers end with one earned and
+  one `capped`. The two Points test files pass (18 tests), and so do the Points,
+  sign-in, linked account and pairing tests (ten files, 102 tests). Compile with
+  warnings as errors in dev and test is clean; format is clean and `mix credo --strict`
+  finds no issues on the changed files; `make check-required-fixes` passes.

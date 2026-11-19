@@ -101,7 +101,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       filter expr(id in ^arg(:ids))
     end
 
-    # The accounts made before a moment, such as the Points start.
+    # The accounts made before a moment, such as the time the Points start run reads them.
     read :created_before do
       argument :at, :utc_datetime_usec, allow_nil?: false
       filter expr(created_at < ^arg(:at))

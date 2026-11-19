@@ -1,17 +1,22 @@
 defmodule Keyfleet.Points.StartAwardsTest do
   # Invariant: an account, its linked social accounts and its paired agent from
   # before the Points start earn their one-time awards at the start, once,
-  # through this site's own checks, without the person doing anything; an
-  # account another site already recorded for a rule is not offered it again,
-  # and a social account linked in place of an earlier one after the start is
-  # not held from before it.
+  # through this site's own checks, without the person doing anything; those
+  # from after the start that Points has not recorded earn them once, at their
+  # own time, and a run adds nothing for what is already recorded; an account
+  # another site already recorded for a rule is not offered it again; a social
+  # account linked in place of an earlier one after the start is not held from
+  # before it; and a social account refused because it changed hands earns once,
+  # for its present holder.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
+  import Ecto.Query, only: [from: 2]
   require Ash.Query
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.VerifiedSession
   alias Keyfleet.Actors.System
+  alias Keyfleet.Repo
   alias RegentPoints.{Entry, Event, IntakeWorker, StartAwards, Store}
 
   @rules ~w(account.activated social.x social.github social.farcaster agent.activated)
@@ -112,11 +117,14 @@ defmodule Keyfleet.Points.StartAwardsTest do
     assert {:ok, _account, []} = did |> session([replacement]) |> VerifiedSession.establish()
     assert offered(["x:" <> replacement.subject]) == ["x:" <> replacement.subject]
 
-    # The start awards offer the account, and neither X account as held before the start.
+    # The start awards offer the account, and the new X account again, since Points
+    # has not recorded it yet; neither X account as held before the start.
     assert :ok = perform_job(StartAwards, %{})
     assert offered([to_string(account.id)]) == [to_string(account.id)]
     assert offered(["x:" <> before.subject]) == []
-    assert offered(["x:" <> replacement.subject]) == ["x:" <> replacement.subject]
+
+    assert offered(["x:" <> replacement.subject]) ==
+             List.duplicate("x:" <> replacement.subject, 2)
 
     assert %{failure: 0} = Oban.drain_queue(queue: :points, with_recursion: true)
     link = Accounts.get_linked_identity_by_subject!(:x, replacement.subject, actor: %System{})
@@ -128,6 +136,140 @@ defmodule Keyfleet.Points.StartAwardsTest do
     assert DateTime.compare(activated_at, start) == :eq
     assert DateTime.compare(earned_at, link.inserted_at) == :eq
   end
+
+  test "an account made after the start, before the site switched Points on, earns once at its own time" do
+    switched_on_late("account.activated", fn name ->
+      did = "did:privy:joined-after-start-#{name}-" <> Ecto.UUID.generate()
+      assert {:ok, account, []} = did |> session([]) |> VerifiedSession.establish()
+      after_clock(account)
+      saved = Accounts.points_account!(account.id, actor: %System{})
+      {account.id, to_string(account.id), saved.created_at}
+    end)
+  end
+
+  test "an X account linked after the start, before the site switched Points on, earns once at its own time" do
+    switched_on_late("social.x", fn name ->
+      x = social(:x)
+      did = "did:privy:linked-after-start-#{name}-" <> Ecto.UUID.generate()
+      assert {:ok, account, []} = did |> session([x]) |> VerifiedSession.establish()
+      link = Accounts.get_linked_identity_by_subject!(:x, x.subject, actor: %System{})
+      {account.id, "x:" <> x.subject, link.inserted_at}
+    end)
+  end
+
+  test "an agent paired after the start, before the site switched Points on, earns once at its own time" do
+    switched_on_late("agent.activated", fn name ->
+      did = "did:privy:paired-after-start-#{name}-" <> Ecto.UUID.generate()
+      assert {:ok, account, []} = did |> session([]) |> VerifiedSession.establish()
+      code = RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: did})
+
+      pairing =
+        RegentAgents.pair_agent!(code.code, "Agent", :codex,
+          actor: %RegentAgents.Agent{wallet: wallet()}
+        )
+
+      {:ok, history} = RegentAgents.pairing_history(pairing.id)
+      {account.id, pairing.id, history.paired_at}
+    end)
+  end
+
+  test "a social account refused because it changed hands is offered again by the next run, and its present holder earns it once" do
+    Application.put_env(:regent_points, :starts_at, DateTime.add(DateTime.utc_now(), -60))
+    Application.put_env(:regent_points, :approved_rules, ["social.x"])
+    x = social(:x)
+    key = "x:" <> x.subject
+
+    [first, second] =
+      for name <- ~w(first second), do: "did:privy:changed-hands-#{name}-" <> Ecto.UUID.generate()
+
+    assert {:ok, account, []} = first |> session([x]) |> VerifiedSession.establish()
+    assert {:ok, other, []} = second |> session([]) |> VerifiedSession.establish()
+
+    # One pass checks the first person's offer; its award waits.
+    assert %{success: 1, failure: 0} = Oban.drain_queue(queue: :points)
+
+    # The first person lets the X account go and the second links it. The second
+    # person's offer is checked while the first award still waits, so it is not
+    # recorded.
+    assert {:ok, _account, []} = first |> session([]) |> VerifiedSession.establish()
+    assert {:ok, _other, []} = second |> session([x]) |> VerifiedSession.establish()
+
+    assert [offer] =
+             Enum.filter(
+               all_enqueued(worker: IntakeWorker),
+               &(&1.args["source_event_key"] == key)
+             )
+
+    check_now(offer)
+    assert events(other.id, "social.x") == []
+
+    # The first award is refused: the X account now names the second person.
+    assert %{failure: 0} = drain()
+    assert events(account.id, "social.x") == [{"keyfleet", :rejected}]
+    assert entries(account.id, "social.x") == []
+    assert entries(other.id, "social.x") == []
+
+    # The next start run offers it for its present holder, who earns it once, at
+    # the time they linked it.
+    assert :ok = perform_job(StartAwards, %{})
+    assert offered([key]) == [key]
+    assert %{failure: 0} = drain()
+
+    link = Accounts.get_linked_identity_by_subject!(:x, x.subject, actor: %System{})
+    assert [%{earned_at: earned_at}] = entries(other.id, "social.x")
+    assert DateTime.compare(earned_at, link.inserted_at) == :eq
+    assert entries(account.id, "social.x") == []
+    assert events(other.id, "social.x") == [{"keyfleet", :confirmed}]
+
+    # A second run the same day adds nothing.
+    assert :ok = perform_job(StartAwards, %{})
+    assert offered([key]) == []
+    assert [_entry] = entries(other.id, "social.x")
+  end
+
+  # Points started a minute ago and this site switches `rule` on only now. `act`
+  # does the rule's action for a new person and answers their account id, the
+  # source key and when it was done: the first person before the switch, so no
+  # save offers it, and the second after it, so their save does.
+  defp switched_on_late(rule, act) do
+    start = DateTime.add(DateTime.utc_now(), -60)
+    Application.put_env(:regent_points, :starts_at, start)
+    {late, late_key, done_at} = act.("late")
+    Application.put_env(:regent_points, :approved_rules, [rule])
+    {live, live_key, _done_at} = act.("live")
+
+    # The second person's offer is checked and awarded before the start run.
+    assert offered([late_key, live_key]) == [live_key]
+    assert %{failure: 0} = drain()
+
+    # The run offers the first person's, once, and not the second person's again.
+    assert :ok = perform_job(StartAwards, %{})
+    assert offered([late_key, live_key]) == [late_key]
+    assert %{failure: 0} = drain()
+
+    assert [%{earned_at: earned_at}] = entries(late, rule)
+    assert DateTime.after?(earned_at, start)
+    assert DateTime.compare(earned_at, done_at) == :eq
+    assert [_entry] = entries(live, rule)
+
+    # A second run the same day finds both recorded and adds nothing.
+    assert :ok = perform_job(StartAwards, %{})
+    assert offered([late_key, live_key]) == []
+    assert [_entry] = entries(late, rule)
+    assert [_entry] = entries(live, rule)
+  end
+
+  # Checks one waiting offer now, ahead of work queued before it, as another node
+  # may, and marks its job done.
+  defp check_now(job) do
+    assert :ok = perform_job(IntakeWorker, job.args)
+
+    Repo.update_all(from(j in Oban.Job, where: j.id == ^job.id), [set: [state: "completed"]],
+      prefix: "keyfleet_app"
+    )
+  end
+
+  defp drain, do: Oban.drain_queue(queue: :points, with_recursion: true)
 
   # The offers waiting for these source keys.
   defp offered(keys) do
@@ -184,6 +326,8 @@ defmodule Keyfleet.Points.StartAwardsTest do
     |> Ash.Query.sort(rule_id: :asc)
     |> Ash.read!(actor: Store.system())
   end
+
+  defp entries(account_id, rule), do: Enum.filter(entries(account_id), &(&1.rule_id == rule))
 
   defp events(account_id, rule) do
     Event

@@ -7,7 +7,8 @@ defmodule Keyfleet.Points.AccountRulesTest do
   # newly linked, and a rule that is off offers nothing and never refuses the
   # action it rides in. Points asks the source when it checks the offer and
   # again just before it writes the award, which goes only to the account the
-  # offer named. An award is offered only for its own signal.
+  # offer named; offers checked together for one account end one earned and the
+  # rest capped. An award is offered only for its own signal.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
@@ -232,7 +233,10 @@ defmodule Keyfleet.Points.AccountRulesTest do
              |> Ash.read!(actor: Store.system())
 
     assert wallet in wallets
-    assert events(account.id, "agent.activated") == [{"keyfleet", :confirmed}]
+
+    # Both offers were checked together: one earned and the other ended capped.
+    assert Enum.sort(events(account.id, "agent.activated")) ==
+             [{"keyfleet", :capped}, {"keyfleet", :confirmed}]
   end
 
   # Points asks the source when it checks the offer and again just before it
@@ -282,10 +286,13 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert {:ok, _account, []} = first |> session([]) |> VerifiedSession.establish()
     assert {:ok, _other, []} = second |> session([x]) |> VerifiedSession.establish()
 
+    # The first person's award is refused; the second person's own offer, checked
+    # after it, earns the X account for them, once.
     assert %{failure: 0} = drain()
     assert entries(account.id, "social.x") == []
-    assert entries(other.id, "social.x") == []
-    assert events(account.id, "social.x") == [{"keyfleet", :rejected}]
+    assert entries(other.id, "social.x") == [{"social.x", 10_000_000, "keyfleet"}]
+    assert events(account.id, "social.x") == []
+    assert events(other.id, "social.x") == [{"keyfleet", :confirmed}]
     assert "account_changed" in rejections("x:" <> x.subject)
   end
 
