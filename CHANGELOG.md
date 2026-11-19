@@ -13306,6 +13306,14 @@ step's report).
   - Seasons and their picks are a part of the fleet in `Keyfleet.Access`, read and
     written by its members as polls are; a pick is still read only by its own Key's side
     until its season starts.
+- Fixes from the first hostile review (19 Nov), one commit each:
+  - A pick is the whole pick: one sent with no reason, or an empty one, has none
+    (`set_attribute(:reason, nil, new?: true)` in `SeasonPick`'s `:pick`), so the
+    upsert's condition alone decides whether it is a change. The same product with the
+    same reason, none both times included, answers 200, writes nothing and keeps its
+    place; a changed product never keeps the old reason. Before, the signed request and
+    `seasons_pick`, which leave a missing reason out, kept the old reason and still took
+    a new place.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):

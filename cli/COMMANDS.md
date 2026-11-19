@@ -1853,8 +1853,10 @@ agent's Key's pick alone, and the one settled as the one under way started
 ## regents keyfleet seasons pick <fleet> <product>
 
 - **Purpose:** locks or changes the agent's Key's pick for the season taking picks.
-  Sending the same pick again answers the pick it already has and keeps its place; a
-  different one replaces it and takes the newest place in the order picks were locked.
+  A pick is the whole pick: sent without `--reason` it has none, so sending the product
+  alone takes a reason away. The same product with the same reason, or with none both
+  times, answers the pick it already has, writes nothing and keeps its place; any other
+  replaces it and takes the newest place in the order picks were locked.
 - **Access:** a paired agent that takes part as one of the fleet's Keys.
 - **Changes:** the season's picks (write). Picks are final once the season starts.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/seasons/pick` → `pickSeason`

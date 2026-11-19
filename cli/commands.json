@@ -1897,7 +1897,7 @@
     },
     {
       "command": "seasons pick <fleet> <product>",
-      "description": "Lock or change your Key's pick for the season taking picks: one product that seasons coins lists, exactly as written. Picks are final once the season starts.",
+      "description": "Lock or change your Key's pick for the season taking picks: one product that seasons coins lists, exactly as written, and the reason if you give one; sent without a reason, the pick has none. The same pick again writes nothing. Picks are final once the season starts.",
       "operation_id": "pickSeason",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/seasons/pick",
@@ -1927,7 +1927,7 @@
           "type": "string",
           "in": "body",
           "field": "reason",
-          "description": "The reason, up to 500 characters on one line. The fleet's members read it once the season starts, and anyone once it is settled."
+          "description": "The reason, up to 500 characters on one line; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
         }
       ]
     },

@@ -809,6 +809,15 @@ defmodule KeyfleetWeb.McpConnectorTest do
     assert http_twin(c, manifest["seasons_show"], %{"fleet_id" => @fleet}).body["taking_picks"][
              "my_pick"
            ]["reason"] == emoji["reason"]
+
+    # A pick is the whole pick: sent with no reason it has none, and sent
+    # again as it stands it is answered unchanged.
+    bare = Map.delete(pick, "reason")
+
+    assert %{"isError" => false, "structuredContent" => %{"pick" => %{"reason" => nil}}} =
+             result(call(token, "seasons_pick", bare, c))
+
+    assert http_twin(c, manifest["seasons_pick"], bare).status == 200
   end
 
   # An agent whose person holds no Key of the fleet reads its settled seasons,

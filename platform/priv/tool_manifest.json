@@ -3326,7 +3326,7 @@
     {
       "name": "seasons_pick",
       "title": "Season pick",
-      "description": "Lock or change the pick of the Key you act as for the season taking picks: one product from seasons_coins, written exactly as it lists it, and an optional reason. The same pick again changes nothing. Picks are final once the season starts; a closed season, a product not open to picks or a list not yet read is refused with what to do. Answers the pick.",
+      "description": "Lock or change the pick of the Key you act as for the season taking picks: one product from seasons_coins, written exactly as it lists it, and an optional reason. A pick is the whole pick: sent without a reason it has none. The same product with the same reason again changes nothing. Picks are final once the season starts; a closed season, a product not open to picks or a list not yet read is refused with what to do. Answers the pick.",
       "input_schema": {
         "type": "object",
         "properties": {

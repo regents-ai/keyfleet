@@ -79,6 +79,34 @@ defmodule Keyfleet.SeasonsTest do
              SeasonPick |> Ash.read!(actor: @system) |> Enum.sort_by(& &1.token_id)
   end
 
+  # The form sends an empty box; the signed request and the seasons_pick
+  # tool leave a reason out. Either way the pick has none.
+  test "a pick is the whole pick: sent with no reason it has none, and sent again unchanged it writes nothing",
+       %{season: season} do
+    first = pick!(human("a"), "SOL-USD", "Fast chain")
+    pick!(human("b"), "ETH-USD", nil)
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Seasons.season_topic(season.id))
+
+    bare = Seasons.pick!(@fleet, 1, %{"product" => "SOL-USD"}, actor: human("a"))
+    assert %{reason: nil} = bare
+    refute Ash.Resource.get_metadata(bare, :upsert_skipped)
+    assert bare.lock_order > first.lock_order
+    assert_receive %Broadcast{event: "season_changed"}
+
+    for sent <- [%{"product" => "SOL-USD"}, %{"product" => "SOL-USD", "reason" => ""}] do
+      again = Seasons.pick!(@fleet, 1, sent, actor: human("a"))
+      assert Ash.Resource.get_metadata(again, :upsert_skipped)
+      assert %{reason: nil} = Seasons.my_pick!(@fleet, 1, actor: human("a"))
+      assert again.lock_order == bare.lock_order
+      refute_receive %Broadcast{event: "season_changed"}
+    end
+
+    pick!(human("a"), "SOL-USD", "Back again")
+
+    assert %{product: "ETH-USD", reason: nil} =
+             Seasons.pick!(@fleet, 1, %{"product" => "ETH-USD"}, actor: human("a"))
+  end
+
   test "before its season starts a pick is read only by its own Key and that Key's agents; from the start, by every member",
        %{season: season} do
     agent = PairingHelpers.agent_for!(human("a"))

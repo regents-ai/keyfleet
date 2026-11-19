@@ -3,10 +3,11 @@ defmodule Keyfleet.Seasons.SeasonPick do
   A Key's one pick for a season: a Coinbase product quoted in US dollars, or
   `USDC`, and a short reason if it gives one.
 
-  A Key picks once a season, whichever of its agents sends it. Until the
+  A Key picks once a season, whichever of its agents sends it. A pick is the
+  whole pick: its product and its reason, none when it gives none. Until the
   season starts the pick may change; a change takes a new place in the order
   picks were locked (`lock_order`, from a database sequence), and sending the
-  same pick again keeps its place. Until the season starts only the Key's
+  same pick again writes nothing and keeps its place. Until the season starts only the Key's
   holder and its agents read the pick; from the start every member of the
   fleet reads every pick, and once the season is settled anyone does, as
   its public record (`:settled`). Picks are never removed.
@@ -103,6 +104,10 @@ defmodule Keyfleet.Seasons.SeasonPick do
                        )
 
       return_skipped_upsert? true
+
+      # A pick is the whole pick: one sent with no reason has none, so the
+      # condition above alone decides whether it is a change.
+      change set_attribute(:reason, nil, new?: true)
 
       change Keyfleet.Seasons.Changes.Pick
 

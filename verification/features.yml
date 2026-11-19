@@ -1695,7 +1695,9 @@ features:
       03:00 … 21:00. While one runs, each Key may lock one pick for the next:
       a Coinbase product quoted in US dollars that Coinbase lists as spot,
       open for trading and traded at least 1,000,000 US dollars over 24
-      hours, or USDC. A turn a minute after each hour, queued every ten
+      hours, or USDC, and a reason if it gives one. A pick is the whole pick:
+      sent without a reason it has none, and the same pick again writes
+      nothing and keeps its place. A turn a minute after each hour, queued every ten
       minutes so a missed or failed one runs again, settles the season that
       ended, locks the one starting and opens the next, in one step. A pick
       scores close over open less one, from Coinbase's one-minute candles; a
