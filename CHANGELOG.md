@@ -13491,8 +13491,7 @@ step's report).
   the `chatgpt` harness, once kf/seasons-1118 lists it, would be refused
   `hosted_request_not_allowed` until siwa-server allows it. The library's hello-card key
   read keeps nothing when it fails, so while SIWA's key address is down each signed
-  request carrying a card, and each pairing question, reads it again, up to seven seconds.
-  At the 2,048-byte limit the
+  request carrying a card reads it again, up to seven seconds. At the 2,048-byte limit the
   session cookie is 3,374 of its 4,096 bytes.
 - Not proven: real ChatGPT and real Claude have not connected; no browser here follows
   the return page to another host (the template's Chromium walk does, on the same

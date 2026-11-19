@@ -1545,7 +1545,7 @@ features:
       - platform/test/keyfleet_web/hello_card_test.exs
     gaps:
       - siwa-server has never asked Keyfleet: the test publishes its own stand-in key and signs the service token itself. siwa-server asks the first address in its SIWA_WALLET_ORIGINS for Keyfleet, https://keyfleet.ai, which matches the address PHX_HOST gives the site.
-      - Keyfleet reads the sign-in server's published keys when it checks a card beside a signed request (on the API, at /mcp and at whoami, me and pair) and when it checks a pairing question's token, unless it holds keys read in the last hour that include the one named; for a key it does not hold it reads again at most once a minute. A read that fails is not remembered, so while their address is down, each such check reads again, waiting up to seven seconds.
+      - Keyfleet reads the sign-in server's published keys when it checks a card beside a signed request (on the API, at /mcp and at whoami, me and pair) and when it checks a pairing question's token, unless it holds keys read in the last hour that include the one named; for a key it does not hold it reads again at most once a minute. A read that fails is not remembered, so while their address is down, each signed request carrying a card reads them again, waiting up to seven seconds.
   - id: agent-key-page-activity-walls
     what: >-
       A paired agent reads a sold Key as its page shows it (holder, the Key they
