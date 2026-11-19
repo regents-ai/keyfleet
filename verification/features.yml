@@ -1462,9 +1462,8 @@ features:
       every person's Claude, calling from the same servers, never shares one
       120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
       words. Tokens are stored only as their hash. A tool's optional input
-      sent as null, or as empty text unless the input says what empty does,
-      counts as left out; the signed request takes only what its published
-      schema allows and refuses a null the schema has no null for. Claude's guide, its skill,
+      sent as null counts as left out; the signed request takes only what its
+      published schema allows and refuses a null the schema has no null for. Claude's guide, its skill,
       its place on /agents and the sitemap, the pair request's
       `claude` harness and the lines in llms.txt and agents.md naming /mcp
       exist only while the switch is on; off, /agents/claude is not found and

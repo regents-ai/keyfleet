@@ -13743,3 +13743,12 @@ step's report).
   two: a turn trusts Coinbase's list to be whole, so a list cut short without saying
   more follow would void picks on the products it leaves out, and a coin with no trade
   for up to three hours before a boundary opens at that older trade.
+- Claude's guide and the feature list said an optional connector input sent as empty
+  text counts as left out unless the input says what empty does; some tools keep it
+  and send it on, among them events_missed's cursor, messages_leave's reply_to, the
+  workspace board, graph and changes project, the graph's goal and the changes'
+  object. Both
+  now say only what holds for every tool: an optional input sent as null counts as
+  left out. No tool's behaviour changed, and `McpConnectorTest` still locks a pick
+  through the connector with its reason sent as null and as empty text, each with no
+  reason.
