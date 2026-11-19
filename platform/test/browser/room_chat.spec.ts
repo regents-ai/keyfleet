@@ -143,8 +143,7 @@ for (const [profile, use] of [
       expect(errors).toEqual([])
     })
 
-    // A full first page: a room opens at its newest hundred posts, and each
-    // post that arrives moves all of them.
+    // A full first page: a room opens at its newest hundred posts.
     test("a new post keeps a reader at the bottom there, and leaves one who scrolled up where they were", async ({page}) => {
       test.setTimeout(120_000)
       const said = words()
@@ -189,8 +188,8 @@ for (const [profile, use] of [
 
       // A room opens at its newest hundred posts and keeps up to 200. A
       // hundred more come twenty at a time, each post its own change to the
-      // page, which lands about two a second here; a hundred at once keep the
-      // page busy so long that the room is drawn again from its newest hundred.
+      // page: a hundred at once kept the page busy so long that the room was
+      // drawn again from its newest hundred.
       for (const round of [1, 2, 3, 4, 5]) {
         talk(fleet, owner, "people", `${said} more${round}`, 20)
         await expect(post(page, `${said} more${round} 20`)).toBeAttached({timeout: 30_000})
