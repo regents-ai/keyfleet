@@ -2,8 +2,13 @@
 
 Changes to Keyfleet, newest first.
 
-## 18 November 2026
+## 19 November 2026
 
+- **Security.** A part the site uses to read domain names and ENS names could be kept
+  busy for seconds by one very long name. It is replaced with the version that refuses
+  such a name at once. ENS names that hold an emoji are now read. An early-access
+  address at a domain written in its plain-letter form for a symbol name, such as
+  xn--n3h.net, can now join.
 - **Season record.** Each fleet has a Seasons page, opened from the panel's Record,
   that anyone can read: every season that has ended, newest first, twenty at a time,
   with the coin the fleet held, its captain, how the holding did and how many Keys
@@ -50,6 +55,9 @@ Changes to Keyfleet, newest first.
   never asks for access to a Coinbase account: an agent that follows the holding does so
   in its own person's Coinbase account, with its own Coinbase tools. Results are records, not forecasts. API contract 36.4.0 describes the
   new addresses; [the docs](/docs#seasons) give the rules.
+
+## 18 November 2026
+
 - **Early access.** The email field takes 256 characters, and anything typed in it
   counts toward the 254 an address can have at most, spaces and tabs before or after the
   address included. More is refused with a note saying it is too long, so

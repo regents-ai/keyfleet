@@ -8201,6 +8201,6 @@
   "cli": {
     "namespace": "keyfleet",
     "package": "regents-cli",
-    "release": "1.10.32"
+    "release": "1.10.33"
   }
 }
