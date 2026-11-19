@@ -97,8 +97,7 @@ function edgePath(edges: number, size: number) {
  * elements, fewer where the map has gaps. The laptop stage (1,390 × 630 at
  * 96 px cells) needs at most 19 × 12 = 228 against a budget of 400, and the
  * phone stage (378 × 587 at 76 px) at most 9 × 13 = 117 against 160. A stage
- * wider than about 2,300 px would pass 400; the browser tests hold both
- * measured counts to their budgets.
+ * wider than about 2,300 px would pass 400.
  */
 export function createTiles(layer: HTMLElement, faces: TileFaces, pictures: Pictures): Tiles {
   let placed = new Map<number, Tile>()

@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.ScriptPreloads do
   alongside it instead of finding them only once `app.js` has arrived.
 
   They come from esbuild's record of what it built (`--metafile`, written to
-  `priv/esbuild-meta.json` with the assets), read once. Without built assets,
-  as in tests, there are none.
+  `priv/esbuild-meta.json` with the assets), read once. Without built assets
+  there are none.
   """
 
   @app "../priv/static/assets/js/app.js"

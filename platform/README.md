@@ -90,10 +90,10 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site, and `/early` then sends visitors to the homepage. `off` leaves only the early-access page, the Contact page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site, and `/early` then sends visitors to the homepage. `off` leaves only the early-access page, the Contact page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development sets it in `config/dev.exs`. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. The Claude connector's sign-in and its `/mcp` address are at `https://PHX_HOST` too, and each of its tokens is bound to that address as it is issued. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
-| `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
+| `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development defaults to a local siwa-server on port 4100. |
 | `KEYFLEET_RPC_URL` | For the fleet reader | The Base node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets take Base from Privy's own list of networks. Unset, the fleet reader does not run and sent steps are read from Base's public node. |
 | `KEYFLEET_PRESENCE_TIMER_KEY` | Yes in production | The timer wallet's private key, `0x` and 64 hex digits. It marks presence for Keys whose owners gave it a shard (`Keyfleet.Keys.PresenceTimer`). Only ever stored on Fly. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
@@ -117,7 +117,7 @@ cluster through the app's private DNS name, and a workspace write on the site
 machine is made by its fleet's writer on the graph machine. **The graph
 machine must stay one machine** (deploy with `--ha=false`): a second would
 mount its own empty volume and the graphs would split without any error. In
-development and tests one machine runs everything. In development
+development one machine runs everything, and
 `mix setup` installs the graph process's Python environment under `graph_host/`
 with `uv`, and the graph files go to `tmp/graph/`.
 
@@ -187,18 +187,6 @@ security policy; the router's pipelines choose one.
 Anything else a page loads goes into the one directive of the one profile
 that needs it, as an exact origin with a comment saying why. Never add
 `https:`, `*`, a whole-domain wildcard or `'unsafe-eval'`.
-`test/browser/content_security_policy.spec.ts` loads the main pages, the
-early-access page and the start of sign-in, and fails on any refusal.
-
-An authorized security red-team regression suite lives in
-`test/keyfleet_web/security/`: each probe performs an attack (IDOR,
-mass-assignment, cross-tenant read, gate bypass, stored XSS, open redirect)
-and asserts the refusal, so a control that regresses makes a probe fail. The
-check catalog is `priv/security/redteam_checks.yml` and the proof table and
-live-run runbook are `docs/security/redteam-2026-10-17.md`. Run it with
-`mix test test/keyfleet_web/security` (add `--include dynamic` for the probes
-that need a non-sandboxed database or the chain); render the proof table with
-`mix run scripts/security_proof_table.exs`.
 
 The per-address budget keys on the client address from `KeyfleetWeb.ClientAddress`. In
 production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
@@ -238,7 +226,6 @@ assets/                 TypeScript and CSS, built with esbuild; the hashed
                         script pieces go in priv/static/assets/js/chunks,
                         which browsers keep for a year
 priv/                   Migrations, public and legal Markdown, static assets
-test/                   ExUnit suites, including browser and budget tests
 docs/                   Local setup guides
 scripts/                Release helpers
 rel/                    Release overlays, including the migrate command
@@ -317,17 +304,9 @@ exported as `keyfleet_vitals_{lcp,inp,fcp,ttfb}_microseconds` and
 ## Checks
 
 Before an ordinary change ships, `make check-change` from the monorepo root
-compiles with warnings as errors, checks formatting and runs the tests that
-cover what changed since `origin/main` (`BASE=<ref>` picks another starting
-point): the ExUnit suite split four ways when anything under `lib`, `test`
-(outside the browser tests), `config` or `priv` or the Mix files changed,
-Vitest and Playwright on the tests that import what changed, and the graph
-host's tests and the contracts' gate when their folders changed. Its ExUnit run splits the test files
-into four parts of about equal time, by the times in `test/durations.tsv`
-(`scripts/test-durations.sh` rewrites it; commit the result when test files
-are added or change speed), and gives each part a database named after the
-checkout (`keyfleet_c<checksum>p1_test` to `p4`), created on first use, so two
-checkouts can run it at once.
+compiles with warnings as errors, checks formatting, and runs the contracts'
+gate when `contracts/` changed since `origin/main` (`BASE=<ref>` picks another
+starting point).
 
 From the monorepo root, `make check-platform` runs this component's gate and
 `make check` runs every component's:
@@ -336,68 +315,17 @@ From the monorepo root, `make check-platform` runs this component's gate and
 mix precommit
 ```
 
-These need `MIX_TEST_PARTITION` set, even to an empty value. For example, with
-the test database `keyfleet_test`:
-
-```sh
-MIX_TEST_PARTITION= make check
-```
-
 `mix precommit` compiles with warnings as errors and builds the assets, then
-runs three parts in turn. `mix precommit.checks` checks unused dependency
-locks, refuses Hex packages that are retired or carry a security advisory
-(`mix hex.audit`), checks formatting, runs Credo in strict mode and Sobelow, holds the
+runs `mix precommit.checks`: it checks unused dependency locks, refuses Hex
+packages that are retired or carry a security advisory (`mix hex.audit`),
+checks formatting, runs Credo in strict mode and Sobelow, holds the
 compile-connected `xref` graph under its limit, verifies the Ash codegen, the
 usage rules and the route handoff are current, and runs the TypeScript
-typecheck and the Vitest unit suite. `mix precommit.suite` runs the graph
-host's tests, then the test suite with warnings as errors. `mix
-precommit.walks` runs the browser suite, then the phone walks, on the assets
-already built. `make check` builds the assets once, then runs
-`precommit.checks` and `precommit.walks` in one lane beside
-`precommit.suite` in another, each writing to `_build/check/<gate>.log`, and
-prints a `SLOW` line for any gate over its budget (`CHECK_BUDGETS` in the
-root `Makefile`), which warns and never fails.
-`npm run test:browser` builds the assets and runs the browser suite alone.
-
-| Command | What it does |
-| --- | --- |
-| `npm run typecheck` | Type-checks the TypeScript assets. |
-| `npm test` | Runs the Vitest unit suite. |
-| `npm run test:browser` | Builds the assets, then runs the browser suite against a test server and database of its own. |
-| `npm run test:devices` | Builds the assets, then walks the main flows signed out at an iPhone 15's and a Pixel 7's screen, and runs the accessibility check of every main page, light and dark, wide and at a phone's width. |
-| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, and that use the agent tools the pages register as a signed agent would, against a test server and database of their own. Every run starts from the same unsold fleets. |
-| `npm run test:budgets` | Enforces the asset size budgets. |
-| `mix test.external` | Runs the tests that need tools outside the hermetic suite: the rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
-
-The test database name carries whatever `MIX_TEST_PARTITION` holds, just
-before its `_test` ending. Give each test run its own value whenever more than
-one can happen on a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
-`MIX_ENV=test mix ecto.create` once for a new value; the suite builds the
-schema itself on its first run.
-The browser suite's server has a database of its own, the partition's name
-with `_walk` after it (`keyfleet_a1b_walk_test`), and the phone walks' server
-one with `_fleet_map` after it; each is dropped and made afresh as its walk
-starts, so the ExUnit suite runs beside either. The two walks share the port
-`PORT` names (4502 when unset) and `tmp/walk-lines.jsonl`, so they run one
-after the other.
-
-### Membership check
-
-`mix keyfleet.check_membership` moves a Key from one person to another, ends an
-agent's pairing, and tries an agent whose person holds another fleet's Key, and
-checks after each that the fleet's rooms, workspace, notebooks and code let in
-and refuse whom they should, open notebook connections included. It prints
-`pass` or `fail` for each check, with the reason when one fails.
-
-```sh
-MIX_ENV=test MIX_TEST_PARTITION=_membership mix keyfleet.check_membership
-```
-
-It runs on its own database, `keyfleet_membership_test`, which it empties at
-the start of every run, and serves the site at https://localhost:4502; set
-`PORT` when 4502 is taken. The sign-in server, notebook hubs and code store
-are stand-ins it serves itself, so it never reaches the network beyond
-localhost.
+typecheck (`npm run typecheck` runs it alone). `make check` builds the assets
+once, then runs `precommit.checks` beside the other components' gates, each
+writing to `_build/check/<gate>.log`, and prints a `SLOW` line for any gate
+over its budget (`CHECK_BUDGETS` in the root `Makefile`), which warns and
+never fails.
 
 ## Deployment
 
@@ -472,10 +400,6 @@ opens its rooms and turns its key sales on, all at once; a coming-soon fleet
 opens with it. It refuses a fleet whose chain, USDC or trait table differs
 from a fleet already recorded.
 
-Load, deploy-during-load and database-fault runs
-start the release image and a throwaway database on one computer
-([load/README.md](load/README.md)).
-
 The graph host's Python supply is sealed by
 `scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for
 `amd64`, whenever `graph_host/uv.lock` or `graph_host/.python-version` changes.
@@ -489,7 +413,7 @@ It prints the supply name to set as `ARM64_GRAPH_HOST_SUPPLY` or
 
 ### Shipping a change
 
-An ordinary change ships on the tests that cover it, with no other sign-off:
+An ordinary change ships on `make check-change`, with no other sign-off:
 
 1. Commit it on top of `origin/main`.
 2. Run `make check-change` from the monorepo root.

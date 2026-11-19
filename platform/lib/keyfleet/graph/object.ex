@@ -462,8 +462,8 @@ defmodule Keyfleet.Graph.Object do
     # wait first, a page of at most 20 with how many wait in all. A task's
     # wait began when its current version was made (`changed_at`). "May
     # review" is the graph host's rule for a review (`_plan_review` in
-    # graph_host/src/keyfleet_graph/host.py), and a property test holds the
-    # two together: a task not archived, in a project that is active, that
+    # graph_host/src/keyfleet_graph/host.py), and this read keeps to it: a
+    # task not archived, in a project that is active, that
     # neither the Key nor the wallet submitted, that the Key has not joined
     # at its current ownership, and that the Key did not change or submit
     # (`sys.worked`, which never lists the task's creator). A task awaiting

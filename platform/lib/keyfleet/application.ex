@@ -33,7 +33,7 @@ defmodule Keyfleet.Application do
   # the writers over the cluster. Anywhere else, one machine runs the site.
   defp children(:graph) do
     [
-      database_child(),
+      Keyfleet.Repo,
       cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
       graph_processes_child(),
@@ -47,7 +47,7 @@ defmodule Keyfleet.Application do
     [
       KeyfleetWeb.Telemetry,
       {Keyfleet.Accounts.RequestRateLimiter, []},
-      database_child(),
+      Keyfleet.Repo,
       cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
       graph_processes_child(),
@@ -73,7 +73,7 @@ defmodule Keyfleet.Application do
       KeyfleetWeb.SharePictures,
       # After the repository and PubSub: a pairing made or ended on any Regent
       # site reaches the pages showing it.
-      shared_changes_child(),
+      Keyfleet.SharedChanges,
       # A key's profile reads its rewards wherever the site runs.
       Keyfleet.Chain.RewardsWaiting,
       graph_children(),
@@ -105,23 +105,11 @@ defmodule Keyfleet.Application do
   defp graph_processes_child,
     do: %{id: Keyfleet.Graph.Processes, start: {:pg, :start_link, [Keyfleet.Graph.Processes]}}
 
-  defp database_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false),
-      do: Keyfleet.Repo
-  end
-
   # Background work lives in the database, so it starts with it. AshOban adds a
   # queue and a sweep for every trigger in the site's domains.
   defp oban_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false) do
-      domains = Application.fetch_env!(:keyfleet, :ash_domains)
-      {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
-    end
-  end
-
-  defp shared_changes_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false),
-      do: Keyfleet.SharedChanges
+    domains = Application.fetch_env!(:keyfleet, :ash_domains)
+    {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
   end
 
   # Metrics are served beside the site, never by a process that only runs a task.
@@ -129,7 +117,7 @@ defmodule Keyfleet.Application do
     if serving?(), do: KeyfleetWeb.Metrics
   end
 
-  # The agents here are read only where pages are served, so a task or a test
+  # The agents here are read only where pages are served, so a task
   # never reads them on its own.
   defp here_child do
     if serving?(), do: Keyfleet.Agents.Here
@@ -147,14 +135,14 @@ defmodule Keyfleet.Application do
     if serving?(), do: KeyfleetWeb.FleetProposals
   end
 
-  # The Points board is read only where pages are served, so a task or a test
+  # The Points board is read only where pages are served, so a task
   # never reads the database before it asks to.
   defp points_board_child do
     if serving?(), do: Keyfleet.Points.Board
   end
 
   # The products a season's pick may name are read only where pages are
-  # served, so a task or a test never asks Coinbase on its own.
+  # served, so a task never asks Coinbase on its own.
   defp season_coins_child do
     if serving?(), do: Keyfleet.Seasons.CoinList
   end

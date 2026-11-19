@@ -19,7 +19,6 @@ defmodule Keyfleet.Chain.ReadBalances do
 
   require Logger
 
-  alias Keyfleet.Chain.Client
   alias Keyfleet.Chain.TreasuryReader
   alias Keyfleet.Fleets
 
@@ -30,7 +29,7 @@ defmodule Keyfleet.Chain.ReadBalances do
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
     with %{manager_address: address} = fleet when is_binary(address) <-
            Fleets.get_fleet!(fleet_id),
-         {:error, reason} <- TreasuryReader.read(fleet, Client.configured()) do
+         {:error, reason} <- TreasuryReader.read(fleet) do
       Logger.warning("Fleet #{fleet_id}: reading its balances failed: #{inspect(reason)}")
       {:error, reason}
     else

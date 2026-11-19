@@ -190,7 +190,7 @@ defmodule Keyfleet.Seasons.Coinbase do
         redirect: false,
         connect_options: [timeout: 5_000],
         receive_timeout: 15_000
-      ] ++ options ++ Keyword.fetch!(config, :req_options)
+      ] ++ options
     )
   end
 end

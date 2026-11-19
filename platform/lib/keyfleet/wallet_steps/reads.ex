@@ -7,21 +7,19 @@ defmodule Keyfleet.WalletSteps.Reads do
   reads fail builds no steps and says the chain can't be read right now.
   """
 
-  alias Keyfleet.Chain
+  alias Keyfleet.Chain.RpcClient
   alias Keyfleet.Fleets.Fleet
   alias RegentChain.{Abi, Call}
 
-  @enforce_keys [:client, :head]
-  defstruct [:client, :head]
+  @enforce_keys [:head]
+  defstruct [:head]
 
-  @type t :: %__MODULE__{client: module(), head: map()}
+  @type t :: %__MODULE__{head: RpcClient.head()}
 
   @doc "The site's node at its head block."
   def at_head do
-    client = Chain.Client.configured()
-
-    case client.head() do
-      {:ok, head} -> {:ok, %__MODULE__{client: client, head: head}}
+    case RpcClient.head() do
+      {:ok, head} -> {:ok, %__MODULE__{head: head}}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -38,8 +36,8 @@ defmodule Keyfleet.WalletSteps.Reads do
   end
 
   @doc "One view function's answers, of `types` in order."
-  def many(%__MODULE__{client: client, head: head}, to, signature, arguments, types) do
-    with {:ok, returned} <- client.call(to, Call.encode(signature, arguments), head.hash),
+  def many(%__MODULE__{head: head}, to, signature, arguments, types) do
+    with {:ok, returned} <- RpcClient.call(to, Call.encode(signature, arguments), head.hash),
          do: decode(returned, types)
   end
 
@@ -48,8 +46,8 @@ defmodule Keyfleet.WalletSteps.Reads do
   head block, sent from no one in particular: `{:ok, false}` when the contract
   refuses it.
   """
-  def goes_through?(%__MODULE__{client: client, head: head}, to, signature, arguments) do
-    case client.call(to, Call.encode(signature, arguments), head.hash) do
+  def goes_through?(%__MODULE__{head: head}, to, signature, arguments) do
+    case RpcClient.call(to, Call.encode(signature, arguments), head.hash) do
       {:ok, _returned} -> {:ok, true}
       {:error, :reverted} -> {:ok, false}
       {:error, reason} -> {:error, reason}
@@ -63,12 +61,12 @@ defmodule Keyfleet.WalletSteps.Reads do
   def logs(%__MODULE__{head: %{number: head}}, _addresses, _topics, from) when from > head,
     do: {:ok, []}
 
-  def logs(%__MODULE__{client: client, head: head}, addresses, topics, from),
-    do: client.get_logs(addresses, topics, from, head.number)
+  def logs(%__MODULE__{head: head}, addresses, topics, from),
+    do: RpcClient.get_logs(addresses, topics, from, head.number)
 
   @doc "An account's ETH at the head block, in wei."
-  def balance(%__MODULE__{client: client, head: head}, account),
-    do: client.get_balance(account, head.hash)
+  def balance(%__MODULE__{head: head}, account),
+    do: RpcClient.get_balance(account, head.hash)
 
   @doc """
   Whether `wallet` pays its own network fee and holds less ETH than any
@@ -91,8 +89,8 @@ defmodule Keyfleet.WalletSteps.Reads do
   end
 
   @doc "Whether `wallet` has no code at the head block, so it pays its own network fee."
-  def pays_own_fee?(%__MODULE__{client: client, head: head}, wallet) do
-    with {:ok, code} <- client.get_code(wallet, head.hash), do: {:ok, code == ""}
+  def pays_own_fee?(%__MODULE__{head: head}, wallet) do
+    with {:ok, code} <- RpcClient.get_code(wallet, head.hash), do: {:ok, code == ""}
   end
 
   @doc """

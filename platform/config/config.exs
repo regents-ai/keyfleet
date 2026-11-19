@@ -99,11 +99,6 @@ config :regent_points,
     "social.x" => Keyfleet.Points.LinkedSocial
   }
 
-# Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
-# its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
-# load pictures from. Each environment names its bucket.
-config :keyfleet, :avatar_bucket, req_options: []
-
 # Paired agents' activity readings kept for the account menu
 # (`Keyfleet.Agents.ActivityReading`), swept of expired ones every ten minutes.
 config :keyfleet, Keyfleet.Agents.ActivityReading,
@@ -117,18 +112,13 @@ config :keyfleet, KeyfleetWeb.SharePictures,
   gc_interval: :timer.minutes(10),
   max_size: 64
 
-# The key-art service that draws revealed keys' cards (`key-art/`).
-config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
-
 # Regent's Lighthouse account, which keeps revealed keys' cards on IPFS for
 # good (`Keyfleet.Lighthouse`). Production sets its `api_key`.
-config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage", req_options: []
+config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage"
 
 # Coinbase's public market data, read with no account or key, for the seasons'
 # picks and prices (`Keyfleet.Seasons.Coinbase`).
-config :keyfleet, Keyfleet.Seasons.Coinbase,
-  url: "https://api.coinbase.com/api/v3/brokerage",
-  req_options: []
+config :keyfleet, Keyfleet.Seasons.Coinbase, url: "https://api.coinbase.com/api/v3/brokerage"
 
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
@@ -139,7 +129,7 @@ config :ash, default_string_length_count: :codepoints
 # Each deployed fleet's history is read every five minutes, by the JSON-RPC
 # node that `KEYFLEET_RPC_URL` names at runtime (`Keyfleet.Chain.ReadFleet`),
 # and ten seconds after a person's on-chain press lands (`Keyfleet.ChainRefresh`).
-config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interval_seconds: 300
+config :keyfleet, Keyfleet.Chain, pass_interval_seconds: 300
 
 # Who reads a chain again when a person's action may have changed it
 # (`Keyfleet.ChainRefresh`).
@@ -436,8 +426,7 @@ config :keyfleet, :code,
   # A workspace page shows a folder or a file of the code; it waits this long
   # for the store, and shows files up to this size.
   page_timeout_ms: 5_000,
-  file_max_bytes: 512 * 1024,
-  req_options: []
+  file_max_bytes: 512 * 1024
 
 # A sign-in lasts 30 days: the cookie expires then, and
 # `Keyfleet.Accounts.SessionAuthority` reads this same limit. The `__Host-`
@@ -460,7 +449,7 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   # A connection kept open cleans up after every request it answers, not
   # every fifth, so no large body or decoding stays held while it idles. Each
   # environment's listener adds its address and port (config/dev.exs,
-  # config/runtime.exs), and the browser test server takes these for its own.
+  # config/runtime.exs).
   #
   # A websocket message is at most 52,000 bytes, whole or sent in parts, so a
   # live page's socket never decodes more (`KeyfleetWeb.Endpoint` bounds a
@@ -481,7 +470,6 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   # value is drawn back no longer than its box (`KeyfleetWeb.WalletPanel`), and
   # a page drops a #fragment of over 256 characters before it joins
   # (`assets/js/app.ts`).
-  # KeyfleetWeb.LiveMessageLimitTest and the proposals page's test measure them.
   http: [
     http_1_options: [gc_every_n_keepalive_requests: 1],
     websocket_options: [max_fragmented_message_size: 52_000]

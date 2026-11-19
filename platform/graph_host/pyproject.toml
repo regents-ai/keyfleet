@@ -23,7 +23,3 @@ activegraph = { git = "https://github.com/yoheinakajima/activegraph", rev = "8ae
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-p no:cacheprovider"

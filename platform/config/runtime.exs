@@ -2,12 +2,9 @@ import Config
 
 require Logger
 
-# Tests use the fixed app id in config/test.exs, whatever the shell sets.
-if config_env() != :test do
-  config :keyfleet, :privy,
-    app_id: System.get_env("PRIVY_APP_ID"),
-    verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
-end
+config :keyfleet, :privy,
+  app_id: System.get_env("PRIVY_APP_ID"),
+  verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
 
 # The connector for Claude and ChatGPT, behind one switch, named for Claude, its
 # first app: its sign-in (Keyfleet.OAuth), its MCP address at /mcp, pairing as a
@@ -91,37 +88,9 @@ if config_env() == :dev and Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endp
   end
 end
 
-# The browser test server. Production can never take this branch.
-if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
-  # The server uses production's pool, not the test suite's: a process holds a
-  # connection only while it uses one, so a read stopped mid-query (its page was
-  # left) drops that one connection alone, and no worker is cut off for holding
-  # one too long. It keeps the test setting's ten connections, twice the site's.
-  config :keyfleet, Keyfleet.Repo, pool: DBConnection.ConnectionPool
-
-  # It answers over https alone (config/test.exs), with the web server
-  # settings every listener of the site runs with (config/config.exs).
-  config :keyfleet, KeyfleetWeb.Endpoint,
-    http: false,
-    https: Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:http]
-
-  # The list of products a pick may name is read as the server starts, before
-  # any walk could stand in for Coinbase, so the server's own stand-in answers.
-  config :keyfleet, Keyfleet.Seasons.Coinbase, req_options: [plug: Keyfleet.BrowserCoinbase]
-
-  # The browser test server (playwright.config.ts) writes its lines in
-  # production's shape to a file, which test/browser/visits.spec.ts reads to
-  # replay a visit.
-  config :logger, level: :info
-
-  config :logger, :default_handler,
-    config: [file: String.to_charlist(Path.expand("../tmp/walk-lines.jsonl", __DIR__))],
-    formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
-end
-
 # Whether the product surfaces are open: KEYFLEET_APP_SURFACES says exactly
 # "on" or "off", and anything else stops the boot. Production must say it;
-# development and test set it in their own config files.
+# development sets it in its own config file.
 case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
   {_env, "on"} ->
     config :keyfleet, :app_surfaces, true
@@ -138,8 +107,8 @@ case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
     raise ~s(KEYFLEET_APP_SURFACES must be "on" or "off", got #{inspect(other)})
 end
 
-# Fleets are read from the chain only when a node is named, and never by the
-# test suite. The anvil lab (docs/anvil-lab.md) reads them from its own node.
+# Fleets are read from the chain only when a node is named. The anvil lab
+# (docs/anvil-lab.md) reads them from its own node.
 rpc_url =
   case {config_env(), System.get_env("KEYFLEET_LAB"), System.get_env("KEYFLEET_RPC_URL")} do
     {:dev, lab, _url} when lab not in [nil, ""] -> lab
@@ -147,63 +116,54 @@ rpc_url =
     {_env, _lab, url} -> url
   end
 
-if config_env() != :test do
-  config :keyfleet, Keyfleet.Chain, rpc_url: rpc_url
-end
+config :keyfleet, Keyfleet.Chain, rpc_url: rpc_url
 
 # The fleets live on the one wallet chain, and the server reads what a page's
 # wallet sent through the same node as the fleets, so a lab fork sees it.
-if config_env() != :test and rpc_url do
+if rpc_url do
   [chain_id] = :keyfleet |> Application.fetch_env!(:wallet_chains) |> Map.keys()
   nodes = Application.fetch_env!(:keyfleet, :chain_nodes)
   config :keyfleet, :chain_nodes, Map.put(nodes, chain_id, rpc_url)
 end
 
 # Each sign-in reads the wallet's ENS name from Ethereum mainnet while this
-# endpoint is set (Keyfleet.Accounts.EnsIdentity). Tests never read it.
-if config_env() != :test do
-  if ethereum_read_rpc_url = System.get_env("ETHEREUM_READ_RPC_URL") do
-    case URI.new(ethereum_read_rpc_url) do
-      {:ok, %URI{scheme: "https", host: host}} when host not in [nil, ""] ->
-        config :keyfleet, :ethereum_read_rpc_url, ethereum_read_rpc_url
+# endpoint is set (Keyfleet.Accounts.EnsIdentity).
+if ethereum_read_rpc_url = System.get_env("ETHEREUM_READ_RPC_URL") do
+  case URI.new(ethereum_read_rpc_url) do
+    {:ok, %URI{scheme: "https", host: host}} when host not in [nil, ""] ->
+      config :keyfleet, :ethereum_read_rpc_url, ethereum_read_rpc_url
 
-      _invalid ->
-        raise "ETHEREUM_READ_RPC_URL must be an https address"
-    end
+    _invalid ->
+      raise "ETHEREUM_READ_RPC_URL must be an https address"
   end
 end
 
 # Each fleet's trait table, and card deck if it has one, ships with the
-# release, named by its hash; the tests keep theirs elsewhere.
-if config_env() != :test do
-  config :keyfleet, Keyfleet.Traits,
-    directory: Application.app_dir(:keyfleet, "priv/trait_tables")
+# release, named by its hash.
+config :keyfleet, Keyfleet.Traits, directory: Application.app_dir(:keyfleet, "priv/trait_tables")
 
-  config :keyfleet, Keyfleet.Decks, directory: Application.app_dir(:keyfleet, "priv/decks")
-end
+config :keyfleet, Keyfleet.Decks, directory: Application.app_dir(:keyfleet, "priv/decks")
 
 # The fleets' notebook hubs: KEYFLEET_HUB_FLEETS lists `fleet_id=address`
 # pairs separated by commas, each address the hub's private Flycast URL
 # (`fibonacci_syndicate=http://kf-nb-fibonacci-syndicate.flycast`), and
 # KEYFLEET_HUB_SIGNING_KEY is the JWK Set whose first key signs every pass.
-if config_env() != :test do
-  hub_fleets =
-    "KEYFLEET_HUB_FLEETS"
-    |> System.get_env("")
-    |> String.split(",", trim: true)
-    |> Map.new(fn pair ->
-      [fleet_id, address] = pair |> String.trim() |> String.split("=", parts: 2)
-      {fleet_id, address}
-    end)
+hub_fleets =
+  "KEYFLEET_HUB_FLEETS"
+  |> System.get_env("")
+  |> String.split(",", trim: true)
+  |> Map.new(fn pair ->
+    [fleet_id, address] = pair |> String.trim() |> String.split("=", parts: 2)
+    {fleet_id, address}
+  end)
 
-  hub_signing_keys = System.get_env("KEYFLEET_HUB_SIGNING_KEY")
+hub_signing_keys = System.get_env("KEYFLEET_HUB_SIGNING_KEY")
 
-  if hub_fleets != %{} and hub_signing_keys in [nil, ""] do
-    raise "KEYFLEET_HUB_SIGNING_KEY must be set when KEYFLEET_HUB_FLEETS names a fleet"
-  end
-
-  config :keyfleet, :notebooks, fleets: hub_fleets, signing_keys: hub_signing_keys
+if hub_fleets != %{} and hub_signing_keys in [nil, ""] do
+  raise "KEYFLEET_HUB_SIGNING_KEY must be set when KEYFLEET_HUB_FLEETS names a fleet"
 end
+
+config :keyfleet, :notebooks, fleets: hub_fleets, signing_keys: hub_signing_keys
 
 migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
@@ -214,10 +174,7 @@ database_config =
     Keyfleet.DatabaseConfig.runtime_config!(config_env())
   end
 
-if database_config do
-  config :keyfleet, :database_startup_enabled, true
-  config :keyfleet, Keyfleet.Repo, database_config
-end
+config :keyfleet, Keyfleet.Repo, database_config
 
 if config_env() == :prod do
   # One JSON object a line, which Fly Sentinel reads, carrying only the visit

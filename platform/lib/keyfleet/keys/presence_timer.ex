@@ -19,8 +19,8 @@ defmodule Keyfleet.Keys.PresenceTimer do
   """
   use Oban.Worker, queue: :chain, max_attempts: 1
 
-  alias Keyfleet.Chain
   alias Keyfleet.Chain.JsonRpc
+  alias Keyfleet.Chain.RpcClient
   alias Keyfleet.Keys
   alias Keyfleet.Keys.PresenceTimerError
   alias Keyfleet.WalletSteps.Build
@@ -129,7 +129,7 @@ defmodule Keyfleet.Keys.PresenceTimer do
   end
 
   defp head do
-    case Chain.Client.configured().head() do
+    case RpcClient.head() do
       {:ok, head} -> {:ok, head}
       {:error, _reason} -> {:error, "the node didn't answer for its latest block"}
     end

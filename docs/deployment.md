@@ -56,8 +56,8 @@ chain actually holds.
 
 ## The five deployment transactions
 
-`contracts/script/KeyfleetSystem.sol` does this for the deployment script, the
-suite and the fork tests. From one account, in order:
+`contracts/script/KeyfleetSystem.sol` does this for the deployment script and
+the Base-fork lab. From one account, in order:
 
 1. `KeyfleetManagerDeployer`
 2. `KeyfleetVotesDeployer`
@@ -522,11 +522,6 @@ Every purchase is paid in Base USDC, and the treasury's part becomes REGENT
 through the real REGENT pools a piece at a time, so a rehearsal that buys keys
 runs on a fork of Base.
 
-**The fork suites.** With `BASE_RPC_URL` set, the suites in
-`contracts/test/fork/` deploy the system from the committed Base manifest
-through the real deployment and Safe steps, and run fleets, the swap, Lit and
-Autolaunch against Base's own contracts. The contracts README lists them.
-
 **A plain Base fork, for the Base manifest.**
 
 ```sh
@@ -594,13 +589,8 @@ the manager. Buy with a fresh address, not one of anvil's default accounts,
 which may carry delegated code on a fork whose NFT callback reverts, so a key
 minted to it fails.
 
-**The anvil lab.** `contracts/script/AnvilLab.s.sol` is no part of a release:
-it puts the system with Classic #1 on a plain local anvil, with stand-ins for
-USDC, WETH, REGENT, both pools, REGENT staking, the coordinator and the
-Autolaunch factory, for the site's anvil tests.
-
 **The Base-fork lab.** `contracts/script/BaseForkLab.s.sol`, run by
-`contracts/script/base-fork-lab.sh`, is no part of a release either: it puts the
+`contracts/script/base-fork-lab.sh`, is no part of a release: it puts the
 system with Classic #1 selling on a local fork of Base run as chain 31337, for
 the site on `http://localhost:4097`, so a wallet can buy a key with Base's own
 USDC, and the treasury's part becomes REGENT through Base's own swap route. Everything comes from `base.json` except

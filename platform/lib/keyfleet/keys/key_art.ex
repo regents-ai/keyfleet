@@ -13,9 +13,8 @@ defmodule Keyfleet.Keys.KeyArt do
   its small card, the whole card at a fifth of its width, for a holder's
   cards.
 
-  The service is configured under `:keyfleet, Keyfleet.Keys.KeyArt`: its `url`
-  and `req_options` (the tests' `Req.Test` stub). Each draw and each read of a
-  kept card is asked once; the jobs retry.
+  The service's `url` is configured under `:keyfleet, Keyfleet.Keys.KeyArt`.
+  Each draw and each read of a kept card is asked once; the jobs retry.
   """
 
   alias Vix.Vips.Image
@@ -50,18 +49,16 @@ defmodule Keyfleet.Keys.KeyArt do
     config = Application.fetch_env!(:keyfleet, __MODULE__)
 
     Req.post(
-      [
-        base_url: config[:url],
-        url: "/draw",
-        json: %{seed: seed, top_line: top_line, table: trait_table_hash},
-        decode_body: false,
-        retry: false,
-        redirect: false,
-        # The service's machine may be asleep and wake for this request. Its
-        # private Flycast address has only an IPv6 record.
-        connect_options: [timeout: 15_000, transport_opts: [inet6: true]],
-        receive_timeout: 150_000
-      ] ++ config[:req_options]
+      base_url: config[:url],
+      url: "/draw",
+      json: %{seed: seed, top_line: top_line, table: trait_table_hash},
+      decode_body: false,
+      retry: false,
+      redirect: false,
+      # The service's machine may be asleep and wake for this request. Its
+      # private Flycast address has only an IPv6 record.
+      connect_options: [timeout: 15_000, transport_opts: [inet6: true]],
+      receive_timeout: 150_000
     )
     |> case do
       {:ok, %Req.Response{status: 200, body: <<0x89, "PNG", _rest::binary>> = png}} ->
@@ -82,12 +79,10 @@ defmodule Keyfleet.Keys.KeyArt do
   `receive_timeout` and `connect_options`.
   """
   def kept(cid, waits \\ []) do
-    config = Application.fetch_env!(:keyfleet, __MODULE__)
-
     asked = [url: link(cid), decode_body: false, retry: false, redirect: false]
     waited = Keyword.merge([receive_timeout: 60_000], waits)
 
-    Req.get(asked ++ waited ++ config[:req_options])
+    Req.get(asked ++ waited)
     |> case do
       {:ok, %Req.Response{status: 200, body: <<0x89, "PNG", _rest::binary>> = png}} ->
         {:ok, png}

@@ -39,7 +39,7 @@ defmodule Keyfleet.Chain.VotesLog do
   @cleared Event.topic0("PresenceCleared(uint256)")
   @scheduled Event.topic0("PresenceScheduled(uint256,uint64)")
 
-  # The contract's `Choice` numbers, pinned in contracts/test/KeyfleetVotesTopics.t.sol;
+  # The contract's `Choice` numbers (`KeyfleetVotes.Choice` in contracts/src/KeyfleetVotes.sol);
   # `None` is never cast.
   @choices %{1 => :yes, 2 => :no, 3 => :abstain}
   # The words of `ProposalCreated`'s data before its calls.

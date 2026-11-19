@@ -21,7 +21,10 @@ direnv exec /Users/sean/Documents/regent/repos/keyfleet/platform scripts/anvil-l
 - Privy asks your wallet to add and switch to the lab network as it connects, and a button
   asks again when you press it on another network; say yes. A wallet that can't add a
   network, such as Zerion, can't use the lab.
-- A Key's card is drawn by the lab's stand-in for Chainlink VRF, which answers every 20 seconds.
+- Every founding fleet has its real deck from `contracts/deployments/base.json`, and every deck
+  file is in `platform/priv/decks`, so Classic #1's keys 1 to 1,024 hold their cards by number
+  and draw nothing. A key past its fleet's deck is drawn by the lab's stand-in for Chainlink VRF,
+  which answers every 20 seconds.
 
 ## Moving time
 

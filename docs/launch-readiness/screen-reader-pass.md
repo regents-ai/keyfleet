@@ -3,10 +3,9 @@
 A person who cannot see the screen should be able to find Classic #1 and
 understand its price, open a Key, read a room and follow a poll, signed out,
 on their own phone. This script walks those four tasks with VoiceOver on an
-iPhone (Safari) and with TalkBack on an Android phone (Chrome). An automated
-check (`platform/test/browser/accessibility.spec.ts`) covers what a machine
-can see; this pass covers what only listening shows: the order things are
-read in, what each control is called, and whether a change is announced.
+iPhone (Safari) and with TalkBack on an Android phone (Chrome). It covers what
+only listening shows: the order things are read in, what each control is
+called, and whether a change is announced.
 
 Allow 30 minutes per phone. Do it once on each phone. Tick each box as you go
 and write what you heard in the notes column when it differs.

@@ -70,9 +70,6 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
           <p :if={@mode == :unconfigured} role="status">
             Configure the local Privy app and verification key before using these controls. Nothing is simulated.
           </p>
-          <p :if={@mode == :fixture} role="status">
-            This server uses a test verifier. Readouts are test data; real sign-in is disabled here.
-          </p>
         </section>
 
         <section class="rg-panel rg-panel--surface" aria-labelledby="privy-state-heading">
@@ -120,7 +117,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
             </li>
             <li>
               Create your local PostgreSQL database (<code>keyfleet_dev</code>
-              by default), then run <code>mix keyfleet.setup_local_auth</code>. Use <code>MIX_ENV=dev</code>, not a browser-test server, for real sign-in.
+              by default), then run <code>mix keyfleet.setup_local_auth</code>.
             </li>
             <li>
               Build the assets with <code>mix assets.build</code>, start <code>mix phx.server</code>, then open <code>/showcase/privy</code>.

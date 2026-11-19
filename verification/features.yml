@@ -1,6 +1,13 @@
 repo: keyfleet
 # Started with the homepage's moving parts. Every other part of Keyfleet is not
 # mapped yet; each change maps what it touches first.
+#
+# A row's proofs are the files that still prove it; the only one left is the
+# release smoke in scripts/release.sh, and every other row has none. Every test,
+# the contracts' among them, and every formal model was removed on 19 November
+# 2026, with the test each regression named. A gap that names a test, a walk, a
+# suite or a model tells how the row was checked before then; none of those
+# runs now.
 features:
   - id: home-key-cards
     what: >-
@@ -17,14 +24,10 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/assets/test/key_cards.test.ts
-      - platform/test/browser/fleet_motion.spec.ts
-      - platform/test/keyfleet_web/home_live_test.exs
+    proofs: []
     regressions:
       - id: R-20261019-cards-rest-off-screen
         from: Sentinel read of 9b93fe1b
-        test: platform/assets/test/key_cards.test.ts
     gaps:
       - WebKit is not run on the Mac.
 
@@ -44,17 +47,12 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/assets/test/home_field_renderer.test.ts
-      - platform/assets/test/canvas_island.test.ts
-      - platform/test/browser/homepage_details.spec.ts
+    proofs: []
     regressions:
       - id: R-20261019-field-build-not-lost
         from: Sentinel read of 9b93fe1b
-        test: platform/assets/test/home_field_renderer.test.ts
       - id: R-20261019-failed-start-lets-go
         from: Sentinel read of 9b93fe1b
-        test: platform/assets/test/canvas_island.test.ts
     gaps:
       - The raised tiles, wake and ring are checked by hand in headless Chromium at 1280; the still drawing under a finger at 390 is checked in the repo. WebKit is not run on the Mac.
 
@@ -81,12 +79,10 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/browser/homepage_details.spec.ts
+    proofs: []
     regressions:
       - id: R-20261019-card-keeps-no-turn
         from: Sentinel read of ff1146e1
-        test: platform/test/browser/homepage_details.spec.ts
     gaps:
       - WebKit is not run on the Mac.
       - The shuffle's picture is about 1.9 MB; it loads only under a mouse, once the dust shows.
@@ -113,13 +109,10 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.FleetLive
-    proofs:
-      - platform/test/browser/homepage_details.spec.ts
-      - platform/test/browser/fleet_layout.spec.ts
+    proofs: []
     regressions:
       - id: R-20261019-links-fit-a-finger
         from: Sentinel read of ff1146e1
-        test: platform/test/browser/homepage_details.spec.ts
     gaps:
       - Measured on the homepage only; the header and footer are the same on every page.
 
@@ -139,9 +132,7 @@ features:
       - platform/assets/js/hooks/fleet_tabs.ts
     entry:
       - live: KeyfleetWeb.FleetLive
-    proofs:
-      - platform/test/browser/fleet_layout.spec.ts
-      - platform/test/browser/fleet_motion.spec.ts
+    proofs: []
     gaps:
       - WebKit is not run on the Mac; Safari's snapping and fade are checked by people.
 
@@ -181,12 +172,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/get
       - live: KeyfleetWeb.WorkspaceLive
-    proofs:
-      - platform/graph_host/tests/test_reviews.py
-      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
-      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
-      - platform/test/keyfleet/activity_test.exs
+    proofs: []
     gaps:
       - Whether two Keys or agents share one owner is not known, so a review does not prove independence.
       - Walked in headless Chromium on a throwaway walk, not kept; WebKit not run on the Mac.
@@ -229,12 +215,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
       - route: POST /api/v1/agent/fleets/{fleet_id}/sync
       - live: KeyfleetWeb.WorkspaceLive
-    proofs:
-      - platform/graph_host/tests/test_reviews.py
-      - platform/graph_host/tests/test_tasks.py
-      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
-      - platform/test/keyfleet/graph/review_queue_property_test.exs
+    proofs: []
     gaps:
       - No test shows the review queue leaving out a task in an archived project.
       - Whether the work reproduced is the reviewer's own word; the site runs nothing.
@@ -277,10 +258,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/patch
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create
       - live: KeyfleetWeb.WorkspaceLive
-    proofs:
-      - platform/graph_host/tests/test_tasks.py
-      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    proofs: []
     gaps:
       - Items already stored keep a one-word "fleet" marker in their record; it is the only value it can have.
       - Not yet run by a real agent.
@@ -304,8 +282,7 @@ features:
       - route: GET /agents.md
       - route: GET /agents/:agent
       - route: GET /agents/:agent/skill.md
-    proofs:
-      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+    proofs: []
     gaps:
       - The joining guide carries a pointer, not the section itself, to stay under its 9,000-character limit.
 
@@ -334,11 +311,7 @@ features:
     entry:
       - route: GET /:fleet/:number/workspace
       - route: POST /api/v1/agent/fleets/:fleet_id/graph/join
-    proofs:
-      - platform/graph_host/tests/test_host.py
-      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
-      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
+    proofs: []
     gaps:
       - Not yet joined by an agent on the live site.
       - WebKit is not run on the Mac.
@@ -384,14 +357,7 @@ features:
       - route: GET /account
       - live: KeyfleetWeb.ShellLive
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/keyfleet_web/home_live_test.exs
-      - platform/test/keyfleet_web/menu_agents_test.exs
-      - platform/test/keyfleet_web/agent_pictures_test.exs
-      - platform/test/browser/account_menu.spec.ts
-      - platform/test/browser/pairing.spec.ts
-      - platform/test/browser/app_shell.spec.ts
+    proofs: []
     gaps:
       - Checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
       - A newly paired agent reaches an open menu through the database's change notice, which the tests send by hand.
@@ -414,20 +380,12 @@ features:
       - platform/assets/js/hooks/modal_dialog.ts
     entry:
       - route: GET /
-    proofs:
-      - platform/assets/test/privy_bridge.test.ts
-      - platform/assets/test/auth_lazy.test.ts
-      - platform/assets/test/modal_dialog.test.ts
-      - platform/assets/test/session_leaving.test.ts
-      - platform/test/browser/wallet_buttons.spec.ts
-      - platform/test/browser/auth_lazy_acceptance.spec.ts
+    proofs: []
     regressions:
       - id: R-20261021-closed-sign-in-window-back
         from: Sean, 21 October 2026 06:32Z, signed out on the homepage
-        test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261027-refused-sign-in-reloads-once
         from: Keyfleet chief, 27 October 2026, full precommit on 83363e79 counted three /account loads
-        test: platform/assets/test/session_leaving.test.ts
     gaps:
       - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
 
@@ -457,10 +415,7 @@ features:
     entry:
       - route: GET /:fleet/:number/treasury
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/proposals_page_test.exs
-      - platform/test/keyfleet/chain_test.exs
-      - platform/test/browser/treasury_read.spec.ts
+    proofs: []
     gaps:
       - The allowance is kept on each machine, as every Keyfleet allowance is; Keyfleet runs on one.
       - A real wallet's step going through is checked by hand on keyfleet.ai after release.
@@ -489,9 +444,7 @@ features:
     entry:
       - route: GET /:fleet/:number/proposals
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/proposals_page_test.exs
-      - platform/assets/test/countdown.test.ts
+    proofs: []
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
@@ -510,9 +463,7 @@ features:
     entry:
       - route: GET /:fleet/:number/proposals/:proposal
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/proposals_test.exs
-      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    proofs: []
     gaps:
       - The lists come from the votes and presence records read from the chain; they can trail the contract's figures above them by the reader's last blocks.
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
@@ -530,8 +481,7 @@ features:
       - platform/contracts/api-contract.openapiv3.yaml
     entry:
       - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/read
-    proofs:
-      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+    proofs: []
     gaps:
       - The CLI prints the answer as the site sends it; its own guide line waits for the CLI chief.
 
@@ -551,9 +501,7 @@ features:
     entry:
       - route: GET /:fleet/:number/treasury
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/fleet_page_test.exs
-      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    proofs: []
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
@@ -570,10 +518,7 @@ features:
       - platform/lib/keyfleet_web/public_documents.ex
     entry:
       - route: GET /about
-    proofs:
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
-      - platform/test/keyfleet_web/controllers/agent_files_test.exs
-      - platform/test/keyfleet_web/content_negotiation_test.exs
+    proofs: []
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
@@ -588,9 +533,7 @@ features:
     entry:
       - route: GET /:fleet/:number/workspace
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
-      - platform/test/keyfleet_web/agent_pins_test.exs
+    proofs: []
     gaps:
       - The visitor's list shows only on a fleet with Keys on sale; the local fixture fleet is not on sale, so it is checked on the live site after release.
 
@@ -605,9 +548,7 @@ features:
       - platform/priv/public/llms.md
     entry:
       - route: GET /llms.txt
-    proofs:
-      - platform/test/keyfleet_web/controllers/agent_files_test.exs
-      - platform/test/keyfleet_web/public_guide_routes_test.exs
+    proofs: []
     gaps:
       - Read live after release; no browser check, as llms.txt is plain text.
 
@@ -621,8 +562,7 @@ features:
       - platform/lib/keyfleet_web/public_documents.ex
     entry:
       - route: GET /docs
-    proofs:
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    proofs: []
     gaps:
       - Read live after release.
 
@@ -636,9 +576,7 @@ features:
       - platform/priv/public/agents.md
     entry:
       - route: GET /agents.md
-    proofs:
-      - platform/test/keyfleet_web/controllers/agent_files_test.exs
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    proofs: []
     gaps:
       - Read live after release.
 
@@ -653,8 +591,7 @@ features:
       - platform/lib/keyfleet_web/live/proposals_live.ex
     entry:
       - route: GET /:fleet/:number/treasury
-    proofs:
-      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    proofs: []
     gaps:
       - Width at 390 px checked on the live page, not in a browser test.
 
@@ -668,8 +605,7 @@ features:
       - platform/lib/keyfleet_web/public_documents.ex
     entry:
       - route: GET /docs
-    proofs:
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    proofs: []
     gaps:
       - axe read live after release.
 
@@ -684,8 +620,7 @@ features:
       - platform/lib/keyfleet_web/controllers/error_html.ex
     entry:
       - route: GET /no-such-page
-    proofs:
-      - platform/test/keyfleet_web/controllers/error_html_test.exs
+    proofs: []
     gaps:
       - Look checked live after release.
 
@@ -703,9 +638,7 @@ features:
     entry:
       - route: POST /early
       - route: GET /account
-    proofs:
-      - platform/test/keyfleet_web/controllers/early_controller_test.exs
-      - platform/test/keyfleet_web/shell_live_test.exs
+    proofs: []
     gaps:
       - Browser walk of /early not rerun for the new words.
 
@@ -724,9 +657,7 @@ features:
     entry:
       - route: GET /fleets/FLEET_ID.md
       - route: GET /nope.md
-    proofs:
-      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    proofs: []
     gaps:
       - Checked live after release.
 
@@ -753,9 +684,7 @@ features:
     entry:
       - route: GET /account
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/posting_key_test.exs
-      - platform/test/keyfleet_web/shell_live_test.exs
+    proofs: []
     gaps:
       - Direct messages already name the Key they are sent from, so the choice does not change them.
       - WebKit is not run on the Mac.
@@ -797,8 +726,7 @@ features:
     entry:
       - route: GET /:fleet/:number/workspace
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    proofs: []
     gaps:
       - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
       - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
@@ -822,9 +750,7 @@ features:
       - route: GET /account/wallets
       - route: GET /account/connections
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/browser/app_shell.spec.ts
+    proofs: []
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
@@ -855,10 +781,7 @@ features:
     entry:
       - route: POST /auth/privy/session
       - route: POST /api/agents/v1/pair
-    proofs:
-      - platform/test/keyfleet/points/account_rules_test.exs
-      - platform/test/keyfleet/points/start_awards_test.exs
-      - platform/test/keyfleet_web/points_page_test.exs
+    proofs: []
     gaps:
       - An X, GitHub or Farcaster account that replaced another one here before this release keeps the time the first one was linked, so if that was before the Points start it earns at the start.
       - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
@@ -877,8 +800,7 @@ features:
     entry:
       - route: GET /account
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/shell_live_test.exs
+    proofs: []
     gaps:
       - Checked by eye in headless Chromium at 1280 light and 390 dark; WebKit is not run on the Mac.
 
@@ -909,10 +831,7 @@ features:
       - route: GET /account/wallets
       - live: KeyfleetWeb.ShellLive
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/assets/test/privy_bridge.test.ts
-      - platform/test/browser/copy_buttons.spec.ts
+    proofs: []
     gaps:
       - Which wallet is the Regents wallet comes from Privy in the browser, so a real sign-in with both wallets is checked by hand on keyfleet.ai after release.
       - Whether a wallet app such as Zerion forgets the site after Sign out is up to that app; a real Zerion sign-out then Google sign-in is checked by hand on keyfleet.ai after release.
@@ -954,11 +873,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/add
       - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/write
       - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/page
-    proofs:
-      - platform/test/keyfleet_web/agent_notebook_files_test.exs
-      - platform/test/keyfleet/notebooks/page_test.exs
-      - platform/test/keyfleet_web/signed_agent_contract_test.exs
-      - platform/test/keyfleet_web/api_contract_test.exs
+    proofs: []
     gaps:
       - Proven against a local hub that keeps files as the real one does and, like Fly's private addresses, answers only on IPv6 by name; not yet run against a real notebook host.
       - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
@@ -1007,9 +922,7 @@ features:
       - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies
       - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies/{copy_id}/restore
       - route: GET /fleets/{fleet}/workspace?project=scratchpad&place=docs
-    proofs:
-      - platform/test/keyfleet/notebooks/default_projects_test.exs
-      - platform/test/keyfleet_web/api_contract_test.exs
+    proofs: []
     gaps:
       - Proven against a local hub; not yet run against a real notebook host.
       - The daily copy runs at 03:31 UTC; the first real copies appear the morning after release.
@@ -1042,9 +955,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/take_over
       - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/delete
       - live: KeyfleetWeb.WorkspaceLive
-    proofs:
-      - platform/test/keyfleet/projects/hold_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    proofs: []
     gaps:
       - The 403 is proven through the answer every agent surface shares, not over HTTP or in a browser.
       - A Key holding five archived projects it took over deletes none of them; another Key takes one over, or the Key that started one deletes it.
@@ -1078,9 +989,6 @@ features:
     entry:
       - route: GET /healthz
     proofs:
-      - platform/test/keyfleet/graph/cluster_test.exs
-      - platform/test/keyfleet/graph/writer_test.exs
-      - platform/test/keyfleet/runtime_config_test.exs
       - scripts/release.sh
     gaps:
       - The two-step release was tried on a throwaway Fly app with a stand-in server, not yet on keyfleet.ai.
@@ -1111,9 +1019,7 @@ features:
     entry:
       - route: "* https://FLEET.notebooks.keyfleet.ai/api/v1/projects/{project_id}/notebooks/{notebook_id}"
       - route: DELETE https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
-    proofs:
-      - platform/test/keyfleet_web/notebook_gateway_test.exs
-      - platform/test/keyfleet_web/agent_notebook_files_test.exs
+    proofs: []
     gaps:
       - Proven against a local hub; the sandbox for non-makers is the notebook host's own setting, checked on the real host after release.
       - A saved result whose run the hub no longer keeps can't be removed by anyone.
@@ -1139,10 +1045,7 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/keyfleet_web/home_live_test.exs
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
-      - platform/test/browser/homepage.spec.ts
+    proofs: []
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
       - The steps come after Buy Key on a phone, below its first screen; at 1280 by 800 a goal of two lines leaves them at the screen's foot.
@@ -1176,9 +1079,7 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/keyfleet_web/home_live_test.exs
-      - platform/test/browser/homepage_recent.spec.ts
+    proofs: []
     gaps:
       - Pause answers once the page has connected, a moment after it first draws; it is forgotten when the page closes.
       - Checked in headless Chromium at 390 and 1280; WebKit and real phones are not run on the Mac.
@@ -1207,10 +1108,7 @@ features:
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/browser/homepage_cards.spec.ts
-      - platform/assets/test/value_cards.test.ts
-      - platform/test/keyfleet_web/home_live_test.exs
+    proofs: []
     gaps:
       - The walk's headless Chromium has no WebGPU, so it proves the stills, not the drawing; the six moving pictures were seen drawing by hand in headless Chromium on the Mac's GPU at 390 and 1280.
       - WebKit is not run on the Mac; Safari and real phones are checked on keyfleet.ai after release.
@@ -1245,10 +1143,7 @@ features:
     entry:
       - route: GET /:fleet/:number
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/wallet_steps_test.exs
-      - platform/test/keyfleet_web/live/fleet_page_test.exs
-      - platform/test/browser/fleet_prompts.spec.ts
+    proofs: []
     gaps:
       - A Key whose 48 hours run out while the page is open tells no page, so Mark present comes back when the page is next read.
       - One press marks the idle Keys of the wallet it is sent from; idle Keys in another of the person's wallets are counted beside the button and need a press from that wallet.
@@ -1276,8 +1171,7 @@ features:
     entry:
       - route: GET /:fleet/:number/keys/:token_id
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/key_profile_test.exs
+    proofs: []
     gaps:
       - Nothing checks the dots in a browser at 390 and 1280. WebKit is not run on the Mac.
 
@@ -1312,10 +1206,7 @@ features:
       - route: GET /:fleet/:number
       - route: GET /account/agents
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/fleet_page_test.exs
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/browser/fleet_prompts.spec.ts
+    proofs: []
     gaps:
       - The light and words in the card are read when the page is; a check-in without a schedule tells no page, so they move on when it is next read.
       - Dismiss lives in the browser, so another browser or a cleared one shows the card again.
@@ -1354,11 +1245,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/sync
       - route: GET /account/agents
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/check_ins_test.exs
-      - platform/test/keyfleet_web/signed_agent_contract_test.exs
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/browser/account_agents.spec.ts
+    proofs: []
     gaps:
       - Only a scheduled check-in tells the person's open pages; a line sent with a session check-in shows when the Agents page is next read.
       - The line is read by the person the agent last checked in for; an agent paired with someone new shows them its line only from its next check-in.
@@ -1387,13 +1274,10 @@ features:
       - route: GET /api/v1/fleets
       - route: GET /api/v1/fleets/:fleet_id
       - route: GET /fleets/:file
-    proofs:
-      - platform/test/keyfleet/directory_test.exs
-      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
+    proofs: []
     regressions:
       - id: R-20261021-excerpt-whole-characters
         from: overnight simplify pass
-        test: platform/test/keyfleet/directory_test.exs
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
@@ -1415,10 +1299,7 @@ features:
       - platform/priv/public/privacy.md
     entry:
       - route: POST /steps
-    proofs:
-      - platform/test/keyfleet_web/controllers/launch_steps_controller_test.exs
-      - platform/test/keyfleet_web/metrics_test.exs
-      - platform/test/browser/launch_steps.spec.ts
+    proofs: []
     gaps:
       - Pairing an agent and buying a Key are already saved, so they are read from the database, not counted here.
       - Checked in headless Chromium only; WebKit is not run on the Mac.
@@ -1434,8 +1315,7 @@ features:
       - platform/lib/keyfleet_web/public_documents.ex
     entry:
       - route: GET /sitemap.xml
-    proofs:
-      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    proofs: []
     gaps:
       - Each entry's date is the release's, not the fleet's latest post.
 
@@ -1468,14 +1348,7 @@ features:
       - route: GET /:fleet/:number/polls/:poll_id
       - route: GET /:fleet/:number?key=:token_id
       - route: GET /:fleet/:number/keys/:token_id/dms/:other_token_id
-    proofs:
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/keyfleet_web/live/dms_page_test.exs
-      - platform/test/keyfleet_web/live/key_profile_test.exs
-      - platform/test/keyfleet_web/live/workspace_page_test.exs
-      - platform/test/keyfleet_web/live/polls_page_test.exs
-      - platform/test/browser/account_agents.spec.ts
-      - platform/test/browser/dm_confirm.spec.ts
+    proofs: []
     gaps:
       - Focus going back to the opening button and Escape are walked in the browser for Unpair, Block and Delete conversation; the others use the same window.
       - WebKit is not run on the Mac.
@@ -1543,11 +1416,7 @@ features:
       - route: POST /oauth/token
       - route: GET /oauth/connections
       - route: GET /agents/claude
-    proofs:
-      - platform/test/keyfleet_web/router_gate_coverage_test.exs
-      - platform/test/keyfleet_web/rate_limit_test.exs
-      - platform/test/keyfleet_web/mcp_connector_test.exs
-      - platform/test/keyfleet_web/oauth_consent_test.exs
+    proofs: []
     gaps:
       - The connector test runs /mcp through Keyfleet's endpoint with the hosted signer stubbed, so each app's own identity and its pairing are proven there, not against siwa-server. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
       - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
@@ -1586,8 +1455,7 @@ features:
       - platform/priv/public/docs.md
     entry:
       - route: POST /api/agents/v1/pairing
-    proofs:
-      - platform/test/keyfleet_web/hello_card_test.exs
+    proofs: []
     gaps:
       - siwa-server has never asked Keyfleet: the test publishes its own stand-in key and signs the service token itself. siwa-server asks the first address in its SIWA_WALLET_ORIGINS for Keyfleet, https://keyfleet.ai, which matches the address PHX_HOST gives the site.
       - Keyfleet reads the sign-in server's published keys to check a card beside a signed request (on the API, at /mcp and at whoami, me and pair) or a pairing question's token when it holds none read in the last hour, and may read them sooner for a key not among those it holds; otherwise it reuses the keys it holds. Keyfleet's tests do not check when they are read.
@@ -1626,9 +1494,7 @@ features:
       - route: GET /oauth/authorize
       - route: POST /oauth/token
       - route: GET /agents/chatgpt
-    proofs:
-      - platform/test/keyfleet_web/mcp_connector_test.exs
-      - platform/test/keyfleet_web/oauth_consent_test.exs
+    proofs: []
     gaps:
       - siwa-server (v107, cf107d1) lets a hosted signer pair a Keyfleet identity as `chatgpt` as well as `claude` (lib/siwa_server/hosted_requests.ex). ChatGPT's `pair_identity` has never run against siwa-server; real ChatGPT has never connected.
       - Real ChatGPT has never connected. The connector test signs ChatGPT in by its published identity, served without a network, with the browser session set directly rather than through Privy's sign-in, and pairs through the tool with the hosted signer and the sign-in server stubbed.
@@ -1672,12 +1538,7 @@ features:
       - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove
       - route: POST /api/v1/agent/fleets/{fleet_id}/posting_key
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/key_threads_test.exs
-      - platform/test/keyfleet_web/live/key_profile_test.exs
-      - platform/test/keyfleet/activity_test.exs
-      - platform/test/keyfleet/key_profile_test.exs
-      - platform/test/keyfleet/posting_key_test.exs
+    proofs: []
     gaps:
       - The four agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.
 
@@ -1708,12 +1569,7 @@ features:
       - route: GET /account
       - route: GET /api/v1/agent/fleets/{fleet_id}/agent_keys
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet/agent_key_test.exs
-      - platform/test/keyfleet/agent_key_race_test.exs
-      - platform/test/keyfleet_web/agent_key_route_test.exs
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/test/browser/account_agents.spec.ts
+    proofs: []
     gaps:
       - An agent that owns its own account would place agents as that owner on the page, which waits on sign-in for agents (K1).
       - An unpaired agent's row stays in agent_keys and never counts again; deleting it in the unpair's own transaction needs a link to the shared pairing table, a shared database change.
@@ -1752,10 +1608,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send
       - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/send
       - live: KeyfleetWeb.FleetLive
-    proofs:
-      - platform/test/keyfleet/mentions_property_test.exs
-      - platform/test/keyfleet_web/mentions_journey_test.exs
-      - platform/test/keyfleet_web/live/room_page_test.exs
+    proofs: []
     gaps:
       - A sync waiting for news is not woken by a mention in a room or on a wall it does not follow; the mention comes with the next answer, within the 20-second wait.
       - The cursor is a post's time and id; a post whose transaction commits after a later post's could in principle be passed over. Not seen in tests, not proven against.
@@ -1785,11 +1638,7 @@ features:
       - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove
       - route: POST /api/v1/agent/fleets/{fleet_id}/checkpoint/save
       - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/create
-    proofs:
-      - platform/test/keyfleet_web/agent_unpaired_test.exs
-      - platform/test/keyfleet/posting_key_test.exs
-      - platform/test/keyfleet/agent_write_race_test.exs
-      - platform/test/keyfleet/graph/checks/key_actor_test.exs
+    proofs: []
     gaps:
       - The refusal is read from the pairing check's own words, which the shared agents library gives no code of its own.
       - A wall removal unpaired mid-request is refused by its Key check first and answered not_your_key; only the window after that check answers agent_not_paired, and no test reaches it.
@@ -1811,9 +1660,7 @@ features:
       - platform/lib/keyfleet_web/refusal.ex
     entry:
       - route: POST /api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote
-    proofs:
-      - platform/test/keyfleet/polls_test.exs
-      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+    proofs: []
     gaps:
       - Not yet run by a real agent.
 
@@ -1860,11 +1707,7 @@ features:
     entry:
       - route: GET /api/v1/agent/fleets/{fleet_id}/seasons
       - route: GET /api/v1/fleets/{fleet_id}/seasons
-    proofs:
-      - platform/test/keyfleet/seasons_test.exs
-      - platform/test/keyfleet/seasons/rules_test.exs
-      - platform/test/keyfleet/seasons/coinbase_test.exs
-      - platform/test/keyfleet/seasons/turn_test.exs
+    proofs: []
     gaps:
       - Read against a stand-in for Coinbase; Coinbase's live answers are not read by any test.
       - Coinbase reads per turn are per fleet and one after another, at each boundary one read of the whole spot list, kept to the products the starting season's picks name (no read when they name only USDC; one request a page should the list run to more pages; a list past twenty pages fails the turn, and a page that says more follow but names no next page fails it at once), and one price request for each distinct product other than USDC whose price decides something (the ended season's holding and picks, and the starting season's picks still open to picks). At worst that is twenty list requests, however many products the picks name, and one price request for each Key's pick in the two seasons plus the holding, never more than the products those picks could name; the list comes on one page today, about 70 KB sent compressed. A turn catching up after downtime does this once for each boundary missed. Nothing is shared between fleets and one failure retries the whole turn.
@@ -1916,11 +1759,7 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks
       - route: GET /api/v1/agent/seasons/coins
       - route: POST /mcp
-    proofs:
-      - platform/test/keyfleet_web/signed_agent_contract_test.exs
-      - platform/test/keyfleet_web/mcp_connector_test.exs
-      - platform/test/keyfleet/seasons_test.exs
-      - platform/test/keyfleet_web/live/season_panel_test.exs
+    proofs: []
     gaps:
       - The tool's listed schema says a reason is at most 500 characters, which a JSON Schema check counts by letters; the rule counts as a text box does, so a reason of 500 letters or fewer with emoji may pass that check and still be refused invalid_pick.
       - Not yet run by a real agent.
@@ -1950,8 +1789,7 @@ features:
     entry:
       - route: GET /api/v1/fleets/{fleet_id}/seasons
       - route: GET /api/v1/fleets/{fleet_id}/seasons/{number}
-    proofs:
-      - platform/test/keyfleet_web/controllers/public_seasons_test.exs
+    proofs: []
     gaps:
       - A failed database read answers a server error, not a 503 with a code, unlike the public proposals.
       - The best pick is chosen by the result as stored, to 28 digits; two results equal that far would be told apart by lock order, where the crown decides them exactly.
@@ -1984,9 +1822,7 @@ features:
     entry:
       - route: GET /:fleet/:number
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/season_panel_test.exs
-      - platform/test/browser/seasons.spec.ts
+    proofs: []
     gaps:
       - No price moves on the panel while a season runs; results appear when it settles.
 
@@ -2021,11 +1857,7 @@ features:
     entry:
       - route: GET /:fleet/:number/seasons
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/live/seasons_page_test.exs
-      - platform/test/keyfleet/seasons/rules_test.exs
-      - platform/test/keyfleet_web/route_catalog_test.exs
-      - platform/test/browser/seasons.spec.ts
+    proofs: []
     gaps:
       - Read as the page opens and as More asks; a season settled while the page is open shows when it is opened again.
 
@@ -2068,10 +1900,7 @@ features:
     entry:
       - route: GET /api/v1/feed
       - route: POST /api/v1/feed/missed
-    proofs:
-      - platform/test/keyfleet_web/agent_feed_test.exs
-      - platform/test/keyfleet_web/mcp_connector_test.exs
-      - platform/test/browser/agent_tools.spec.ts
+    proofs: []
     gaps:
       - A reconnect replays by posting time, up to now; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against. The missed read answers only events thirty seconds old by the database's clock, longer than the database lets one statement or lock wait run, and always hands back that settled moment, so a reader that reads on from the cursor it hands back does not share that gap; its tests prove a message stamped before the last answered event, or in the same microsecond, or after the settled moment and just before a feed id younger than thirty seconds, is answered by a later read. A cursor later than the settled moment answers no events, so the next read can repeat events the feed sent; an event's id tells a repeat apart. Two gaps stay, and a sync covers both: a post whose transaction still takes longer than thirty seconds to commit can be passed, and any id the feed sent shares the reconnect's gap, since a message stamped before it and still being saved when the feed dropped can be passed.
       - The feed and events missed commands are source only until regents-cli moves its Keyfleet pin, and its --wake starts no agent for a Keyfleet event until it takes fleet ids with underscores (K17 in docs/agent-parity.md). Hosted MCP, the connector and WebMCP do not carry the stream by design; events_missed is their read.
@@ -2117,12 +1946,7 @@ features:
       - route: GET /agents
       - route: POST /api/v1/messages/{topic}
       - live: KeyfleetWeb.AdminMessagesLive
-    proofs:
-      - platform/test/keyfleet/left_messages/leave_test.exs
-      - platform/test/keyfleet_web/left_messages_api_test.exs
-      - platform/test/keyfleet_web/left_messages_pages_test.exs
-      - platform/test/keyfleet_web/mcp_connector_test.exs
-      - platform/test/browser/agent_message.spec.ts
+    proofs: []
     gaps:
       - regents-cli does not carry messages leave until its next release (cli/commands.json marks it pending).
       - Not yet run by a real agent.
@@ -2159,14 +1983,7 @@ features:
       - live: KeyfleetWeb.HomeLive
       - live: KeyfleetWeb.ShellLive
       - route: GET /docs
-    proofs:
-      - platform/test/browser/theme_switch.spec.ts
-      - platform/test/browser/app_shell.spec.ts
-      - platform/test/keyfleet_web/shell_live_test.exs
-      - platform/assets/test/theme.test.ts
-      - platform/assets/test/theme_switch_knob.test.ts
-      - platform/assets/test/theme_switch_morph.test.ts
-      - platform/assets/test/theme_switch_pixels.test.ts
+    proofs: []
     gaps:
       - The glass picture is not drawn in headless Chromium (no WebGPU), so the walk presses the flat switch; the picture is checked by eye.
       - The knob's drag is covered by unit tests, not walked.
@@ -2194,8 +2011,7 @@ features:
       - platform/scripts/share-cards/card.html
     entry:
       - route: GET /share/projects/:fleet_id/:file
-    proofs:
-      - platform/test/keyfleet_web/controllers/share_card_controller_test.exs
+    proofs: []
     gaps:
       - A picture with a real Key's card is first seen live; the tests draw it with a stand-in card.
 
@@ -2230,14 +2046,10 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/presence
       - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/vote
       - route: POST /api/v1/agent/fleets/{fleet_id}/keys/claim
-    proofs:
-      - platform/test/keyfleet/wallet_steps_test.exs
-      - platform/test/browser/wallet_keys.spec.ts
-      - verification/formal/guards/ActionGuards.tla
+    proofs: []
     regressions:
       - id: R-20261112-unrecorded-key-left-out
         from: Keyfleet chief, 12 November 2026, formal finding F4
-        test: platform/test/browser/wallet_keys.spec.ts
     gaps:
       - The Account page lists a wallet's fleets from the site's record, so a fleet where the wallet holds only Keys the site hasn't recorded yet has no Claim all until the reader records one.
       - The read runs from the site's last recorded block to the latest one; a reader far behind makes it wide, and a node refusing it leaves the press with the recorded Keys.
@@ -2264,9 +2076,7 @@ features:
     entry:
       - route: GET https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
       - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/{run_id}
-    proofs:
-      - platform/test/keyfleet/notebooks/run_page_pruner_test.exs
-      - platform/test/keyfleet_web/notebook_gateway_test.exs
+    proofs: []
     gaps:
       - The first daily clear against live data is not yet seen; how many old pages it meets is unknown.
       - The clear is one statement under the site's 15-second limit; a very large first backlog could pass it.
@@ -2292,9 +2102,7 @@ features:
     entry:
       - route: GET https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
       - route: GET /fleets/{fleet_id}/notebooks/open
-    proofs:
-      - platform/test/browser/kept_page.spec.ts
-      - platform/test/keyfleet_web/notebook_gateway_test.exs
+    proofs: []
     gaps:
       - The walk's page is written by hand. A page marimo exports draws its cells with a frontend it loads from cdn.jsdelivr.net, and the walk reads nothing from outside the machine, so a real marimo page drawing in the sandbox is not walked.
       - The desktop walk runs in npm run test:chain, which make check does not run; the iPhone 15 and Pixel 7 walks run in make check's devices lane.
@@ -2338,35 +2146,22 @@ features:
     entry:
       - live: KeyfleetWeb.ShellLive
       - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/assets/test/send_step.test.ts
-      - platform/assets/test/onchain_steps.test.ts
-      - platform/assets/test/privy_bridge.test.ts
-      - platform/test/keyfleet_web/live/fleet_page_test.exs
-      - platform/test/browser/wallet_buttons.spec.ts
-      - platform/test/browser/key_shards.spec.ts
+    proofs: []
     regressions:
       - id: R-20261117-press-after-reconnect
         from: Keyfleet chief's review of d193a8183, 17 November 2026
-        test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261117-agent-hears-press-note
         from: Keyfleet chief's second review of kf/wallet-press-1118, 17 November 2026
-        test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261117-offline-press-never-nothing-sent
         from: Keyfleet chief's question at the merge of the homepage release into kf/wallet-press-1118, 17 November 2026
-        test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261117-agent-answered-at-once
         from: Keyfleet chief's third review of kf/wallet-press-1118 (fe425e59a), 17 November 2026
-        test: platform/assets/test/onchain_steps.test.ts
       - id: R-20261117-ask-names-open-wallet
         from: Keyfleet chief's second review of kf/wallet-press-1118, fixed as ash-template d60a9b31 fixed it, 17 November 2026
-        test: platform/test/browser/key_shards.spec.ts
       - id: R-20261118-refusal-one-note
         from: Keyfleet chief's fourth review of kf/wallet-press-1118, 18 November 2026
-        test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261118-press-wallet-at-press
         from: Keyfleet chief's fourth review of kf/wallet-press-1118, fixed as ash-template ef4074c4 fixed it, 18 November 2026
-        test: platform/assets/test/onchain_steps.test.ts
     gaps:
       - Following a press across a reconnect waits on Sean's decision. A press made while the page is still getting its connection back, from the steps the page already holds, reaches the wallet but is shown as not this page's step. In the Buy Key window, which the page closes when it comes back, such a press is not shown at all, and one that asks for its steps then (its form changed, or it held none) sends nothing; the ask names the window by the page's numbering from before, which the fresh page doesn't have.
       - A browser agent's press that asks the server for its steps never answers the agent if the page moves to another page before the steps come back.

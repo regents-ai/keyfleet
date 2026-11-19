@@ -1,6 +1,6 @@
 # Contracts
 
-A Foundry workspace, tested with forge 1.8.6, pinned to Solidity 0.8.26 with
+A Foundry workspace, built with forge 1.8.6, pinned to Solidity 0.8.26 with
 OpenZeppelin 5.7.0 and forge-std 1.9.7 vendored as git submodules under
 `contracts/lib`. Everything lives on Base (chain 8453).
 
@@ -238,8 +238,7 @@ first step, never as a closed-form power, and every step rounds up:
   `scripts/classic_prices.py` at the repository root, which also writes
   `platform/lib/keyfleet/fleets/classic_key_prices.txt`, the same prices the
   site shows; change the script and run `uv run scripts/classic_prices.py`,
-  never either file. The preset test walks the curve one key at a time in
-  36-decimal fixed point and checks every one of the 1,024 prices against it.
+  never either file.
 
 Fibonacci level supplies are 2, 3, 5, 8, 13, ..., 17,711 at level 20, 28,657 at
 level 21, and so on without end. Key numbers are 1-based and contiguous across
@@ -483,8 +482,7 @@ seed `seed`:
   that `u * total` fits in 64 bits and every value with a weight above zero can
   be drawn.
 
-The site draws traits with this rule in `platform/lib/keyfleet/traits.ex`, and
-`test/KeyfleetTraitDraw.t.sol` pins the same golden results the site's tests pin.
+The site draws traits with this rule in `platform/lib/keyfleet/traits.ex`.
 The table's file format is in [../docs/deployment.md](../docs/deployment.md).
 
 The operator writes a known VRF subscription id into the manifest before deployment.
@@ -1627,23 +1625,12 @@ without six decimals, a zero keeper and a zero trait table hash.
   does not own (`VrfSubscriptionNotOwnedByRegentsSafe`). It lists every fleet
   in the collection's registry, so it can be rerun at any time to add fleets
   created since.
-- `script/AnvilLab.s.sol` is no part of a release. It puts the system with
-  its five founding fleets on a plain local anvil for the anvil tests in `platform/`
-  (`mix test.external`), with stand-in USDC, WETH, REGENT, a USDC/WETH pool and
-  a WETH/REGENT pool manager at a fixed price where 1 USDC buys 1 REGENT, REGENT
-  staking, the Autolaunch factory and a VRF coordinator. The sender is the Safe
-  and the keeper. It runs in two steps, since a phase must open in the future:
-  `run` creates the five founding fleets with a stand-in deck and moves to
-  phase 2, opening Club gifts and Classic sales a
-  minute later (`OPENING`); once the chain's clock is past that, `sell` buys two
-  keys while the coordinator refuses every request, turns the treasury's booked
-  USDC into REGENT with one piece, and leaves the sender holding and having
-  approved the USDC for a third key.
 - `script/BaseForkLab.s.sol` and `script/base-fork-lab.sh` are no part of a
-  release either. They put the system with Classic #1 selling on a local anvil
+  release. They put the system with Classic #1 selling on a local anvil
   fork of Base run as chain 31337, for the site on `http://localhost:4097`,
   against Base's own USDC, swap route, REGENT staking and Autolaunch factory
-  from `deployments/base.json`, with a stand-in VRF coordinator. The Safe is
+  from `deployments/base.json`, with a stand-in VRF coordinator
+  (`script/lab/MockVRFCoordinatorV2Plus.sol`). The Safe is
   anvil's first default account and the keeper its second. `deploy` deploys,
   creates the five founding fleets with their real decks and moves to phase 2,
   opening Club gifts and Classic sales 10 minutes
@@ -1654,10 +1641,6 @@ without six decimals, a zero keeper and a zero trait table hash.
   (Classic #1's keys 1 to 1,024 hold their cards by number and draw nothing).
   The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
   Every step refuses any chain but 31337 (`WrongChain`).
-
-The scripts' cores take and return values, so the suite runs the real
-deployment, the real Safe steps and the real record against local stand-ins
-without touching a file.
 
 ### Deploy-day checklist
 
@@ -1715,9 +1698,10 @@ Nothing below can be fixed after the fact unless it says so.
 
 ### Over stand-ins
 
-Measured by the suite against a plain ERC-20 standing in for USDC, stand-in
-pools and a stand-in coordinator, with every account cold, each call in a
-transaction of its own. The suite asserts each ceiling.
+Measured by the contract tests, removed on 19 November 2026, against a plain
+ERC-20 standing in for USDC, stand-in pools and a stand-in coordinator, with
+every account cold, each call in a transaction of its own. The tests held each
+call under its ceiling; nothing measures or holds them now.
 
 | Call | Gas | Ceiling |
 | --- | --- | --- |
@@ -1762,8 +1746,8 @@ zero, so nearly all of it is first writes.
 Open creation was measured with a 2,000-byte description, a 512-byte image link
 and a 10 USDC starting price, against the 16,777,216-gas cap one transaction may
 use on Ethereum since Fusaka (EIP-7825), which the build keeps every creation
-under. The least gas that completes a purchase is 289,258; the reveal suite
-tries every limit in the few thousand gas above it and finds that every
+under. The least gas that completes a purchase is 289,258; the reveal tests
+tried every limit in the few thousand gas above it and found that every
 completed purchase either made its random-number request or said it failed.
 
 ### On a fork of Base
@@ -1776,8 +1760,8 @@ real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking, the
 Chainlink VRF coordinator and the real Regents Club Pass, with the collection a
 consumer of a funded subscription so a key that draws makes its real request.
 Each figure is the whole transaction, the 21,000 base and the call data
-included, every call run as a transaction of its own
-(`test/fork/KeyfleetBaseGas.t.sol`):
+included, every call run as a transaction of its own, by a fork suite removed
+on 19 November 2026:
 
 | Call | Gas |
 | --- | --- |
@@ -1806,12 +1790,7 @@ included, every call run as a transaction of its own
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. The five transactions that deploy the
-system are to measure on a Base fork. To measure again, with `BASE_RPC_URL` set
-to a Base endpoint:
-
-```sh
-forge test --match-contract KeyfleetBaseGasTest --isolate -vv
-```
+system are to measure on a Base fork; nothing in this workspace measures gas now.
 
 The coordinator's charge for each answer, paid in ETH from the subscription, is
 not in these figures; it is about half a US cent per key (see Status).
@@ -1819,31 +1798,10 @@ not in these figures; it is about half a US cent per key (see Status).
 ## Checks
 
 Run `make check-contracts` from the repository root. It runs, in `contracts/`,
-`forge fmt --check`, `forge build`, `forge test` (all but the audit's fork
-proofs) and `script/check_bytecode.sh`.
-
-The suites in `test/`, all against local stand-ins, cover the presets, the
-collection (registry, phases, sales, decks, the keeper, metadata and royalty),
-reveals, cards dealt by number and the trait draw, the factory and its
-deployers, the manager, the Regents Club's gifts and claims, the
-purchase money and the REGENT buyer, the protocol share and money sent to a
-fleet, the treasury's payments and advances, the daily split, the launch token,
-the rewards ledger, votes and proposal topics, carrying out proposals, presence,
-shards, signed messages, Lit, the deployment, Safe-step and record scripts and
-the anvil lab. `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. Shared set-up is in `test/helpers` and the stand-ins in
-`test/mocks`.
-
-`test/invariant/` holds the handler-based invariant suites, which `forge test`
-runs with the rest: the collection (founding and open fleets on one collection,
-the Regents Club's gifts, and the phases), the money of the founding Cascade and Accelerant fleets, the electorate, presence, and segregation
-(random approved batches never lower protected money). The presence suite runs
-256 runs, and the fleet, electorate and segregation suites 256 runs × depth 100.
-The two collection suites run short every day, 24 runs × depth 80 and
-24 runs × depth 40; the `deep` profile runs them at 256 runs × depth 100:
-
-```sh
-cd contracts && FOUNDRY_PROFILE=deep forge test --match-path test/invariant/KeyfleetCollectionInvariant.t.sol
-```
+`forge fmt --check`, `forge build` and `script/check_bytecode.sh`. The contract
+tests, the audit's proofs and the fork and invariant suites were removed on
+19 November 2026; nothing else checks a new or changed contract before it is
+deployed, apart from review.
 
 `script/check_bytecode.sh` disassembles the deployed code of the collection, the
 factory, its four deployers, the REGENT buyer, the shard record, the Regents Club
@@ -1853,43 +1811,6 @@ following every jump target the code pushes, and fails if any of them can reach
 the Classic price table stored at the end of the manager's code, are data and
 are not judged. Foundry must be installed (forge 1.8.6); the compiler may be
 downloaded on first use.
-
-Tests need no RPC, apart from the five suites in `test/fork/`, which skip
-themselves unless `BASE_RPC_URL` is set:
-
-- `KeyfleetBaseFork.t.sol` deploys the system from the committed Base manifest
-  through the real deployment and Safe steps and runs fleets against the real
-  Chainlink coordinator, USDC, REGENT pools and REGENT staking, including a
-  protocol share deposit and a send refused while the Safe has staking paused
-  (on the fork only).
-- `KeyfleetRegentBuyerFork.t.sol` checks that the pinned v4 pool key names a
-  live pool, that a key purchase delivers REGENT to the fleet's treasury through
-  both real pools, and that the buyer's and the purchase's own protections hold.
-- `KeyfleetLitFork.t.sol` runs the treasury's Lit writes, each carried by a
-  passed proposal, against Lit's real account contract, and checks Lit refuses
-  anyone else and refuses the treasury once the account is handed on.
-- `KeyfleetAutolaunchFork.t.sol` runs a whole launch of a fleet's token through
-  Autolaunch v2's real factory, auction, strategy, escrow and payment receiver,
-  forked at block 52,272,000; it needs an endpoint that serves older blocks. The
-  factory is still paused on Base, so on the fork only the test acts as the
-  Regents Safe to open it.
-- `KeyfleetBaseGas.t.sol` gives the figures in [On a fork of Base](#on-a-fork-of-base)
-  and runs only with `--isolate`.
-
-Run them one suite at a time, as a public endpoint may refuse a burst of
-requests.
-
-`test/audit/` keeps the proofs of the internal contract audit (9 Oct): each
-repeats a finding's original attack and checks the safe outcome. KF-A-04 checks
-the gift-batch behaviour left open by decision. KF-A-05 proves a coordinator
-change is refused while an accepted reveal waits, and succeeds after its answer.
-Anyone can expire an unanswered request after 24 hours to release its lock on
-the coordinator; its Key stays without a seed and cannot request again.
-`KeyfleetAuditLocal.t.sol` and `Agent5QueueBrick.t.sol` run on the
-local stand-ins with the rest. `KeyfleetAuditFork.t.sol` runs against real Base
-USDC, Permit2 and the REGENT route at the pinned block 52,366,000; it fails, and
-does not skip, without `BASE_RPC_URL`, and needs an endpoint that serves that
-block. `make check-audit-fork` runs it.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run
 `git submodule update --init`.

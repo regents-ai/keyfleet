@@ -3,10 +3,9 @@ defmodule Keyfleet.Lighthouse do
   Regent's Lighthouse account, which keeps files on IPFS for good. Keyfleet
   keeps revealed keys' cards there (`Keyfleet.Keys.DrawPicture`).
 
-  Configured under `:keyfleet, Keyfleet.Lighthouse`: its upload `url`, the
-  account's `api_key` and `req_options` (the tests' `Req.Test` stub). Each
-  upload is asked once; the picture job retries. The same bytes always get the
-  same address, so a repeated upload is harmless.
+  Configured under `:keyfleet, Keyfleet.Lighthouse`: its upload `url` and the
+  account's `api_key`. Each upload is asked once; the picture job retries. The
+  same bytes always get the same address, so a repeated upload is harmless.
   """
 
   # An IPFS address as Lighthouse answers it: version 0 (`Qm`, base58) or
@@ -21,16 +20,14 @@ defmodule Keyfleet.Lighthouse do
     config = Application.fetch_env!(:keyfleet, __MODULE__)
 
     Req.post(
-      [
-        base_url: config[:url],
-        url: "/api/v0/add",
-        auth: {:bearer, config[:api_key]},
-        form_multipart: [file: {bytes, filename: filename, content_type: content_type}],
-        decode_body: false,
-        retry: false,
-        redirect: false,
-        receive_timeout: 60_000
-      ] ++ config[:req_options]
+      base_url: config[:url],
+      url: "/api/v0/add",
+      auth: {:bearer, config[:api_key]},
+      form_multipart: [file: {bytes, filename: filename, content_type: content_type}],
+      decode_body: false,
+      retry: false,
+      redirect: false,
+      receive_timeout: 60_000
     )
     |> case do
       {:ok, %Req.Response{status: 200, body: body}} ->

@@ -1,20 +1,32 @@
 defmodule Keyfleet.Chain.RpcClient do
   @moduledoc """
-  `Keyfleet.Chain.Client` over JSON-RPC to the node at `KEYFLEET_RPC_URL`.
+  The chain reads the fleet reader and the wallet steps need, over JSON-RPC to
+  the node at `KEYFLEET_RPC_URL`.
+
+  Logs come back exactly as `eth_getLogs` returns them; decoding them is
+  `Keyfleet.Chain.Logs`'s job. Contract reads come back as the bytes the
+  contract returned. One call asks for every contract and event the
+  reader follows, so a stretch of blocks is always read whole.
 
   Every request the node does not answer, or answers with an error other than
   the contract refusing the call, is logged and counted in
   `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`) under the
   scope "fleet", so Sentinel warns while the node keeps failing.
   """
-  @behaviour Keyfleet.Chain.Client
 
   require Logger
 
   alias Keyfleet.Chain.JsonRpc
   alias RegentChain.Abi
 
-  @impl true
+  @type head :: %{
+          number: non_neg_integer(),
+          hash: String.t(),
+          timestamp: DateTime.t(),
+          base_fee: non_neg_integer()
+        }
+
+  @spec chain_id() :: {:ok, pos_integer()} | {:error, term()}
   def chain_id do
     with {:ok, result} <- request("eth_chainId", []) do
       case Abi.quantity(result) do
@@ -26,7 +38,7 @@ defmodule Keyfleet.Chain.RpcClient do
 
   # Base makes five `latest` blocks a second from Denim; nothing here waits
   # for `safe` or `finalized`.
-  @impl true
+  @spec head() :: {:ok, head()} | {:error, term()}
   def head do
     with {:ok, header} <- block("latest"), do: head_of(header)
   end
@@ -49,7 +61,12 @@ defmodule Keyfleet.Chain.RpcClient do
 
   defp head_of(_header), do: {:error, :invalid_block_header}
 
-  @impl true
+  @spec get_logs(
+          addresses :: [String.t()],
+          topic0s :: [String.t()],
+          from_block :: non_neg_integer(),
+          to_block :: non_neg_integer()
+        ) :: {:ok, [map()]} | {:error, term()}
   def get_logs(addresses, topic0s, from_block, to_block) do
     filter = %{
       address: addresses,
@@ -65,9 +82,17 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
+  @doc """
+  Calls a contract's view function with `data`, the `0x` calldata
+  `RegentChain.Call.encode/2` builds, at the block whose hash is
+  `block_hash`, and returns the bytes it returned. A call the contract refuses is
+  `{:error, :reverted}`. A block that is no longer on the chain is an error,
+  never another block's answer.
+  """
   # EIP-1898: the node answers at exactly that block, and refuses once it is
   # no longer on the chain.
-  @impl true
+  @spec call(to :: String.t(), data :: String.t(), block_hash :: String.t()) ::
+          {:ok, binary()} | {:error, term()}
   def call(to, data, block_hash) do
     case request("eth_call", [
            %{to: to, data: data},
@@ -84,7 +109,13 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  @impl true
+  @doc """
+  The ETH `address` holds, in wei, at the block whose hash is `block_hash`. A
+  block that is no longer on the chain is an error, never another block's
+  answer.
+  """
+  @spec get_balance(address :: String.t(), block_hash :: String.t()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
   def get_balance(address, block_hash) do
     with {:ok, result} <-
            request("eth_getBalance", [address, %{blockHash: block_hash, requireCanonical: true}]) do
@@ -95,7 +126,13 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  @impl true
+  @doc """
+  The code at `address`, as bytes, at the block whose hash is `block_hash`:
+  empty for a plain wallet, the contract's code for a smart wallet, and the
+  delegation for a wallet that delegates to one (EIP-7702).
+  """
+  @spec get_code(address :: String.t(), block_hash :: String.t()) ::
+          {:ok, binary()} | {:error, term()}
   def get_code(address, block_hash) do
     with {:ok, result} <-
            request("eth_getCode", [address, %{blockHash: block_hash, requireCanonical: true}]) do

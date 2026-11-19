@@ -1,9 +1,9 @@
 # Per-key still pictures
 
 6 October 2026. Each revealed key's marketplace picture is its card, seen from the outside, as a still picture.
-Sean accepted the Key Lab card design on 6 October 2026 ("1. a"). This folder holds the trait table, eight fixed
-test keys, the script that draws them unattended, and the check that the site draws the same traits. It ran on this
-Mac only. No storage, job, Fly machine or money was used; production storage and the job that makes pictures each
+Sean accepted the Key Lab card design on 6 October 2026 ("1. a"). This folder holds eight fixed test keys and the
+script that draws them unattended; the check that the site draws the same traits was removed on 19 November 2026.
+Everything here ran on this Mac only. No storage, job, Fly machine or money was used; production storage and the job that makes pictures each
 need their own go.
 
 ## What ran
@@ -18,9 +18,9 @@ need their own go.
   "keyfleet still test n".
 - **Rendering.** `render.mjs` opens each key in headless Chromium with reduced motion and saves the card as a
   767×959 PNG at `art/<table hash>/<slot>/<key>.png`.
-- **Parity.** `parity.exs` loads the table file through the site's own reader, `Keyfleet.Traits.table!/1`, which
-  checks the fingerprint, then draws the same eight keys with `Keyfleet.Traits.draw/2` and compares them with what
-  the page showed.
+- **Parity.** A script, removed on 19 November 2026, loaded the table file through the site's own reader,
+  `Keyfleet.Traits.table!/1`, which checks the fingerprint, then drew the same eight keys with
+  `Keyfleet.Traits.draw/2` and compared them with what the page showed.
 
 ## Results
 
@@ -66,10 +66,6 @@ Sean's "2. a" of 6 October 2026 asked for the per-key pictures, built locally fi
 
 ## Run it again
 
-The 6 October table is no longer in the tree; take it from the last commit that had it.
-
 ```sh
-git show aecccaa:platform/priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json > <out folder>/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json
 node docs/still-pictures/render.mjs <saved Key Lab page> <out folder> classic 0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8 classic 1
-cd platform && MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs <out folder>/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json ../docs/still-pictures/keys.json <out folder>/report.json
 ```

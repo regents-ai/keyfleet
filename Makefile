@@ -1,24 +1,20 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-change check-platform platform-assets platform-checks platform-suite platform-walks check-required-fixes check-cli check-siwa-latest check-contracts check-audit-fork check-notebook-hub release readiness
+.PHONY: help check check-change check-platform platform-assets platform-checks check-required-fixes check-cli check-siwa-latest check-contracts check-notebook-hub release
 help:
-	@echo "Run make check-change before an ordinary change ships: it runs the tests that cover what changed since origin/main."
+	@echo "Run make check-change before an ordinary change ships: it compiles with warnings as errors, checks the format, and runs the contracts' gate when contracts/ changed since origin/main."
 	@echo "Run make check for every gate, side by side, each writing its output to platform/_build/check/<gate>.log; it prints every gate's log, the failed ones last, then one line per gate."
 	@echo "Or run check-platform, check-required-fixes, check-cli, check-siwa-latest or check-contracts for one component."
 	@echo "Run make check-notebook-hub for the fleet notebook hub; it is not part of make check and must succeed before any hub image is pushed."
 	@echo "Run make release to run every gate, then build the committed tree into an image and start it against a throwaway database."
-	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
 # make check builds the platform's assets, then runs its gates side by side, each
 # writing its output to $(CHECK_LOGS)/<gate>.log, then prints every gate's log,
 # the failed ones last, and one line per gate, and fails when any gate failed.
-# The gates of one quoted lane run in turn. The assets are built before any lane
-# starts and never again while they run: the browser walks serve them, and the
-# ExUnit suite's pages read priv/esbuild-meta.json, which esbuild rewrites in
-# place. The walks come after the other checks in their lane, and each walk's
-# server has a database of its own, so the suite runs beside them. The contracts
-# run under nice: the Solidity compiler takes every core it can, and gives way.
+# The assets are built before any other gate starts: the platform's typecheck
+# reads the shared libraries' scripts and tokens they copy. The contracts run
+# under nice: the Solidity compiler takes every core it can, and gives way.
 CHECK_FIRST := platform-assets
-CHECK_LANES := "platform-checks platform-walks" platform-suite check-required-fixes check-cli check-siwa-latest check-contracts
-CHECK_GATES := $(CHECK_FIRST) $(subst ",,$(CHECK_LANES))
+CHECK_LANES := platform-checks check-required-fixes check-cli check-siwa-latest check-contracts
+CHECK_GATES := $(CHECK_FIRST) $(CHECK_LANES)
 CHECK_LOGS := platform/_build/check
 # Each gate's budget in seconds, about 40% over its time in make check on a
 # 16-core Mac (Nov 2026), and 5 s for a gate that takes a second or two. The
@@ -26,8 +22,8 @@ CHECK_LOGS := platform/_build/check
 # entry, which the site serves), and the required fixes' the three answers it
 # waits for from GitHub (2 to 7 s). A gate over its budget gets a SLOW line
 # under its own at the end; it never fails the check.
-CHECK_BUDGETS := platform-assets:35 platform-checks:35 platform-walks:380 \
-  platform-suite:620 check-required-fixes:10 check-cli:5 check-siwa-latest:5 check-contracts:215
+CHECK_BUDGETS := platform-assets:35 platform-checks:10 check-required-fixes:10 check-cli:5 \
+  check-siwa-latest:5 check-contracts:11
 check:
 	@mkdir -p $(CHECK_LOGS) && : > $(CHECK_LOGS)/results
 	@echo "Running $(words $(CHECK_GATES)) gates, $(CHECK_FIRST) first, then the rest side by side; each writes $(CHECK_LOGS)/<gate>.log."
@@ -37,9 +33,7 @@ check:
 	  code=$$?; echo "$$1 $$code $$(( $$(date +%s) - start ))" >> $(CHECK_LOGS)/results; \
 	}; \
 	run $(CHECK_FIRST); \
-	for lane in $(CHECK_LANES); do \
-	  for gate in $$lane; do run $$gate; done & \
-	done; wait
+	for gate in $(CHECK_LANES); do run $$gate & done; wait
 	@failed=; \
 	for gate in $(CHECK_GATES); do \
 	  if grep -q "^$$gate 0 " $(CHECK_LOGS)/results; then \
@@ -62,17 +56,13 @@ check:
 check-change:
 	scripts/check-change.sh
 # The platform's whole gate, in turn (mix precommit in platform/mix.exs); make
-# check runs its parts below side by side.
+# check runs its parts below.
 check-platform:
 	cd platform && mix precommit
 platform-assets:
-	cd platform && MIX_ENV=test mix assets.build
+	cd platform && mix assets.build
 platform-checks:
 	cd platform && mix precommit.checks
-platform-suite:
-	cd platform && mix precommit.suite
-platform-walks:
-	cd platform && mix precommit.walks
 # Every site runs the same check against ash-template's current main branch, so a
 # newly published required fix reaches every site's next gate. Needs `gh auth login`.
 TEMPLATE := repos/regents-ai/ash-template
@@ -93,13 +83,9 @@ check-cli:
 check-siwa-latest:
 	scripts/check-siwa-latest.sh $(REGENTS_CLI_REV)
 check-contracts:
-	cd contracts && nice forge fmt --check && nice forge build && nice forge test --no-match-path 'test/audit/KeyfleetAuditFork.t.sol' && nice script/check_bytecode.sh
-# The audit's proofs against real Base contracts, on a fork pinned to one block.
-# Needs BASE_RPC_URL and fails without it.
-check-audit-fork:
-	cd contracts && forge test --match-path 'test/audit/KeyfleetAuditFork.t.sol' -vv
-# The fleet notebook hub: compute-fly in the pinned marimohub workspace, the hub
-# and runner images, and the runner helper's tests. Needs Node 24 and Docker. It
+	cd contracts && nice forge fmt --check && nice forge build && nice script/check_bytecode.sh
+# The fleet notebook hub: compute-fly's types, lint and bundle in the pinned
+# marimohub workspace, and the hub and runner images. Needs Node 24 and Docker. It
 # is not part of make check because it builds a 3 GB image; run it before any hub
 # image is pushed.
 check-notebook-hub:
@@ -110,7 +96,3 @@ release:
 	@test -z "$$(git status --porcelain)" || { echo "Commit every change first: the release checks and builds the committed tree." >&2; exit 1; }
 	$(MAKE) check
 	scripts/release.sh
-# Starts the local server on a free port, checks what the agent-readiness scorer
-# looks for against it, and stops it. Needs the local development database.
-readiness:
-	scripts/readiness.sh

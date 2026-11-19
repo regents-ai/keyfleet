@@ -1,3 +1,0 @@
-# Every run writes its summaries, logs and probes here.
-results/
-zap-*/

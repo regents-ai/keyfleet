@@ -15,7 +15,7 @@
 //
 // Run from platform/ after `mix deps.get` and `npm ci`:
 //   node scripts/share-cards/render.mjs
-import { chromium } from "@playwright/test";
+import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";

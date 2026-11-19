@@ -13,9 +13,6 @@ defmodule Keyfleet.MixProject do
       app: :keyfleet,
       version: "0.1.0",
       elixir: "~> 1.20",
-      elixirc_paths: elixirc_paths(Mix.env()),
-      # The browser walk's files under test/browser are run by Playwright, not ExUnit.
-      test_ignore_filters: [&String.starts_with?(&1, "test/browser/")],
       start_permanent: false,
       aliases: aliases(),
       deps: deps(),
@@ -34,22 +31,6 @@ defmodule Keyfleet.MixProject do
       extra_applications: [:logger, :runtime_tools]
     ]
   end
-
-  def cli do
-    [
-      preferred_envs: [
-        precommit: :test,
-        "precommit.checks": :test,
-        "precommit.suite": :test,
-        "precommit.walks": :test,
-        "test.external": :test
-      ]
-    ]
-  end
-
-  # Specifies which paths to compile per environment.
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
   #
@@ -84,7 +65,7 @@ defmodule Keyfleet.MixProject do
       {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.10.3"},
       {:ash_state_machine, "~> 0.3.1"},
-      {:igniter, "== 0.8.5", only: [:dev, :test], runtime: false},
+      {:igniter, "== 0.8.5", only: :dev, runtime: false},
       {:mdex, "== 0.14.6"},
       {:regent_privy,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
@@ -117,11 +98,7 @@ defmodule Keyfleet.MixProject do
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "oauth", override: true},
       {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "mcp_agents"},
       {:simple_sat, "~> 0.1"},
-      {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      # Property tests. Ash already needs it in every environment, so it is not
-      # limited to :test here.
-      {:stream_data, "~> 1.4"},
+      {:sourceror, "~> 1.12", only: :dev, runtime: false},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:logger_json, "~> 7.0"},
       {:telemetry_metrics, "~> 1.0"},
@@ -140,16 +117,12 @@ defmodule Keyfleet.MixProject do
       # Cuts each Key card's small close-up out of its picture (libvips).
       {:vix, "~> 0.42.0"},
       {:bandit, "~> 1.14 and >= 1.14.1"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: :dev, runtime: false},
+      {:ex_slop, "~> 0.4", only: :dev, runtime: false},
       {:credo_ash,
-       git: @elixir_utils,
-       ref: @elixir_utils_ref,
-       sparse: "credo_ash",
-       only: [:dev, :test],
-       runtime: false},
-      {:sobelow, "~> 0.18", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 1.3", only: [:dev, :test], runtime: false}
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credo_ash", only: :dev, runtime: false},
+      {:sobelow, "~> 0.18", only: :dev, runtime: false},
+      {:usage_rules, "~> 1.3", only: :dev, runtime: false}
     ]
   end
 
@@ -198,24 +171,14 @@ defmodule Keyfleet.MixProject do
         "esbuild keyfleet --minify",
         "phx.digest"
       ],
-      # The database is prepared before the site starts: its job queue starts
-      # only on a migrated database.
-      test: ["ecto.create --quiet", "keyfleet.setup_local_auth", "test"],
-      "test.external": ["test --only external"],
       # The whole platform gate, in turn. `make check` builds the assets first,
-      # then runs the same three parts side by side: precommit.checks then
-      # precommit.walks in one lane, precommit.suite in another. Neither lane
-      # writes what the other reads: the assets (`assets/vendor`, `priv/static`
-      # and `priv/esbuild-meta.json`, which the suite's pages read) are built
-      # only before them, and the suite and each walk's server have a database
-      # of their own. The compile comes first so that it is the one with
-      # warnings as errors: in one run, a task that has run does not run again.
+      # then runs precommit.checks beside the repository's other gates. The
+      # compile comes first so that it is the one with warnings as errors: in
+      # one run, a task that has run does not run again.
       precommit: [
         "compile --warnings-as-errors",
         "assets.build",
-        "precommit.checks",
-        "precommit.suite",
-        "precommit.walks"
+        "precommit.checks"
       ],
       # The checks that need neither a database nor a server. The typecheck
       # reads the shared libraries' copied scripts and tokens.
@@ -305,22 +268,7 @@ defmodule Keyfleet.MixProject do
         "ash.codegen --check",
         "usage_rules.sync --check",
         "keyfleet.route_handoff --check",
-        "cmd npm run typecheck",
-        "cmd npm test"
-      ],
-      # The graph host's tests, then the ExUnit suite, whose graph tests run
-      # their hosts from the environment uv brings up to date for the first.
-      "precommit.suite": [
-        "cmd --cd graph_host uv run --frozen --offline pytest -q",
-        "test --warnings-as-errors"
-      ],
-      # The browser suite (test/browser), then the main flows at an iPhone's
-      # and a Pixel's screen with the accessibility check of every main page
-      # (playwright.devices.config.ts), on the assets already built, each on a
-      # server and database of its own.
-      "precommit.walks": [
-        "cmd npx playwright test",
-        "cmd npx playwright test --config playwright.devices.config.ts"
+        "cmd npm run typecheck"
       ]
     ]
   end

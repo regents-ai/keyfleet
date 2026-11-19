@@ -64,8 +64,7 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   code_reloader: true,
   # Signal listeners added while the server runs are picked up on reload.
   reloadable_compilers: [:ash_signals, :phoenix_live_view, :elixir, :app],
-  # `make readiness` sets this to off, so error pages answer as they do in a release.
-  debug_errors: System.get_env("KEYFLEET_DEBUG_ERRORS", "on") == "on",
+  debug_errors: true,
   secret_key_base: "6ihHqnWB0px5FXmoddiKg3V2NLeiM0k0UsFs5DwmIADSX35FFdeSs5VNICCc3iU5",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:keyfleet, ~w(--sourcemap=inline --watch)]}

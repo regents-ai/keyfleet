@@ -1,6 +1,6 @@
 # Local component workshop
 
-Open `/showcase` on a development or test server using `localhost` or `127.0.0.1`.
+Open `/showcase` on a development server using `localhost` or `127.0.0.1`.
 The production configuration omits its routes. HTTP requests and connected
 page mounts both require a loopback peer and a loopback hostname; forwarded
 headers do not grant access. Gallery styles and metadata use the same guard.
@@ -29,15 +29,13 @@ listed at `/showcase/catalog`. The catalog never reads resource records.
 separate wallet fixture in the main gallery. It includes configuration
 instructions, header Sign in/Sign out, in-page connection controls and the
 selected wallet. Controls are disabled with an explanation when configuration is
-missing or the server uses a test verifier. No configuration values, tokens or
-provider objects are displayed, and the page requests no transaction or extra
-signature.
+missing. No configuration values, tokens or provider objects are displayed, and
+the page requests no transaction or extra signature.
 
-For real testing, use the configured development server and a Privy-allowed
+For a real sign-in, use the configured development server and a Privy-allowed
 localhost origin with `PRIVY_APP_ID` and `PRIVY_VERIFICATION_KEY` set. Prepare
 the local database (`keyfleet_dev`), run `mix keyfleet.setup_local_auth`,
-then `mix assets.build` and `mix phx.server`. Do not use browser-test
-configuration as proof of real Privy sign-in.
+then `mix assets.build` and `mix phx.server`.
 
 ## Key map working reference
 
@@ -62,42 +60,3 @@ and coast are adapted from `thiings-grid`; see `THIRD_PARTY_NOTICES.md`.
 - Privy verification: signs an ephemeral fixture token and calls `RegentPrivy`
   for valid, expired and incorrect-audience outcomes. No fixture token enters an
   authentication endpoint; no key or token is displayed or retained.
-- Postgres: a fixed read-only diagnostic accepts only the prepared loopback
-  test database naming convention. It refuses other database settings.
-
-## Run in an isolated worktree
-
-Give the worktree its own `MIX_TEST_PARTITION` and a unique `PORT`. Install
-locked Mix and npm dependencies, then run `mix assets.build`. A prepared test database can be
-created with `MIX_ENV=test mix ecto.create`.
-
-Run the disposable test server with that partition and port. It answers over
-https, with a certificate made once for localhost:
-
-```sh
-mkdir -p tmp/cert
-test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem
-env MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :auto)'
-```
-
-That command belongs only in the isolated test context. Use its printed URL and
-append `/showcase`.
-
-## Focused verification
-
-```sh
-mix test test/keyfleet_web/showcase
-npm run typecheck
-npm test
-PORT=<port> npx playwright test --config playwright.showcase.config.ts --project=chromium
-```
-
-The Chromium run is the one that gates a change. It checks the key map by mouse,
-wheel, keyboard and touch, and measures its frame times, scripting time, build
-time and tile count on a laptop with the largest and the middle fleet, and on a
-phone with the processor slowed four times. The `firefox` and `webkit` projects
-run the same key map checks, and need browser builds that match this Playwright
-release (`npx playwright install firefox webkit`).
-
-The dedicated browser configuration avoids the product suite's seeding and
-global teardown. Failures retain screenshots and traces in `test-results/`.

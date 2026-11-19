@@ -3,7 +3,7 @@
     %{
       name: "default",
       files: %{
-        included: ["mix.exs", "config/", "lib/", "test/"],
+        included: ["mix.exs", "config/", "lib/"],
         excluded: [
           # Build artifacts are generated and are not application source.
           ~r"/_build/",
@@ -90,7 +90,6 @@
           {Credo.Check.Warning.UnusedRegexOperation, []},
           {Credo.Check.Warning.UnusedStringOperation, []},
           {Credo.Check.Warning.UnusedTupleOperation, []},
-          {Credo.Check.Warning.WrongTestFilename, []},
           # ExSlop catches patterns LLMs produce that experienced Elixir
           # developers do not. Registered as checks rather than as a plugin
           # because this config pins an explicit enabled list, which Credo
@@ -125,15 +124,7 @@
           {ExSlop.Check.Refactor.ReduceMapPut, []},
           {ExSlop.Check.Refactor.RedundantBooleanIf, []},
           {ExSlop.Check.Refactor.FlatMapFilter, []},
-          {ExSlop.Check.Refactor.LengthComparison,
-           [
-             files: %{
-               excluded: [
-                 # Exact-size assertions are clearer test failures than counting helpers.
-                 "test/**/*.exs"
-               ]
-             }
-           ]},
+          {ExSlop.Check.Refactor.LengthComparison, []},
           {ExSlop.Check.Readability.NarratorDoc, []},
           {ExSlop.Check.Readability.BoilerplateDocParams, []},
           {ExSlop.Check.Readability.NarratorComment, []},
@@ -149,15 +140,7 @@
           {CredoAsh.Check.Warning.PoliciesWithoutAuthorizer, []},
           {CredoAsh.Check.Warning.AuthorizerWithoutPolicies, []},
           {CredoAsh.Check.Warning.UnprotectedResource, []},
-          {CredoAsh.Check.Warning.AshCallInLoop,
-           [
-             files: %{
-               excluded: [
-                 # Adversarial test cases deliberately issue one call per actor or argument.
-                 "test/**/*.exs"
-               ]
-             }
-           ]},
+          {CredoAsh.Check.Warning.AshCallInLoop, []},
           {CredoAsh.Check.Warning.ActorOnExecution, []},
           {CredoAsh.Check.Warning.DirectRepoCall, []},
           {CredoAsh.Check.Warning.UnjustifiedAuthorizeFalse, []},
@@ -176,8 +159,6 @@
           {Credo.Check.Consistency.UnusedVariableNames, []},
           # DuplicatedCode is experimental and intentionally left opt-in.
           {Credo.Check.Design.DuplicatedCode, []},
-          # SkipTestWithoutComment is controversial and intentionally left opt-in.
-          {Credo.Check.Design.SkipTestWithoutComment, []},
           # AliasAs is controversial and intentionally left opt-in.
           {Credo.Check.Readability.AliasAs, []},
           # BlockPipe is controversial and intentionally left opt-in.
@@ -222,8 +203,6 @@
           {Credo.Check.Refactor.ModuleDependencies, []},
           # NegatedIsNil is controversial and intentionally left opt-in.
           {Credo.Check.Refactor.NegatedIsNil, []},
-          # PassAsyncInTestCases is controversial and intentionally left opt-in.
-          {Credo.Check.Refactor.PassAsyncInTestCases, []},
           # PipeChainStart is controversial and intentionally left opt-in.
           {Credo.Check.Refactor.PipeChainStart, []},
           # RejectFilter is controversial and intentionally left opt-in.

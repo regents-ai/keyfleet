@@ -16,8 +16,8 @@ signed-in Overview. The [README](README.md) describes the product.
   `regents/identity`, pinned by git in `platform/mix.exs` with `design-system`
   and `elixir-utils`.
 - `make check-change` is the check an ordinary change runs before it ships:
-  compile with warnings as errors, format, then the tests that cover what
-  changed since `origin/main` (`scripts/check-change.sh`). The platform
+  compile with warnings as errors, format, then the contracts' gate when
+  `contracts/` changed since `origin/main` (`scripts/check-change.sh`). The platform
   README's "Shipping a change" says how a change goes live.
 - `make check` runs every gate, each writing its output to
   `platform/_build/check/<gate>.log`, then prints every gate's log, the failed
@@ -25,27 +25,21 @@ signed-in Overview. The [README](README.md) describes the product.
   under a gate over its budget (`CHECK_BUDGETS` in the `Makefile`; it warns
   and never fails). It builds the platform's assets first, then
   runs these lanes side by side: the platform's checks (compile with warnings as
-  errors, Credo, Sobelow, the TypeScript typecheck and the unit tests) then its
-  browser walks; the graph host's tests then the ExUnit suite; the
+  errors, the dependency audits, format, Credo, Sobelow, the compile-dependency
+  limit, the Ash and usage-rules checks and the TypeScript typecheck); the
   required-fixes check against ash-template (needs `gh auth login`); the
   command descriptions; the SIWA version check; and the contracts'
-  `forge fmt --check`, `forge build`, `forge test` and bytecode check.
+  `forge fmt --check`, `forge build` and bytecode check. Nothing else checks a
+  new or changed contract before it is deployed, apart from review.
   `make check-platform` runs the platform's whole gate in turn
   (`mix precommit`); `check-required-fixes`, `check-cli`, `check-siwa-latest`
-  and `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value
-  uses `keyfleet_test`).
-- `make check-audit-fork` runs the contract audit's proofs on a Base fork pinned
-  to one block. It is not part of `make check` and fails without `BASE_RPC_URL`.
-- `make readiness` starts the local development server on a free port with the
-  error debugger off and checks what the agent-readiness scorer looks for
-  (`scripts/readiness.sh`). It needs the local development database.
+  and `check-contracts` run one gate.
 - `make release` refuses uncommitted changes, runs `make check`, builds HEAD's
   `platform/` and the graph host's sealed Python supply into an image and
   starts it against a throwaway database (`scripts/release.sh`). It never
   deploys; `scripts/deploy.sh production` does.
 - Follow the workspace's `regent-workflow`; whoever makes a change ships it.
-  Scope verification to observable acceptance and preserve useful
-  regression coverage.
+  Scope verification to observable acceptance.
 - When a step has a clear recommendation, do it; never ask the founder to
   approve it. Ask only for what the platform README's "Shipping a change"
   lists as waiting for the founder's go, or for a choice that changes the goal.

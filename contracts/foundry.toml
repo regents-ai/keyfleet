@@ -1,6 +1,5 @@
 [profile.default]
 src = "src"
-test = "test"
 script = "script"
 out = "out"
 libs = ["lib"]
@@ -12,25 +11,16 @@ fs_permissions = [
   { access = "write", path = "./deployments/safe" },
   { access = "read", path = "./broadcast/DeployKeyfleets.s.sol" },
   { access = "read", path = "./broadcast/BaseForkLab.s.sol" },
-  { access = "read", path = "../platform/test/support/fixtures/trait_tables/0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610.json" },
 ]
 solc_version = "0.8.26"
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
-# Forge 1.8.6 runs each top-level call of a test as a transaction of its own unless told not to.
-# These tests measure calls made inside one transaction: the gas ceilings, the deploy addresses the
-# signed vectors were made for, and the treasury's split flag, which lives in transient storage for
-# the one call of its split routine. With isolation off the gas ceilings understate real gas, so
-# KeyfleetBaseGasTest, run with `--isolate` (test/fork/KeyfleetBaseGas.t.sol), stays the guard for
-# what a whole transaction really costs.
+# Forge 1.8.6 runs each top-level call as a transaction of its own unless told not to, and that
+# reaches `forge script` too. The deploy, Safe-step, record and lab scripts keep running as they
+# always have, with it off.
 isolate = false
-
-# Runs the collection invariant suites at the design's 256 runs × depth 100, set inline in each
-# suite, which the default profile shortens for everyday runs:
-#   FOUNDRY_PROFILE=deep forge test --match-path test/invariant/KeyfleetCollectionInvariant.t.sol
-[profile.deep]
 
 [fmt]
 ignore = ["src/vendor/**"]

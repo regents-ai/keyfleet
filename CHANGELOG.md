@@ -14541,3 +14541,83 @@ step's report).
   sign-in, linked account and pairing tests (ten files, 102 tests). Compile with
   warnings as errors in dev and test is clean; format is clean and `mix credo --strict`
   finds no issues on the changed files; `make check-required-fixes` passes.
+
+## 2026-11-19 — Tests removed
+
+- On the founder's word, every test is removed, the contracts' and the formal
+  proofs among them, with what served only them: 465 files, 126,971 lines.
+  Nothing is left to check a new or changed contract before it is deployed,
+  apart from review.
+  - The platform: its ExUnit suite with its support, fixtures and stand-ins
+    (234 files), the browser walks and their four Playwright configurations
+    (70), the Vitest script tests and both Vitest configurations, the asset size
+    budget among them (43), `config/test.exs`, the red-team check catalog, the
+    proof-table script and `scripts/test-durations.sh` (4), the Atlas seed and
+    read timer and the still pictures' parity script, which ran only in the test
+    environment (3), the trait-table file the contract tests read, so
+    `platform/test/` is gone (1), and the load, deploy-during-load, fault and
+    ZAP rehearsals in `platform/load` (13). The membership check lived in the
+    test support and goes with it.
+  - The contracts: every suite in `contracts/test`, the audit's proofs, the fork,
+    gas and invariant suites, their helpers and stand-ins (53), and
+    `script/AnvilLab.s.sol`, the plain-anvil lab only those tests ran (1). The
+    Base-fork lab stays, as it is how the site runs against a local chain
+    (`platform/docs/anvil-lab.md`); its one stand-in, the VRF coordinator, moves
+    to `contracts/script/lab/` without its test switches. `foundry.toml` loses
+    the test folder, the trait-table read and the `deep` profile; it keeps
+    `isolate = false`, since forge 1.8.6 applies that to `forge script` too.
+  - The graph host's tests (6), the notebook hub's tests and its local
+    end-to-end run (9), `verification/formal` with its skill (26) and
+    `scripts/readiness.sh` with `make readiness` (1).
+- Also gone: the `test`, `test.external`, `precommit.suite` and `precommit.walks`
+  aliases, the test compile path and preferred environments, `lazy_html` (and
+  `fine`, which only it needed), the direct `stream_data` dependency (Ash still
+  brings it), the npm test scripts with `vitest`, `@playwright/test`,
+  `@axe-core/playwright` and `@types/node`, the test entries in Credo, the
+  formatter, TypeScript and `.gitignore`, the graph host's pytest settings, the
+  compute library's test script, `make check-audit-fork`, the readiness check's
+  `KEYFLEET_DEBUG_ERRORS` switch in `config/dev.exs`, the
+  `:database_startup_enabled` switch that only the test environment left off
+  (the repository, the job queue and the shared changes listener now simply
+  start, as they always did in dev and production), the empty `req_options`
+  settings of the avatar bucket, key art, Lighthouse, Coinbase and code store
+  requests, which only tests filled, and the chain reader's `client` setting
+  with `Keyfleet.Chain.Client`, a behaviour with one implementation: the
+  readers and the wallet steps call `Keyfleet.Chain.RpcClient` directly. The
+  test steps in `make check`, `scripts/check-change.sh` and the notebook hub's
+  check go too.
+  `render.mjs` takes `chromium` from `playwright`, as the still pictures already
+  did. Three test dependencies stay where their files cannot be changed here:
+  the graph host's pytest group (its lock is sealed into the release supply),
+  the compute library's `vitest` (its lock is a marimohub patch) and the
+  marimohub tests the hub image build runs (vendored).
+- Application code changes only where a branch or setting existed for the
+  tests, as listed above and here: `config/runtime.exs` loses its browser-test server block and its
+  `config_env() != :test` guards, `Keyfleet.DatabaseConfig` its catch-all for
+  the test repo, and the local database setup admits only development. The
+  development showcase loses what only a test server could reach: the sign-in
+  "fixture" mode with its notes on both showcase pages, and the Postgres check
+  that answered only on a test database. The sign-in checker setting they read
+  goes too, so `PrivySessionController` calls `RegentPrivy.Session` directly, as
+  it always did in dev and production. Dev and production run as before; the
+  rest are comments that named tests.
+- `make check` now builds the assets, then runs side by side: the platform's
+  checks (compile with warnings as errors, unused locks, `mix hex.audit`,
+  format, Credo, Sobelow, the compile-connected limit of 145, the Ash codegen,
+  usage rules and route handoff checks, and the TypeScript typecheck), the
+  required fixes, the command descriptions, the SIWA version check and the
+  contracts' gate (`forge fmt --check`, `forge build` and the bytecode check).
+  It took 9 to 15 s here. Its budgets follow: the platform's checks 10 s, the
+  contracts 11 s. `make check-change` compiles with warnings as errors, checks
+  the format, and runs the contracts' gate when `contracts/` changed.
+- Kept, and why: the restore drill (`scripts/restore-drill.sh`, its folder and
+  `docs/restore-drill.md`), which an operator runs on the real site; the
+  bytecode check, which reads the built contracts and runs no test; and the
+  contract sources with the deploy, Safe-step, record and Base-fork lab scripts,
+  the manifests and `contracts/lib`, which deploy and run the system.
+- `verification/features.yml` keeps every row; the release smoke is the one
+  proof left, and its header says so. The READMEs, `AGENTS.md`, the contracts
+  README's checks, the deployment guide, the agent feature map, the showcase,
+  local sign-in and anvil lab guides, the still pictures record, the notebook
+  hub guide and the red-team record say what is true now. The anvil lab guide
+  says the lab runs on the real founding decks in `platform/priv/decks`.

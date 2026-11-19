@@ -2,8 +2,8 @@ defmodule Mix.Tasks.Keyfleet.SetupLocalAuth do
   @moduledoc """
   Prepares the guarded local database as staging's first deployment is: the
   shared tables this site reads, every shared change, then every migration.
-  Only the repo is started, so it runs before the site does; `mix test` runs
-  it first, since the site's job queue starts only on a migrated database.
+  Only the repo is started, so it runs before the site does, since the site's
+  job queue starts only on a migrated database.
   """
   use Mix.Task
 
@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Keyfleet.SetupLocalAuth do
 
   @impl true
   def run(_args) do
-    unless Mix.env() in [:dev, :test], do: Mix.raise("local auth setup is dev/test only")
+    unless Mix.env() == :dev, do: Mix.raise("local auth setup is dev only")
     Mix.Task.run("app.config")
 
     {:ok, _result, _apps} =

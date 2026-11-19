@@ -465,7 +465,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
               <div class="sc-example rg-feature">
                 <S.panel class="sc-card">
                   <h3>Privy <small>Real app session</small></h3>
-                  <div data-sc-privy-mode={@privy_mode}>
+                  <div>
                     <div id="account-control" class="sc-row">
                       <P.button
                         :if={@privy_mode == :configured && @account_control.kind == :sign_in}
@@ -484,11 +484,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
                     </div>
                     <p :if={@privy_mode == :configured && @account_control.kind == :signed_in}>
                       Signed in as {@account_control.label}.
-                    </p>
-                    <p :if={@privy_mode == :fixture} id="privy-unavailable">
-                      Real sign-in is unavailable on this test-fixture server. Use a development
-                      server with your real Privy app, verifier and an allowed local origin.
-                      The separate wallet demo does not authenticate an account.
                     </p>
                     <p :if={@privy_mode == :unconfigured} id="privy-unavailable">
                       Real sign-in is unavailable until this server has a Privy app ID and
@@ -599,22 +594,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   >
                     <p>
                       Privy verification uses an ephemeral fixture key and the real RegentPrivy verifier, with valid, expired and wrong-audience examples. Fixture tokens never enter the session endpoint. Shared APIs are labeled in the inventory below.
-                    </p>
-                  </P.disclosure>
-                </S.panel>
-              </div>
-              <div class="sc-example rg-feature">
-                <S.panel class="sc-card">
-                  <h3>Postgres <small>Read only</small></h3><P.button
-                    variant="secondary"
-                    phx-click="database"
-                  >Check isolated database</P.button><P.disclosure
-                    phx-mounted={JS.ignore_attributes("open")}
-                    id="database-notes"
-                    summary="Diagnostic boundary"
-                  >
-                    <p>
-                      Runs SELECT current_database(), 1 only against a partitioned loopback test database. Other database configurations are refused. No arbitrary query, fixture writes, schema changes or resets.
                     </p>
                   </P.disclosure>
                 </S.panel>
@@ -761,9 +740,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
   def handle_event("run_utility", params, socket),
     do: {:noreply, assign(socket, :result, run_utility(params["kind"], params))}
 
-  def handle_event("database", _, socket),
-    do: {:noreply, assign(socket, :result, Utilities.database())}
-
   def handle_event("example_action", _, socket),
     do: {:noreply, assign(socket, :result, %{example: "Action received."})}
 
@@ -885,20 +861,13 @@ defmodule KeyfleetWeb.ShowcaseLive do
   def privy_mode do
     config = Application.get_env(:keyfleet, :privy, [])
 
-    cond do
-      Application.get_env(:keyfleet, :privy_verifier, RegentPrivy.Session) !=
-          RegentPrivy.Session ->
-        :fixture
-
+    configured? =
       Enum.all?([:app_id, :verification_key], fn key ->
         value = Keyword.get(config, key)
         is_binary(value) && String.trim(value) != ""
-      end) ->
-        :configured
+      end)
 
-      true ->
-        :unconfigured
-    end
+    if configured?, do: :configured, else: :unconfigured
   end
 
   defp run_utility("privy_valid", _params), do: Utilities.privy(:valid)

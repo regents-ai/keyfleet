@@ -11,7 +11,7 @@
 !platform/package-lock.json
 !cli/commands.json
 # The graph host enters as its project files, lockfile, source and upstream
-# licence files. Its tests and any local environment stay out.
+# licence files. Any local environment stays out.
 !platform/graph_host/pyproject.toml
 !platform/graph_host/uv.lock
 !platform/graph_host/.python-version

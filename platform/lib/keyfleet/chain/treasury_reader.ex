@@ -31,6 +31,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
   require Logger
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.RpcClient
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
   alias RegentChain.Abi
@@ -50,20 +51,20 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @system %System{}
 
   @doc "Reads the fleet's money at the node's head and keeps it, then any unread token details."
-  def read(fleet, client) do
-    with {:ok, head} <- client.head(),
-         {:ok, reading} <- read_money(fleet, client, head) do
-      read_details(fleet, reading, client, head.hash)
+  def read(fleet) do
+    with {:ok, head} <- RpcClient.head(),
+         {:ok, reading} <- read_money(fleet, head) do
+      read_details(fleet, reading, head.hash)
       {:ok, reading}
     end
   end
 
-  defp read_money(fleet, client, head) do
-    at = &call(client, &1, &2, head.hash)
+  defp read_money(fleet, head) do
+    at = &call(&1, &2, head.hash)
     treasury = fleet.treasury_address
 
     with {:ok, [assets]} <- at.(treasury, {@split_assets, [{:array, :address}]}),
-         {:ok, balances} <- balances(fleet, assets, client, at, head),
+         {:ok, balances} <- balances(fleet, assets, at, head),
          {:ok, [bps]} <- at.(treasury, {@daily_split_bps, [{:uint, 16}]}),
          {:ok, [last_run_at]} <- at.(treasury, {@last_run_at, [{:uint, 63}]}),
          {:ok, [next_run_at]} <- at.(treasury, {@next_run_at, [{:uint, 63}]}),
@@ -120,14 +121,14 @@ defmodule Keyfleet.Chain.TreasuryReader do
   end
 
   # The symbol and decimals of the reading's tokens not yet read in full.
-  defp read_details(fleet, reading, client, block_hash) do
+  defp read_details(fleet, reading, block_hash) do
     read = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
     named = Treasury.known_assets(fleet)
 
     reading.assets
     |> Enum.map(& &1.asset)
     |> Enum.reject(&(Map.has_key?(named, &1) or complete?(read[&1])))
-    |> Enum.each(&read_token(fleet, &1, client, block_hash))
+    |> Enum.each(&read_token(fleet, &1, block_hash))
   end
 
   defp complete?(%{symbol: symbol, decimals: decimals}), do: symbol != nil and decimals != nil
@@ -135,9 +136,9 @@ defmodule Keyfleet.Chain.TreasuryReader do
 
   # A call that fails may be the node's, so nothing is kept, and the token
   # is asked again at the next reading.
-  defp read_token(fleet, asset, client, block_hash) do
-    with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
-         {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash) do
+  defp read_token(fleet, asset, block_hash) do
+    with {:ok, symbol} <- detail(asset, {@symbol, :bytes}, block_hash),
+         {:ok, decimals} <- detail(asset, {@decimals, {:uint, 8}}, block_hash) do
       record_details(fleet, asset, symbol, decimals)
     else
       {:error, reason} ->
@@ -156,8 +157,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
   end
 
   # A token that refuses, or answers with something else, does not answer.
-  defp detail(client, asset, {data, type}, block_hash) do
-    case client.call(asset, data, block_hash) do
+  defp detail(asset, {data, type}, block_hash) do
+    case RpcClient.call(asset, data, block_hash) do
       {:ok, returned} -> {:ok, answer(Abi.decode(returned, [type]))}
       {:error, :reverted} -> {:ok, nil}
       {:error, reason} -> {:error, reason}
@@ -181,10 +182,10 @@ defmodule Keyfleet.Chain.TreasuryReader do
   defp hidden?(char) when char in 0x202A..0x202E or char in 0x2066..0x2069, do: true
   defp hidden?(_char), do: false
 
-  defp balances(fleet, assets, client, at, head) do
+  defp balances(fleet, assets, at, head) do
     assets
     |> Enum.reduce_while({:ok, []}, fn asset, {:ok, balances} ->
-      case balance(fleet, asset, client, at, head) do
+      case balance(fleet, asset, at, head) do
         {:ok, balance} -> {:cont, {:ok, [balance | balances]}}
         failure -> {:halt, failure}
       end
@@ -195,18 +196,18 @@ defmodule Keyfleet.Chain.TreasuryReader do
     end)
   end
 
-  defp balance(fleet, asset, client, at, head) do
+  defp balance(fleet, asset, at, head) do
     backed = Call.encode("backed(address)", [asset])
 
-    with {:ok, held} <- held(fleet, asset, client, at, head),
+    with {:ok, held} <- held(fleet, asset, at, head),
          {:ok, [backed]} <- at.(fleet.rewards_address, {backed, [{:uint, 256}]}) do
       {:ok, %{asset: asset, held: held, backed: backed}}
     end
   end
 
-  defp held(fleet, asset, client, at, head) do
+  defp held(fleet, asset, at, head) do
     if asset == Treasury.native() do
-      case client.get_balance(fleet.treasury_address, head.hash) do
+      case RpcClient.get_balance(fleet.treasury_address, head.hash) do
         {:ok, wei} -> {:ok, wei}
         {:error, reason} -> {:error, {fleet.treasury_address, reason}}
       end
@@ -216,8 +217,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
     end
   end
 
-  defp call(client, to, {data, types}, block_hash) do
-    with {:ok, returned} <- client.call(to, data, block_hash),
+  defp call(to, {data, types}, block_hash) do
+    with {:ok, returned} <- RpcClient.call(to, data, block_hash),
          {:ok, values} <- decode(returned, types) do
       {:ok, values}
     else

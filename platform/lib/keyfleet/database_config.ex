@@ -67,9 +67,6 @@ defmodule Keyfleet.DatabaseConfig do
     end
   end
 
-  # The test suite's repo is configured in config/test.exs.
-  def runtime_config!(_environment, _getenv), do: nil
-
   @doc """
   The connection the site's listeners share (`Keyfleet.SharedChanges`): the
   repository's own login and address, one connection rather than a pool, named

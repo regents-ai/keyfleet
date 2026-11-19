@@ -87,8 +87,7 @@ no copy of its source.
 - Commit: `8aedb1866cf5dce056af97529152ffd6f468a1ed` (package version 1.10.0)
 - License: Apache License 2.0
 
-`graph_host/pyproject.toml` pins that commit and `graph_host/uv.lock` records it. The
-host test suite fails if the installed version or commit differs. The upstream
+`graph_host/pyproject.toml` pins that commit and `graph_host/uv.lock` records it. The upstream
 `LICENSE` and `NOTICE` are kept verbatim under `graph_host/third_party/activegraph/`,
 and the release image copies them to `/opt/graph_host/third_party/activegraph/` beside
 the installed package.

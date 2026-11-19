@@ -185,7 +185,7 @@ defmodule Keyfleet.Code.NodeClient do
         # The store's private Flycast address has only an IPv6 record.
         connect_options: [transport_opts: [inet6: true], timeout: timeout],
         receive_timeout: timeout
-      ] ++ options ++ Code.config()[:req_options]
+      ] ++ options
     )
   end
 

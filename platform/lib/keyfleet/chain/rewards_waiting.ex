@@ -12,6 +12,7 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   """
   use GenServer
 
+  alias Keyfleet.Chain.RpcClient
   alias RegentChain.Abi
   alias RegentChain.Call
 
@@ -35,19 +36,19 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   30 seconds before `now`, in monotonic milliseconds, is given again without
   asking the chain.
   """
-  def read(fleet, token_id, holder, client, now \\ System.monotonic_time(:millisecond)) do
+  def read(fleet, token_id, holder, now \\ System.monotonic_time(:millisecond)) do
     key = {fleet.fleet_id, token_id, holder}
 
     case :ets.lookup(@table, key) do
       [{^key, waiting, read_at}] when now - read_at < @kept_ms -> {:ok, waiting}
-      _unread_or_old -> read_chain(fleet, token_id, holder, client, key, now)
+      _unread_or_old -> read_chain(fleet, token_id, holder, key, now)
     end
   end
 
-  defp read_chain(fleet, token_id, holder, client, key, now) do
-    at = &call(client, fleet.rewards_address, &1, &2, &3)
+  defp read_chain(fleet, token_id, holder, key, now) do
+    at = &call(fleet.rewards_address, &1, &2, &3)
 
-    with {:ok, head} <- client.head(),
+    with {:ok, head} <- RpcClient.head(),
          {:ok, [assets]} <- at.(@reward_assets, {:array, :address}, head.hash),
          onchain_token_id = Keyfleet.Fleets.Fleet.onchain_token_id(fleet, token_id),
          {:ok, waiting} <- each_asset(assets, onchain_token_id, holder, at, head.hash) do
@@ -74,8 +75,8 @@ defmodule Keyfleet.Chain.RewardsWaiting do
     end)
   end
 
-  defp call(client, to, data, type, block_hash) do
-    with {:ok, returned} <- client.call(to, data, block_hash) do
+  defp call(to, data, type, block_hash) do
+    with {:ok, returned} <- RpcClient.call(to, data, block_hash) do
       case Abi.decode(returned, [type]) do
         {:ok, values} -> {:ok, values}
         :error -> {:error, :unreadable_answer}

@@ -182,8 +182,7 @@ defmodule KeyfleetWeb.Endpoint do
   The per-address budget above, which a signed request to a fleet's notebooks,
   and a read of a saved page a Key made public, also spend
   (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
-  the session budget is, so the test suite can run on a larger one and a
-  focused test can put the release budget back.
+  the session budget is.
   """
   def api_rate_limit do
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)

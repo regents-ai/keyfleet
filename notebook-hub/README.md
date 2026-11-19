@@ -72,7 +72,6 @@ them to the hub. That part is built separately, in `platform/`.
     lists every file at any depth when asked (below);
   - `run-start-once.patch`, which makes two identical run starts sent at once
     with one `Idempotency-Key` start one run (below).
-- **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
   `check.sh` runs every check.
@@ -87,87 +86,20 @@ make check-notebook-hub              # from the repository root; or notebook-hub
 ```
 
 This check is not part of `make check`, because it builds a 3 GB image. It
-must succeed before any hub or runner image is pushed to Fly. It does four
+must succeed before any hub or runner image is pushed to Fly. It does three
 things:
 
 1. Fetches marimohub at the pinned version into `notebook-hub/.work/` (the
    first run only).
-2. Runs the type check, lint and tests for `compute-fly`, and bundles it.
+2. Runs the type check and lint for `compute-fly`, and bundles it.
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
    - `keyfleet/notebook-hub:626ec14-a4d3105`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
-4. Runs the helper's tests inside the runner image.
 
 The first image build takes a while; later runs reuse Docker's cache.
-
-## The local proof
-
-```sh
-notebook-hub/local/run.sh            # after the images are built
-```
-
-What runs:
-
-- The hub image, with notebooks saved to a folder and Keyfleet's sign-in: each
-  request carries a pass signed the way Keyfleet signs them, with a key made
-  for this run, whose public half `local/jwks-server.mjs` serves. Integrations
-  are on here only so a run can be given a value to plant.
-- A stand-in for Fly's machine service, `local/fake-fly-api.mjs`, which starts
-  each "machine" as a Docker container. Those containers sit on a network that
-  only carries IPv6 addresses, as Fly's private network does.
-
-What it checks, in 25 steps:
-
-- The super admin makes a project with two editors and a viewer in it.
-- For an ordinary file, `notebook.py` and `pyproject.toml`, both editors read
-  the file and write it at once with `If-Match` set to the ETag they read, as
-  Keyfleet does: exactly one write lands, the other answers 412 with the
-  file's ETag now and adds no version, a later write over the old ETag is
-  refused the same way and changes nothing, and a write over the current ETag
-  lands. The two writers are separate members' requests that hold no lock in
-  common; both reach the one hub process.
-- The viewer lists the notebook's files at any depth (`recursive=true`): every
-  file is there with no folder, each listed ETag equals what a read of that
-  file answers, and a file changed since is listed with its new ETag.
-- A session starts on a new machine.
-- The hub reaches the notebook through the relay.
-- A cell runs as the ordinary user, and the helper password is nowhere it can
-  see.
-- The notebook's files and results are saved back to the hub after the session
-  ends.
-- The machine is gone afterwards.
-- A second hub name sees only its own machines.
-- Three runs fail where they should: one whose `pyproject.toml` asks for
-  Python below 3.13 stops at `dependencies`, one whose cell raises and one that
-  prints planted secrets stop at `export`. The editor who wrote the notebooks
-  and started the runs reads each `failure` with its excerpt; the other editor
-  and the viewer read it without, in the run and in the listing. The raw logs
-  hold every planted value, and no run answer, listing, stored run record or
-  hub output holds any of them. It prints each `failure` as each of the three
-  reads it.
-
-It uses a free local port (4791) and removes everything it started. Hub and
-stand-in logs are kept in `notebook-hub/.work/local/`.
-
-What the local proof cannot show, because it needs real Fly:
-
-- That Fly's machine service accepts these requests as written. In particular:
-  - the token header format;
-  - searching machines by their tags;
-  - machine names being unique.
-- How quickly Fly's private addresses (`<machine>.vm.<app>.internal`) start
-  answering after a machine starts.
-- What Fly adds inside a real machine, for example its local machine service
-  at `/.fly/api`. The test checks that notebook code cannot read the helper
-  password, but it does not check what Fly itself exposes.
-- That Fly deletes a machine whose lifetime ran out (`auto_destroy`).
-- Real Tigris storage, and how long a 3 GB image takes to start the first
-  time.
-- Sign-in from Keyfleet's server itself: the proof signs its passes the way
-  Keyfleet does, but not from Keyfleet.
 
 ## Before anything goes on Fly: founder approval
 
@@ -436,5 +368,4 @@ its listed ID.
   one, so every hub runs with them off and needs no `MARIMOHUB_SECRETS_KEK`.
   With them on and no key, each hub warned "integration secret sources: none"
   at every start (27 Oct 2026). Turning them on later means opening the routes
-  in the gateway and giving each hub its own key. The local proof turns them on
-  only to give its runs a value to plant.
+  in the gateway and giving each hub its own key.

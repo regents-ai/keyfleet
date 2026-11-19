@@ -11,8 +11,7 @@ defmodule Keyfleet.Decks do
   every key's (`Keyfleet.Keys.DrawPicture`).
 
   A deck is the JSON file named by its hash, lowercase, in the release's
-  `priv/decks`; the tests keep theirs elsewhere with
-  `config :keyfleet, Keyfleet.Decks, directory: ...`. It names the fleet it was
+  `priv/decks` (`config :keyfleet, Keyfleet.Decks, directory: ...`). It names the fleet it was
   made for, the hash of the trait table its cards draw from, and the cards,
   each a `0x` 32-byte lowercase hex seed, numbered from 0 in the order listed:
 

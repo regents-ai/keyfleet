@@ -5,9 +5,9 @@ import {Vm} from "forge-std/Vm.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 import {KeyfleetSystem} from "./KeyfleetSystem.sol";
+import {MockVRFCoordinatorV2Plus} from "./lab/MockVRFCoordinatorV2Plus.sol";
 import {RecordKeyfleets} from "./RecordKeyfleets.s.sol";
 
 /// @notice The Base-fork lab: the Keyfleet system on a local anvil fork of Base, run on chain

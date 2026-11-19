@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.PrivySessionController do
   def create(conn, _untrusted_params) do
     with {:ok, pair} <- session_pair(conn),
          {:ok, verified} <-
-           verifier().verify(pair, Application.get_env(:keyfleet, :privy, [])),
+           RegentPrivy.Session.verify(pair, Application.get_env(:keyfleet, :privy, [])),
          {:ok, account, identity_conflicts} <- establish(verified) do
       bind(conn, account, identity_conflicts)
     else
@@ -259,8 +259,6 @@ defmodule KeyfleetWeb.PrivySessionController do
   defp lifecycle_error(conn, code), do: Refusal.json(conn, 409, code)
 
   defp drop_session(conn), do: configure_session(conn, drop: true)
-
-  defp verifier, do: Application.get_env(:keyfleet, :privy_verifier, RegentPrivy.Session)
 
   defp session_payload(account) do
     control = account |> AccessContext.for_account() |> AccessContext.account_control()

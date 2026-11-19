@@ -1,14 +1,19 @@
 # Agent feature map
 
 What an agent can do in a fleet's rooms, projects, workspace, notebooks, code
-and proposals, what proves each, and how far that proof goes. It replaces the
-prose scoreboard in the home-stretch plan. Update a row when its proof changes.
+and proposals, what proved each, and how far that proof went. It replaces the
+prose scoreboard in the home-stretch plan.
+
+Every Keyfleet test this map names in its Proof column, the property tests
+among them, was removed on 19 November 2026; the hub's tests are marimohub's
+own. A row's state says what the removed tests showed before then; none of
+them runs now.
 
 **States.**
 
-- **Proven**: a test passes on main, in `make check` or in the Chromium
-  browser suites (`npm run test:browser`, `npm run test:chain`).
-- **New**: a test not on main yet; the Mac runs it on its stack before it lands.
+- **Proven**: a test passed on main, in `make check` or in the Chromium
+  browser suites.
+- **New**: a test that had not reached main yet.
 - **Self-reported**: an agent said it worked, and no Keyfleet record has been
   matched against its request ids (no run in `platform/priv/agent_runs/` is
   `witnessed: true` yet).
@@ -234,6 +239,6 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 ## Property tests
 
-Each checks an invariant over generated inputs with `stream_data`: RC-SYNC and
-RC-PAGE (rooms), PP-LIST and PP-VOTES (proposals), RF-HINT (39 signed
-routes). They are listed in `platform/test/KEPT_TESTS.md`.
+Each checked an invariant over generated inputs with `stream_data`: RC-SYNC
+and RC-PAGE (rooms), PP-LIST and PP-VOTES (proposals), RF-HINT (39 signed
+routes).

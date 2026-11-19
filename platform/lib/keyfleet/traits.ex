@@ -5,8 +5,8 @@ defmodule Keyfleet.Traits do
 
   A fleet's table is the JSON file named by its trait table hash, lowercase,
   in the release's `priv/trait_tables`, such as
-  `priv/trait_tables/0x1249…8610.json`; the tests keep theirs elsewhere with
-  `config :keyfleet, Keyfleet.Traits, directory: ...`. It is an object whose
+  `priv/trait_tables/0xa0a1…64fe.json` (`config :keyfleet, Keyfleet.Traits,
+  directory: ...`). It is an object whose
   `traits` lists each trait in the order the draw takes them, with its `name`
   and its `values`, each a `name` and a whole-number `weight`:
 

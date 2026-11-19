@@ -23,7 +23,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
     only: [push_patch: 2, start_async: 3, stream: 4, stream_delete_by_dom_id: 3]
 
   alias Keyfleet.Agents.Here
-  alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
@@ -963,10 +962,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
          %{assigns: %{fleet: fleet, key_profile: %{token_id: token_id, holder: holder}}} = socket
        ) do
     rewards = Map.take(fleet, [:fleet_id, :chain_fleet_id, :rewards_address])
-    client = Chain.Client.configured()
 
     start_async(socket, :rewards, fn ->
-      with {:ok, waiting} <- RewardsWaiting.read(rewards, token_id, holder, client) do
+      with {:ok, waiting} <- RewardsWaiting.read(rewards, token_id, holder) do
         {:ok, shown_amounts(fleet.fleet_id, waiting)}
       end
     end)

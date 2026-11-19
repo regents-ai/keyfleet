@@ -5,9 +5,8 @@ defmodule Keyfleet.Agents.AvatarBucket do
   public address (`url/1`), never from Keyfleet.
 
   Configured under `:keyfleet, :avatar_bucket`: the S3 `endpoint`, `bucket`,
-  `region`, `access_key_id` and `secret_access_key`, the `public_url` objects
-  are read from, and `req_options` (the tests' `Req.Test` stub). Every call is
-  made once; whoever asked retries.
+  `region`, `access_key_id` and `secret_access_key`, and the `public_url`
+  objects are read from. Every call is made once; whoever asked retries.
   """
 
   @doc "Stores `bytes` under `key`, to be cached for a year: `:ok` or `{:error, reason}`."
@@ -51,7 +50,7 @@ defmodule Keyfleet.Agents.AvatarBucket do
         redirect: false,
         connect_options: [timeout: 5_000],
         receive_timeout: 15_000
-      ] ++ options ++ config[:req_options]
+      ] ++ options
     )
     |> case do
       {:ok, %Req.Response{status: status}} when status in 200..299 -> :ok

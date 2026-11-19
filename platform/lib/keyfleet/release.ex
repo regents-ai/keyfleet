@@ -139,8 +139,8 @@ defmodule Keyfleet.Release do
 
   Staging owns a disposable database, so it has no copy of the tables this
   repository reads but does not own, `regent_names.platform_human_users`. This
-  command creates a staging-only approximation of it with the shape the local
-  fixture already proves sufficient, then applies every shared change this
+  command creates a staging-only approximation of it with the shape local
+  databases run on, then applies every shared change this
   release carries, as `migrate_shared/0` does in production, and runs every
   migration into `keyfleet_app` (`prepare_database!/2`).
 
@@ -150,7 +150,7 @@ defmodule Keyfleet.Release do
 
   The deployed launcher passes no options, so it reads only the database the
   release configuration resolves. The options (`:getenv`, `:config`,
-  `:migrations_path`) aim it at a disposable database under test.
+  `:migrations_path`) aim it at another disposable database.
   """
   def bootstrap_staging(opts \\ []) when is_list(opts) do
     getenv = Keyword.get(opts, :getenv, &System.get_env/1)

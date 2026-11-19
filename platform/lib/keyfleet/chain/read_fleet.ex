@@ -28,8 +28,8 @@ defmodule Keyfleet.Chain.ReadFleet do
   require Logger
 
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.Client
   alias Keyfleet.Chain.ReadingStoppedError
+  alias Keyfleet.Chain.RpcClient
   alias Keyfleet.Chain.Scanner
   alias Keyfleet.Fleets
 
@@ -40,7 +40,7 @@ defmodule Keyfleet.Chain.ReadFleet do
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
     case Fleets.get_fleet!(fleet_id) do
       %{manager_address: address} = fleet when is_binary(address) ->
-        pass(fleet, Client.configured())
+        pass(fleet)
 
       _not_deployed ->
         {:cancel, :not_deployed}
@@ -50,10 +50,10 @@ defmodule Keyfleet.Chain.ReadFleet do
   @impl Oban.Worker
   def backoff(%Oban.Job{}), do: @retry_after
 
-  defp pass(fleet, client) do
-    with {:ok, chain_id} <- client.chain_id(),
+  defp pass(fleet) do
+    with {:ok, chain_id} <- RpcClient.chain_id(),
          :ok <- same_chain(fleet, chain_id),
-         {:error, reason} <- Scanner.step(fleet, client) do
+         {:error, reason} <- Scanner.step(fleet) do
       failed(fleet, reason)
     else
       :ok -> passed(fleet)
