@@ -4,6 +4,11 @@ Changes to Keyfleet, newest first.
 
 ## 19 November 2026
 
+- **Security.** A part the site uses to read domain names and ENS names could be kept
+  busy for seconds by one very long name. It is replaced with the version that refuses
+  such a name at once. ENS names that hold an emoji are now read. An early-access
+  address at a domain written in its plain-letter form for a symbol name, such as
+  xn--n3h.net, can now join.
 - **Rooms.** A room now opens at its newest post, with the box to write in right under
   it, whether you open it from the hall, come back to it or your connection drops and
   returns. While you are at the bottom, new posts keep you there; scroll up to read and

@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "0a9467f9d9688899d8798c5176713c86819a4290"
+  @elixir_utils_ref "caba486c5629be8a2381028c86d6c2dc78862480"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "69dbfface3fdc2ab728f8cc57cface25f9c7120c"
 
@@ -134,7 +134,8 @@ defmodule Keyfleet.MixProject do
       # Reads an agent picture's format and size from its first bytes.
       {:ex_image_info, "~> 1.0"},
       # Writes an early-access address's host in ASCII (Keyfleet.Early.Signup).
-      {:idna, "~> 7.1"},
+      # ethers and jsv still ask for idna 7; this pin replaces theirs.
+      {:idna, "~> 8.0", override: true},
       # Cuts each Key card's small close-up out of its picture (libvips).
       {:vix, "~> 0.42.0"},
       {:bandit, "~> 1.14 and >= 1.14.1"},
