@@ -13957,3 +13957,18 @@ step's report).
   never used (the smoke has no chain node), and `FLY_IMAGE_REF`, the image just built.
   With them the smoke runs to its end again: built on Node 26.13.1, both machines up,
   every migration applied, on PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1).
+
+## 2026-11-19 — Playwright 1.65.1 and Vitest 5.1.1, the refresh's third step
+
+- `platform/package.json`: `@playwright/test` 1.65.1 (from 1.64.1) and `vitest` 5.1.1 (from
+  5.1.0), as the template's v292. The lock follows: Vite 8.3.8, Rolldown 1.2.19 and its
+  binaries, and the packages those name. Playwright's Chromium is build 1255. Test tools
+  only: all 34 lock entries that change are development packages, which the image leaves
+  out (`npm ci --omit=dev`), so the image installs the same packages as before.
+- Checked before and after on Node 26.13.1: 829 packages with verified registry
+  signatures both times; `npm audit` finds nothing both times. Every package the lock
+  shares with the template's at the same version has the same integrity; the six test
+  tool packages are at the template's versions. Three packages Keyfleet already pinned
+  ahead of or apart from the template stay where they were (`@noble/hashes`, `hono`,
+  `source-map-js`).
+- No timeout or test changed. No migration.
