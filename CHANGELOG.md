@@ -13655,3 +13655,18 @@ step's report).
   properties in `SeasonsTest`: a taken reason with any of the five added alone between
   two characters stays taken, and one with a character of the set out of its place is
   refused as not plain; both fail on the old rule.
+- A pick's `"reason": null` is refused at both agent doors, as the published schemas
+  already say: the contract and the tool manifest give the reason as a string, and the
+  contract marks a field that takes null with `[string, "null"]`. The signed request
+  refused it already; the connector took it as no reason, because
+  `KeyfleetWeb.AgentTools.SignedRequest.params/2` left out every argument that was nil.
+  It now keeps a null, for every tool, so a null is checked as the signed request
+  checks it. Ash turns empty text into nil, so each optional free-text or cursor
+  argument the signed request takes empty now keeps it (`allow_empty?: true`): a
+  season pick's reason, the seasons' `before` and `after`, a poll's notes and a vote's
+  reason, the activity and search cursors, the profile's name and harness, the
+  publications' `after`, and the notebooks' list cursor, files path and cursor and new
+  notebook's description. Left out or empty, a reason is still none. `McpConnectorTest`
+  sends a reason empty, left out, given and null, and a notebooks cursor empty and
+  null, through the connector and the signed request (the reasons over signed /mcp
+  too) and finds the same answer or refusal at each; both fail with the old null rule.

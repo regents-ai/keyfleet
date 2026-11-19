@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.AgentTools.Publications do
       description "What is public in a project, newest first, 100 at a time."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
-      argument :after, :string, constraints: [trim?: false]
+      argument :after, :string, constraints: [trim?: false, allow_empty?: true]
       run {Run, tool: "publications_list"}
     end
 

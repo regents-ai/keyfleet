@@ -15,17 +15,14 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
   alias KeyfleetWeb.Refusal
 
   @doc """
-  The signed request's JSON for an action's `arguments`, leaving out those not
-  given, with the `fixed` fields its browser tool always sends. Within an
-  argument every value is kept as sent, null included.
+  The signed request's JSON for an action's `arguments`, the ones given, a
+  null among them kept, with the `fixed` fields its browser tool always
+  sends, so a null is checked as the signed request checks it. An optional
+  text argument the request takes empty keeps empty text (`allow_empty?`),
+  so empty text is not checked as a null.
   """
   @spec params(map(), map()) :: map()
-  def params(arguments, fixed) do
-    arguments
-    |> Enum.reject(fn {_name, value} -> is_nil(value) end)
-    |> Map.new(fn {name, value} -> {to_string(name), json(value)} end)
-    |> Map.merge(fixed)
-  end
+  def params(arguments, fixed), do: arguments |> json() |> Map.merge(fixed)
 
   defp json(%{__struct__: _} = value), do: value
   defp json(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), json(value)} end)

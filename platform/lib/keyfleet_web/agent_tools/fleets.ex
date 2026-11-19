@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
     action :activity, :map do
       description "What has been happening in a fleet, newest first, a page at a time."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
-      argument :cursor, :string, constraints: [trim?: false]
+      argument :cursor, :string, constraints: [trim?: false, allow_empty?: true]
       run {Run, tool: "fleets_activity"}
     end
 
@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
       description "Finds the fleet's posts, direct messages and workspace items whose words match, and its notebooks whose title or description holds the query."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
-      argument :cursor, :string, constraints: [max_length: 512, trim?: false]
+      argument :cursor, :string, constraints: [max_length: 512, trim?: false, allow_empty?: true]
       argument :limit, :integer, constraints: [min: 1, max: 50]
       run {Run, tool: "fleets_search"}
     end
