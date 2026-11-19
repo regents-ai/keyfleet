@@ -54,6 +54,26 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
       upsert? true
       upsert_identity :unique_provider_per_account
       upsert_fields [:subject, :username, :display_name, :verified_at, :metadata]
+
+      emit Keyfleet.Accounts.Signals, :social_linked,
+        dynamic?: true,
+        description: "Only when the sign-in inserted the link."
+
+      # The upsert marks the link it returns with whether it inserted it.
+      change after_action(fn
+               changeset, %{__metadata__: %{upsert_action: :insert}} = identity, _context ->
+                 with :ok <-
+                        Ash.Signals.emit(
+                          changeset,
+                          Keyfleet.Accounts.Signals,
+                          :social_linked,
+                          %{provider: identity.provider, subject: identity.subject}
+                        ),
+                      do: {:ok, identity}
+
+               _changeset, identity, _context ->
+                 {:ok, identity}
+             end)
     end
 
     read :read_mine do
@@ -85,6 +105,13 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
       filter expr(provider == ^arg(:provider) and subject == ^arg(:subject))
     end
 
+    # Each account's link to one provider made before a moment, such as the Points start.
+    read :linked_before do
+      argument :provider, :atom, allow_nil?: false
+      argument :at, :utc_datetime_usec, allow_nil?: false
+      filter expr(provider == ^arg(:provider) and inserted_at < ^arg(:at))
+    end
+
     destroy :remove_verified do
       accept []
       require_atomic? false
@@ -92,7 +119,13 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
   end
 
   policies do
-    policy action([:upsert_verified, :for_account, :by_provider_subject, :remove_verified]) do
+    policy action([
+             :upsert_verified,
+             :for_account,
+             :by_provider_subject,
+             :linked_before,
+             :remove_verified
+           ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
 
