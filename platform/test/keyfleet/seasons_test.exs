@@ -191,20 +191,16 @@ defmodule Keyfleet.SeasonsTest do
   # flags people type, and letters of any script with their marks and the
   # joiners their words hold, are taken.
   test "a reason is one line that shows, of at most 500 units as a box counts them" do
+    six = String.duplicate("\u{0301}", 6)
+
     for {reason, rule} <- [
           {String.duplicate("a", 501), :too_long},
           {String.duplicate("😀", 251), :too_long},
           {"Line one\nline two", :plain},
-          {"Zero\u{200B}width", :plain},
+          {"Line one\u{2028}line two", :plain},
           {"Turned \u{202E}around", :plain},
           {"Isolated \u{2067}around\u{2069}", :plain},
-          {"Arabic \u{061C}mark", :plain},
           {"Tagged a\u{E0067}\u{E0062}\u{E007F}", :plain},
-          {"Doubled a\u{200C}\u{200C}b", :plain},
-          {"Paired a\u{200C}\u{200D}b", :plain},
-          {"Spaced a\u{200D} b", :plain},
-          {"Last a\u{00AD}", :plain},
-          {"\u{200F}First", :plain},
           {"Plain x\u{FE0F}", :plain},
           {"Twice \u{2764}\u{FE0F}\u{FE0F}", :plain},
           {"Up \u{1F680}\u{3164}", :plain},
@@ -220,8 +216,13 @@ defmodule Keyfleet.SeasonsTest do
           {"\u{0301}", :blank},
           {"\u{E000}", :blank},
           {"\u{FFFF}", :blank},
+          {"\u{200B}\u{2060}\u{200F}", :blank},
           {"a" <> String.duplicate("\u{0301}", 499), :marks},
-          {"a" <> String.duplicate("\u{0301}", 7), :marks}
+          {"a" <> String.duplicate("\u{0301}", 7), :marks},
+          # The marks counted through what stands between them: 426 accents
+          # on one letter with a joiner after every sixth.
+          {"a" <> Enum.join(List.duplicate(six, 71), "\u{200D}"), :marks},
+          {"a" <> String.duplicate("\u{0301}\u{200B}", 6) <> "\u{0301}", :marks}
         ] do
       assert {:error, %Ash.Error.Invalid{errors: errors}} =
                Seasons.pick(@fleet, 1, %{product: "SOL-USD", reason: reason}, actor: human("a"))
@@ -241,7 +242,9 @@ defmodule Keyfleet.SeasonsTest do
           "Scotland \u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
           "Japan \u{1F1EF}\u{1F1F5}",
           "Burmese \u{1000}\u{103C}\u{103D}\u{1031}\u{1037}",
-          "a" <> String.duplicate("\u{0301}", 6),
+          "a" <> six,
+          # Six marks, a joiner and a letter, then six more: no tower.
+          "a" <> six <> "\u{200D}b" <> six,
           # "I want" in Persian, with its half-space.
           "\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}",
           # "Sri Lanka" in Sinhala, and "RAB" in Bengali.
@@ -264,22 +267,143 @@ defmodule Keyfleet.SeasonsTest do
     end
   end
 
-  # The characters drawn as nothing, as the rule names them.
-  @nothing for cp <- 0..0x10FFFF,
+  # Ordinary writing as people type it, in the review's 40 scripts and an
+  # Arabic letter mark, and its 22 kinds of emoji. The Khmer, Thai, Burmese,
+  # Mongolian, Malayalam, Bengali, Hebrew and Arabic ones with a zero-width
+  # space, joiner, vowel separator or direction mark were refused before.
+  test "ordinary writing in living scripts and emoji of every kind are taken" do
+    refused = [
+      {"Middle Korean with a filler", "\u{115F}ᅡᆫ"},
+      {"heart with its selector twice", "❤\u{FE0F}\u{FE0F}"},
+      {"Texas flag, outside the three", "🏴\u{E0075}\u{E0073}\u{E0074}\u{E0078}\u{E007F}"}
+    ]
+
+    taken = [
+      {"Hebrew", "שלום עולם, הביטקוין יעלה"},
+      {"Hebrew with points", "שָׁלוֹם"},
+      {"Arabic", "السلام عليكم، البيتكوين سيرتفع"},
+      {"Arabic with vowels", "مُحَمَّدٌ"},
+      {"Arabic, a letter mark before a space", "السلام\u{061C} عليكم"},
+      {"Hebrew, a mark after the price at the end", "המחיר 100$\u{200F}"},
+      {"Hebrew, a mark before a space", "שלום\u{200F} עולם"},
+      {"Latin then Hebrew with a mark between", "ABC\u{200F}שלום"},
+      {"Persian", "می\u{200C}خواهم بیت\u{200C}کوین بخرم"},
+      {"Urdu", "میں بٹ کوائن خریدنا چاہتا ہوں۔"},
+      {"Hindi", "बिटकॉइन ऊपर जाएगा"},
+      {"Hindi with a joiner", "क्\u{200D}ष"},
+      {"Hindi with a non-joiner", "क्\u{200C}ष"},
+      {"Malayalam, atomic chillu", "ഞാൻ പോകുന്നു"},
+      {"Malayalam, chillu by joiner inside a word", "എന്\u{200D}റെ"},
+      {"Malayalam, chillu by joiner before a space", "ഞാന്\u{200D} പോകുന്നു"},
+      {"Malayalam, chillu by joiner at the end", "അവന്\u{200D}"},
+      {"Bengali, khanda ta atomic", "হঠাৎ দাম বাড়ল"},
+      {"Bengali, khanda ta by joiner before a space", "হঠাত্\u{200D} দাম বাড়ল"},
+      {"Sinhala", "ශ්\u{200D}රී ලංකාව"},
+      {"Tamil", "பிட்காயின் உயரும்"},
+      {"Thai", "บิตคอยน์จะขึ้น"},
+      {"Thai with a zero-width space", "บิตคอยน์\u{200B}จะขึ้น"},
+      {"Khmer", "ខ្ញុំចង់ទិញ"},
+      {"Khmer as its standard keyboard types it", "ខ្ញុំ\u{200B}ចង់\u{200B}ទិញ"},
+      {"Burmese", "ဘစ်ကွိုင်တက်မယ်"},
+      {"Burmese with a zero-width space", "ဘစ်ကွိုင်\u{200B}တက်မယ်"},
+      {"Lao", "ບິດຄອຍຈະຂຶ້ນ"},
+      {"Tibetan", "བོད་སྐད་"},
+      {"Mongolian", "ᠮᠣᠩᠭᠣᠯ"},
+      {"Mongolian with a free variation selector", "ᠭ\u{180B}ᠠ"},
+      {"Mongolian with the vowel separator", "ᠬᠠᠷ\u{180E}ᠠ"},
+      {"Mongolian with a suffix space", "ᠮᠣᠩᠭᠣᠯ\u{202F}ᠤᠨ"},
+      {"Korean", "비트코인이 오른다"},
+      {"Korean in conjoining jamo", "\u{1100}\u{1161}\u{11A8}"},
+      {"Japanese", "ビットコインは上がる"},
+      {"Japanese with an ideographic variation selector", "葛\u{E0100}城市"},
+      {"Chinese", "比特币会涨"},
+      {"Amharic", "ቢትኮይን ይነሳል"},
+      {"Vietnamese, decomposed", "Tie\u{0302}\u{0301}ng Vie\u{0323}\u{0302}t"},
+      {"keycaps", "1\u{FE0F}⃣ #\u{FE0F}⃣ *\u{FE0F}⃣ 🔟"},
+      {"family", "👨\u{200D}👩\u{200D}👧\u{200D}👦"},
+      {"rainbow flag", "🏳\u{FE0F}\u{200D}🌈"},
+      {"transgender flag", "🏳\u{FE0F}\u{200D}⚧\u{FE0F}"},
+      {"heart on fire", "❤\u{FE0F}\u{200D}🔥"},
+      {"handshake with tones", "🧑🏽\u{200D}🤝\u{200D}🧑🏻"},
+      {"kiss with tones", "👨🏻\u{200D}❤\u{FE0F}\u{200D}💋\u{200D}👨🏼"},
+      {"eye in bubble", "👁\u{FE0F}\u{200D}🗨\u{FE0F}"},
+      {"running right", "🏃\u{200D}➡\u{FE0F}"},
+      {"head shaking", "🙂\u{200D}↔\u{FE0F}"},
+      {"phoenix", "🐦\u{200D}🔥"},
+      {"flags", "🇺🇦🇨🇶"},
+      {"England, Scotland, Wales",
+       "🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}" <>
+         "🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}" <>
+         "🏴\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}"},
+      {"Unicode 16", "🫩🫆🪾🫜🪉🫟"},
+      {"newer than the patterns", "\u{1FAEA}"},
+      {"newer with its selector", "\u{1FAEA}\u{FE0F}"},
+      {"newer with a tone", "\u{1FAEA}\u{1F3FD}"},
+      {"newer inside a joined emoji", "🧑\u{200D}\u{1FA8A}\u{FE0F}"},
+      {"text style", "☺\u{FE0E}"},
+      {"signs with their selector", "©\u{FE0F} ®\u{FE0F} ™\u{FE0F}"}
+    ]
+
+    mismatches =
+      for {want, cases} <- [ok: taken, plain: refused],
+          {label, reason} <- cases,
+          (got = rule(reason)) != want,
+          do: {label, want: want, got: got}
+
+    assert mismatches == []
+  end
+
+  # The characters taken anywhere, as the rule names them.
+  @anywhere [
+    "\u{00AD}",
+    "\u{200B}",
+    "\u{200C}",
+    "\u{200D}",
+    "\u{200E}",
+    "\u{200F}",
+    "\u{061C}",
+    "\u{180E}",
+    "\u{2060}"
+  ]
+
+  @selectors for cp <- 0..0x10FFFF,
+                 cp not in 0xD800..0xDFFF,
+                 Regex.match?(~r/\p{Variation_Selector}/u, <<cp::utf8>>),
+                 do: <<cp::utf8>>
+
+  # Every character refused wherever it stands: each control, format,
+  # line-separating or drawn-as-nothing character but those taken anywhere and
+  # the variation selectors, which are taken in their place.
+  @refused for cp <- 0..0x10FFFF,
                cp not in 0xD800..0xDFFF,
-               Regex.match?(~r/[\p{DI}\x{2800}\x{1D159}]/u, <<cp::utf8>>),
-               do: <<cp::utf8>>
+               char = <<cp::utf8>>,
+               Regex.match?(~r/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{DI}\x{2800}\x{1D159}]/u, char),
+               char not in @anywhere and char not in @selectors,
+               do: char
 
-  @selectors Enum.filter(@nothing, &Regex.match?(~r/\p{Variation_Selector}/u, &1))
-  @joiners ["\u{200C}", "\u{200D}", "\u{00AD}", "\u{200E}", "\u{200F}"]
-
-  # A reason the rule takes, with no joiner or tag at either end: words of
-  # letters, digits, marks and emoji, with spaces between.
+  # A reason the rule takes: words of letters, digits, marks, emoji, flags and
+  # the writing of several scripts, with spaces between.
   defp taken_reason do
     shown =
       one_of([
         string(:alphanumeric, min_length: 1, max_length: 8),
-        member_of(["😀", "❤\u{FE0F}", "👩\u{200D}💻", "é", "日本", "ශ්\u{200D}රී", "#\u{FE0F}\u{20E3}"])
+        member_of([
+          "😀",
+          "❤\u{FE0F}",
+          "👩\u{200D}💻",
+          "é",
+          "a" <> String.duplicate("\u{0301}", 6),
+          "日本",
+          "葛\u{E0100}",
+          "ශ්\u{200D}රී",
+          "#\u{FE0F}\u{20E3}",
+          "🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+          "ខ្ញុំ",
+          "บิตคอยน์",
+          "שָׁלוֹם",
+          "مُحَمَّدٌ",
+          "ᠭ\u{180B}ᠠ"
+        ])
       ])
 
     gen(
@@ -288,43 +412,61 @@ defmodule Keyfleet.SeasonsTest do
     )
   end
 
-  property "a reason taken stays taken with a joiner alone between two characters added" do
-    check all reason <- taken_reason(),
-              joiner <- member_of(@joiners),
-              left <- member_of(["a", "9", "\u{0645}", "\u{0DCA}", "😀", "."]),
-              right <- member_of(["b", "0", "\u{062E}", "\u{09CD}", "🔥", ","]),
-              max_runs: 60 do
-      assert taken?(reason)
+  # The places in `reason`, counted in code points, where a character can stand
+  # without parting a variation selector or a flag's tag from what it follows.
+  defp open_places(reason) do
+    for {next, place} <- Enum.with_index(String.codepoints(reason) ++ [""]),
+        not Regex.match?(~r/[\p{Variation_Selector}\x{E0020}-\x{E007F}]/u, next),
+        do: place
+  end
 
-      for wrapped <- [reason <> " " <> left <> joiner <> right, left <> joiner <> right <> reason],
-          do: assert(taken?(wrapped), inspect(wrapped))
+  # `reason` with each `{place, character}` put before the code point at `place`.
+  defp put(reason, puts) do
+    puts
+    |> Enum.sort(:desc)
+    |> Enum.reduce(String.codepoints(reason), fn {place, char}, codepoints ->
+      List.insert_at(codepoints, place, char)
+    end)
+    |> Enum.join()
+  end
+
+  property "a reason taken stays taken with characters taken anywhere put anywhere" do
+    check all reason <- taken_reason(),
+              puts <-
+                list_of(tuple({member_of(open_places(reason)), member_of(@anywhere)}),
+                  min_length: 1,
+                  max_length: 8
+                ),
+              max_runs: 80 do
+      assert taken?(reason)
+      held = put(reason, puts)
+      assert taken?(held), inspect(held)
     end
   end
 
-  property "a reason holding a character drawn as nothing out of its place is refused as not plain" do
+  property "a reason holding a refused character anywhere, or a variation selector out of its place, is refused as not plain" do
     check all reason <- taken_reason(),
-              at <- integer(0..String.length(reason)),
-              {hidden, place} <-
+              held <-
                 one_of([
-                  # Anywhere, one never let through.
-                  tuple({member_of(@nothing -- (@joiners ++ @selectors)), constant(:anywhere)}),
-                  # First, after a space or after another: a variation selector.
-                  tuple({member_of(@selectors), member_of([:first, :spaced, :doubled])}),
-                  # First, last, beside a space or doubled: a joiner.
-                  tuple({member_of(@joiners), member_of([:first, :last, :spaced, :doubled])})
+                  gen(
+                    all place <- integer(0..length(String.codepoints(reason))),
+                        hidden <- member_of(@refused),
+                        do: put(reason, [{place, hidden}])
+                  ),
+                  gen(
+                    all selector <- member_of(@selectors),
+                        held <-
+                          member_of([
+                            selector <> reason,
+                            reason <> " " <> selector <> "a",
+                            reason <> " 😀" <> selector <> selector <> "b"
+                          ]),
+                        do: held
+                  )
                 ]),
-              max_runs: 100 do
-      {before, after_} = String.split_at(reason, at)
-
-      held =
-        case place do
-          :anywhere -> before <> hidden <> after_
-          :first -> hidden <> reason
-          :last -> reason <> hidden
-          :spaced -> reason <> " " <> hidden <> "a"
-          :doubled -> reason <> " 😀" <> hidden <> hidden <> "b"
-        end
-
+              # A line break at either end is trimmed away before the rule reads it.
+              String.trim(held) == held,
+              max_runs: 120 do
       assert rule(held) == :plain, inspect(held)
     end
   end

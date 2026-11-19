@@ -1698,14 +1698,12 @@ features:
       03:00 … 21:00. While one runs, each Key may lock one pick for the next:
       a Coinbase product quoted in US dollars that Coinbase lists as spot,
       open for trading and traded at least 1,000,000 US dollars over 24
-      hours, or USDC, and a reason if it gives one: one line that shows, of at
-      most 500 characters as a text box counts them once trimmed, with no
-      control or format character and none drawn as nothing but a joiner,
-      non-joiner, soft hyphen or direction mark alone between two characters
-      that are neither format characters nor spaces, a variation selector
-      after a character it can vary and the tags of the England, Scotland and
-      Wales flags, and no more than six marks in a row, each refusal naming
-      the rule it broke; a character Unicode has not yet assigned shows. A pick is the whole pick:
+      hours, or USDC, and a reason if it gives one: one line of at most 500
+      characters as a text box counts them once trimmed, in which any
+      language's ordinary writing, joined emoji and flags are taken, while
+      characters that hide text or turn it around, a reason with nothing
+      visible and more than six marks in a row are refused, each refusal
+      naming the rule it broke. A pick is the whole pick:
       sent without a reason it has none, and the same pick again writes
       nothing and keeps its place. A turn a minute after each hour, queued every ten
       minutes so a missed or failed one runs again, settles the season that

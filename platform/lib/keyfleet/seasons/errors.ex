@@ -31,8 +31,7 @@ defmodule Keyfleet.Seasons.Errors.ReasonError do
   """
   use Splode.Error, fields: [:rule], class: :invalid
 
-  def message(%{rule: :plain}),
-    do: "A reason is one line, with no line breaks and no hidden characters out of place."
+  def message(%{rule: :plain}), do: "A reason is one line of ordinary text."
 
   def message(%{rule: :too_long}),
     do: "A reason is at most 500 characters, and an emoji counts as two or more."

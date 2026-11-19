@@ -13678,11 +13678,10 @@ step's report).
   this review). Claude's guide and the feature list say so. `McpConnectorTest` locks a
   pick through the connector with its reason sent as null and as empty text, and finds
   each with no reason.
-- A reason refused as not plain says "A reason is one line, with no line breaks and no
-  hidden characters out of place." (`ReasonError`), and the contract's reason, the
-  command guide, the command list, the docs and the public changelog say the rule in
-  the same plain words; the full rule is in `Keyfleet.Seasons.Validations.Reason`'s
-  module note.
+- A reason refused as not plain says so in one short sentence (`ReasonError`), and the
+  contract's reason, the command guide, the command list, the docs and the public
+  changelog say the rule in the same plain words; the full rule is in
+  `Keyfleet.Seasons.Validations.Reason`'s module note.
 - A variation selector directly after a character Unicode has not yet assigned, a
   noncharacter aside, is taken, so an emoji newer than the patterns know followed by
   U+FE0F is taken alone and in a joined emoji (one alternative in `:plain`). `SeasonsTest`
@@ -13697,3 +13696,35 @@ step's report).
   The feature list's Coinbase gap says the new worst case. `CoinbaseTest` keeps the
   asked products from a list on many pages, and asks nothing for USDC alone while
   Coinbase is down.
+
+## 2026-11-19 — Captain Seasons after its third review
+
+- The reason rule is simpler: it no longer polices where a harmless invisible
+  character stands, since each round of placing them refused another living script.
+  `Keyfleet.Seasons.Validations.Reason`'s `:plain` takes the soft hyphen, zero-width
+  space, non-joiner and joiner, the left-to-right, right-to-left and Arabic letter
+  marks, the Mongolian vowel separator and the word joiner anywhere, with nothing
+  asked of what stands beside them; the lookbehind and lookahead around the joiners
+  are gone. It still refuses control characters, line and paragraph separators and
+  every other format or drawn-as-nothing character, so the embeddings, overrides and
+  isolates, the tags outside the England, Scotland and Wales flags, the Hangul
+  fillers, blank Braille and the null notehead stay out; variation selectors are taken
+  where they were. So Khmer as its standard keyboard types it, Thai and Burmese with a
+  zero-width space, Mongolian with its vowel separator, a joiner ending a Malayalam or
+  Bengali word, and a direction mark beside a space in Hebrew or Arabic are taken.
+  `:marks` counts a tower through the characters taken anywhere, so "a" with 426
+  accents and a joiner after every sixth is refused, while an Indic word, where a
+  letter follows the joiner, is taken; its pattern reads each run between two marks
+  once, possessively. The refusal says "A reason is one line of ordinary text.", and
+  the contract's reason in both copies, the command guide, the command list, the docs,
+  the feature list and the public changelog say the rule in plain words. The module
+  note records what is known and accepted: a direction mark can change the order digits
+  show in within that one reason, and each reason is drawn as its own block (a grid or
+  flex cell on all three pages), so nothing outside it turns. `SeasonsTest` takes the
+  review's 40 scripts, an Arabic letter mark and its 22 kinds of emoji, and has two
+  properties: a taken reason stays taken with characters taken anywhere put at any
+  place but between a variation selector or flag tag and what it follows, and a reason
+  holding any refused character anywhere, or a variation selector out of its place, is
+  refused as not plain. The battery, the first property and the tower examples fail on
+  the old rule. The worst 500-unit reasons, the review's and ones aimed at the new
+  count, take 10 to 76 µs each.

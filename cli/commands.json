@@ -1927,7 +1927,7 @@
           "type": "string",
           "in": "body",
           "field": "reason",
-          "description": "The reason, one line that shows, of up to 500 characters as a text box counts them once trimmed (an emoji is two or more), with no hidden characters out of place and no more than six accents or marks in a row; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
+          "description": "The reason, one line of up to 500 characters as a text box counts them once trimmed (an emoji is two or more); any language's ordinary writing, joined emoji and flags are taken, while characters that hide text or turn it around, a reason with nothing visible and more than six accents or marks in a row are refused; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
         }
       ]
     },
