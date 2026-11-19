@@ -14050,3 +14050,29 @@ step's report).
   tests and the sign-in, linked account and pairing tests pass (ten files, 96 tests).
   Compile with warnings as errors, clean; format clean and `mix credo --strict` no
   issues on the changed files.
+
+## 2026-11-19 — Points: an award goes only to the account its offer named
+
+- The shared libraries move from elixir-utils bef9ff27 to 3315bab5, all thirteen
+  together; `platform/mix.lock` changes only in those entries. 3315bab5 is bef9ff27 plus
+  three Points commits:
+  - An award goes only to the account its offer named. When the source, asked again
+    just before the award, names another account, such as a social account linked to
+    someone else since the offer, neither account earns: the event ends `rejected` and
+    the refusal is recorded as `account_changed`.
+  - A rule that is off never refuses the action it rides in: `record_event/2` answers
+    `disabled` before it looks at anything else.
+  - One documentation line.
+- Keyfleet's three sources already name the account in their answer, as the same integer
+  the offer was recorded with, so none changes. The two test stand-ins for another
+  site's source, in `account_rules_test.exs` and `start_awards_test.exs`, answered
+  `{:ok, %{}}`; each now names the account its event was recorded for.
+- No migration; no Points setting, rule or start time changed. The pairings read for
+  the start run is unchanged.
+- Proof: `test/keyfleet/points/account_rules_test.exs` gains two tests: an award goes
+  only to the account its offer named, and a rule that is off never refuses the sign-in
+  it rides in, whatever the length of the linked account's subject. Both fail on
+  bef9ff27's Points code. The Points tests and the sign-in, linked account and pairing
+  tests pass (ten files, 98 tests); compile with warnings as errors, clean; format clean
+  and `mix credo --strict` no issues on the changed files; `make check-required-fixes`
+  passes.

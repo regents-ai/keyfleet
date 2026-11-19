@@ -18,8 +18,18 @@ defmodule Keyfleet.Points.StartAwardsTest do
 
   defmodule Elsewhere do
     @moduledoc false
-    # Another site's own check of its award, which accepted it.
-    def verify(_reference), do: {:ok, %{}}
+    # Another site's own check of its award, which accepted it for the account
+    # the event was recorded for.
+    def verify(%{"source_app" => app, "source_kind" => kind, "source_event_key" => key}) do
+      [%{account_id: account_id}] =
+        Event
+        |> Ash.Query.filter(
+          source_app == ^app and source_kind == ^kind and source_event_key == ^key
+        )
+        |> Ash.read!(actor: Store.system())
+
+      {:ok, %{account_id: account_id}}
+    end
   end
 
   setup do

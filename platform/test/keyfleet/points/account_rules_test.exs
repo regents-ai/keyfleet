@@ -4,9 +4,10 @@ defmodule Keyfleet.Points.AccountRulesTest do
   # whichever site records it. Each is offered inside the save that makes it,
   # so a save that rolls back offers nothing, a sign-in that changes nothing
   # offers nothing more, a social account that replaces another is offered as
-  # newly linked, and a rule that is off offers nothing. Points asks the source
-  # when it checks the offer and again just before it writes the award. An
-  # award is offered only for its own signal.
+  # newly linked, and a rule that is off offers nothing and never refuses the
+  # action it rides in. Points asks the source when it checks the offer and
+  # again just before it writes the award, which goes only to the account the
+  # offer named. An award is offered only for its own signal.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
@@ -28,8 +29,18 @@ defmodule Keyfleet.Points.AccountRulesTest do
 
   defmodule Elsewhere do
     @moduledoc false
-    # Another site's own check of its award, which accepted it.
-    def verify(_reference), do: {:ok, %{}}
+    # Another site's own check of its award, which accepted it for the account
+    # the event was recorded for.
+    def verify(%{"source_app" => app, "source_kind" => kind, "source_event_key" => key}) do
+      [%{account_id: account_id}] =
+        Event
+        |> Ash.Query.filter(
+          source_app == ^app and source_kind == ^kind and source_event_key == ^key
+        )
+        |> Ash.read!(actor: Store.system())
+
+      {:ok, %{account_id: account_id}}
+    end
   end
 
   setup do
@@ -255,6 +266,29 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert "link_not_found" in rejections("github:" <> github.subject)
   end
 
+  test "an award goes only to the account its offer named" do
+    x = social(:x)
+
+    [first, second] =
+      for name <- ~w(first second), do: "did:privy:points-moved-#{name}-" <> Ecto.UUID.generate()
+
+    assert {:ok, account, []} = first |> session([x]) |> VerifiedSession.establish()
+    assert {:ok, other, []} = second |> session([]) |> VerifiedSession.establish()
+    settle_clock(other)
+
+    # One pass checks the three offers. Before the next awards them, the first
+    # person lets the X account go and the second person links it.
+    assert %{success: 3, failure: 0} = Oban.drain_queue(queue: :points)
+    assert {:ok, _account, []} = first |> session([]) |> VerifiedSession.establish()
+    assert {:ok, _other, []} = second |> session([x]) |> VerifiedSession.establish()
+
+    assert %{failure: 0} = drain()
+    assert entries(account.id, "social.x") == []
+    assert entries(other.id, "social.x") == []
+    assert events(account.id, "social.x") == [{"keyfleet", :rejected}]
+    assert "account_changed" in rejections("x:" <> x.subject)
+  end
+
   test "a source that cannot answer just before the award earns once it can" do
     x = social(:x)
     did = "did:privy:points-award-retry-" <> Ecto.UUID.generate()
@@ -311,6 +345,17 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert %{failure: 0} = drain()
     assert entries(account.id) == []
     assert "rule_not_active" in rejections(to_string(account.id))
+  end
+
+  test "a rule that is off never refuses the action it rides in" do
+    put_points_env(:approved_rules, @rules -- ["social.x"])
+    # Whatever the subject's length; this one is 511 bytes.
+    x = %{social(:x) | subject: String.pad_trailing("x-" <> Ecto.UUID.generate(), 511, "0")}
+    did = "did:privy:points-rule-off-" <> Ecto.UUID.generate()
+
+    assert {:ok, account, []} = did |> session([x]) |> VerifiedSession.establish()
+    assert link(x).human_account_id == account.id
+    assert offers("social.x") == []
   end
 
   test "an award is offered only for its own signal; nobody, the system included, asks for one directly" do
