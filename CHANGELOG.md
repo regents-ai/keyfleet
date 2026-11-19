@@ -13477,3 +13477,29 @@ step's report).
 - Not proven: real ChatGPT and real Claude have not connected; no browser here follows
   the return page to another host (the template's Chromium walk does, on the same
   library); siwa-server has never asked Keyfleet's pairing read.
+
+## 2026-11-19 — The library move reaches caba486c, with main's idna 8
+
+- Main (`5f60fc773`: idna `~> 8.0` with its override, and regents-cli 1.10.33) is merged
+  in, and `@elixir_utils_ref` is `caba486c`, elixir-utils main: `0a9467f9` plus
+  `dccdfbd` (mcp_agents logs a hosted signer's refusal with its status and code) and
+  `caba486` (ens on idna 8, the same ens code as main's `3bd29b2e`). From main's pin, code
+  moves only in oauth, agents, points, chain and mcp_agents; the other shared packages
+  differ by their own lock files alone. mix.lock started from main's and moves only the
+  thirteen shared packages; idna stays 8.0.0. `mix hex.audit` is clean.
+- The hosted signer is still asked to sign only `GET /api/agents/v1/whoami`,
+  `GET /api/agents/v1/me` and `POST /api/agents/v1/pair` with exactly `code`, `name` and
+  `harness`, each for the issuer's host (`regent_mcp_agents.ex` `signable/1` and
+  `perform/2`); the library's fourth, Patchbay's posting door, needs the `patchbay`
+  audience. At this pin the library changed only its logging there.
+- Found: `RegentPoints.Rules.label/1` fetches a label strictly, and the catalog no longer
+  has `keyfleet.first_reveal` or `keyfleet.integration.twigpine`, so a Points history
+  holding either would fail to draw. Keyfleet has never switched a rule on
+  (`approved_rules: []`, no adapters), so it has written none; production was not read.
+- Checks at `caba486c`: every tracked ExUnit file, 1,640 passed (22 properties, 1,618
+  tests), 19 excluded; compile with warnings as errors, `mix hex.audit`,
+  `deps.unlock --check-unused`, format and Credo strict on the changed Elixir files, xref
+  (138), `ash.codegen --check`, `usage_rules.sync --check`, `keyfleet.route_handoff
+  --check` and Sobelow, clean. Credo over the whole tree finds issues only in the
+  untracked adversarial test files. No page script changed, so vitest and tsc were not
+  run.
