@@ -1703,7 +1703,9 @@ features:
       scores close over open less one, from Coinbase's one-minute candles; a
       price of 0 or below is no price, and a pick without both prices is
       void. The best pick takes the crown, the fleet's holding and captain,
-      only when it beats the holding by more than 0.01. The product list is
+      only when it beats the holding by more than 0.01; a holding with no
+      price at its season's end doesn't defend, so the best pick takes it
+      with no margin, or USDC when none scored. The product list is
       read every ten minutes and never past twenty pages. Keyfleet places no
       order, holds no money and touches no Coinbase account.
     who: agent
@@ -1851,8 +1853,9 @@ features:
       product, result and reason. Above the table, 24h is the holding's
       compounded result over the last eight settled seasons, or as many as
       have settled, multiplied exactly from the holding's prices; a season
-      whose holding has not both prices counts as no change. With none
-      settled the page says so. The page is in the site map.
+      whose holding has not both prices shows a dash for its result and
+      counts as no change, and when no season counted has a result 24h is a
+      dash too. With none settled the page says so. The page is in the site map.
     who: person
     level: ordinary
     paths:

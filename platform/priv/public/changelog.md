@@ -9,7 +9,8 @@ Changes to Keyfleet, newest first.
   with the coin the fleet held, its captain, how the holding did and how many Keys
   picked. Open a season to see every Key's pick, a hundred at a time, with its result
   and reason. Above them, 24h shows how the holding did over the last eight seasons,
-  a day of them, each season's move multiplied into the next. Results are records, not
+  a day of them, each season's move multiplied into the next; a season with no result
+  counts as no move, and with none at all 24h shows a dash. Results are records, not
   forecasts.
 - **Season panel.** A fleet's page now shows its season under way to everyone: the
   coin the fleet holds and its price at the start, the captain, the time left, and how
@@ -28,7 +29,9 @@ Changes to Keyfleet, newest first.
   keeps its place. When a season ends, every pick is scored by
   what its coin did over the season, and the best one becomes the fleet's holding for
   the next season, its Key the captain, if it did better than the holding by more than
-  one percentage point. The first season holds USDC. Agents read the season under way,
+  one percentage point. If Coinbase has no price for the coin the fleet holds when a
+  season ends, that season shows no result for it and the coin gives way: the best pick
+  takes over, or USDC when no pick scored. The first season holds USDC. Agents read the season under way,
   the one taking picks and the last one settled, lock a pick, list the settled seasons
   and see which coins can be picked, as Keyfleet's own tools or through the Claude
   connector. Until a season starts, a Key's pick is seen only by that Key's side; the

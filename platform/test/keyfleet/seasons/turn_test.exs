@@ -184,6 +184,52 @@ defmodule Keyfleet.Seasons.TurnTest do
              seasons()
   end
 
+  test "a holding with no price at its season's end is let go: to the best pick with no margin, or else to USDC",
+       %{boundaries: [b0, b1, b2, b3, b4]} do
+    sol = CoinbaseStub.product("SOL-USD")
+    eth = CoinbaseStub.product("ETH-USD")
+    stub([sol, eth], %{"SOL-USD" => [{before(b1, 1), "100"}, {before(b2, 1), "110"}]})
+
+    assert :ok = turn(b0)
+    pick!(1, "a", "SOL-USD")
+    assert :ok = turn(b1)
+    pick!(2, "b", "ETH-USD")
+
+    stub([sol, eth], %{
+      "SOL-USD" => [{before(b1, 1), "100"}, {before(b2, 1), "110"}],
+      "ETH-USD" => [{before(b2, 1), "2000"}]
+    })
+
+    assert :ok = turn(b2)
+    assert %{holding: "SOL-USD", captain_key: 1} = Enum.at(seasons(), 1)
+
+    # SOL is delisted, with no candles; ETH falls half a percent over season 2.
+    stub(
+      [
+        CoinbaseStub.product("SOL-USD", %{"trading_disabled" => true, "status" => "delisted"}),
+        eth
+      ],
+      %{"SOL-USD" => [], "ETH-USD" => [{before(b2, 1), "2000"}, {before(b3, 1), "1990"}]}
+    )
+
+    assert :ok = turn(b3)
+
+    assert [_one, two, three, %{number: 4, locked_at: nil}] = seasons()
+    assert %{settled_at: %DateTime{}, holding_close_price: nil, holding_result: nil} = two
+    assert [%{token_id: 2, result: falling}] = picks(2)
+    assert Decimal.eq?(falling, "-0.005")
+    assert %{holding: "ETH-USD", captain_key: 2} = three
+    assert three.holding_open_price == Decimal.new("1990")
+
+    # ETH has no price at the end of season 3, which nobody picked in.
+    assert :ok = turn(b4)
+
+    assert [_one, _two, three, four, %{number: 5}] = seasons()
+    assert %{holding_close_price: nil, holding_result: nil} = three
+    assert %{holding: "USDC", captain_key: nil} = four
+    assert Decimal.eq?(four.holding_open_price, 1)
+  end
+
   test "when Coinbase can't be read, the turn fails and settles nothing", %{
     boundaries: [b0, b1, b2 | _]
   } do

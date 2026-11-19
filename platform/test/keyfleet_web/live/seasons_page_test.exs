@@ -84,6 +84,29 @@ defmodule KeyfleetWeb.Live.SeasonsPageTest do
     assert has_element?(view, "#seasons-day", "3 seasons")
   end
 
+  # Coinbase had no price for season 1's holding at its end.
+  test "a season with no result shows a dash, and so does the day when no season has one",
+       %{conn: conn} do
+    1
+    |> open!(1)
+    |> lock!("100", 1)
+    |> Ash.Changeset.for_update(:settle, %{holding_close_price: nil, holding_result: nil},
+      actor: @system
+    )
+    |> Ash.update!()
+
+    {:ok, view, _html} = live(conn, @path)
+    assert has_element?(view, "#seasons-1 td", "Key 1")
+    assert has_element?(view, "#seasons-1 td.seasons-table__figure", "—")
+    assert has_element?(view, "#seasons-day .seasons-day__figure", "—")
+
+    settled!(2, "100", "110", 2)
+
+    {:ok, view, _html} = live(conn, @path)
+    assert has_element?(view, "#seasons-day", "+10.00%")
+    assert has_element?(view, "#seasons-day", "2 seasons")
+  end
+
   test "the record shows twenty seasons at a time", %{conn: conn} do
     for number <- 1..21, do: settled!(number, "100", "101", nil)
 

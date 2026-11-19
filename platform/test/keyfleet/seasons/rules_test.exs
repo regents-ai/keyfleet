@@ -89,7 +89,7 @@ defmodule Keyfleet.Seasons.RulesTest do
     assert Rules.crown(@usdc_season, [pick(5, 1, "USDC", "1", "1")]) == {"USDC", nil}
   end
 
-  test "a holding with no price at the end counts as 0, so the margin over 0 decides" do
+  test "a holding with no price at the end doesn't defend: the best pick takes the crown with no margin, or else USDC" do
     unknown = %{
       @usdc_season
       | holding: "SOL-USD",
@@ -98,9 +98,14 @@ defmodule Keyfleet.Seasons.RulesTest do
         holding_close_price: nil
     }
 
-    assert Rules.crown(unknown, [pick(5, 1, "ETH-USD", "100", "101")]) == {"SOL-USD", 2}
-    assert Rules.crown(unknown, [pick(5, 1, "ETH-USD", "100", "101.01")]) == {"ETH-USD", 5}
-    assert Rules.crown(unknown, []) == {"SOL-USD", 2}
+    falling = pick(5, 1, "ETH-USD", "100", "90")
+    assert Rules.crown(unknown, [falling]) == {"ETH-USD", 5}
+    assert Rules.crown(unknown, [pick(6, 2, "USDC", "1", "1"), falling]) == {"USDC", 6}
+    assert Rules.crown(unknown, []) == {"USDC", nil}
+
+    void = %{falling | close_price: nil}
+    assert Rules.crown(unknown, [void]) == {"USDC", nil}
+    assert Rules.crown(%{unknown | holding_open_price: nil}, []) == {"USDC", nil}
   end
 
   test "a result is close over open less one, in the decimals sent, and unknown without both" do
@@ -147,15 +152,18 @@ defmodule Keyfleet.Seasons.RulesTest do
       assert Decimal.eq?(Rules.compounded(seasons), "-0.01")
     end
 
-    test "counts a holding without both prices as no change" do
-      seasons = [
-        holding("100", "110"),
+    test "counts a holding without both prices as no change, and is nothing when none has both" do
+      unpriced = [
         %{@usdc_season | holding_close_price: nil},
-        %{@usdc_season | holding_open_price: nil, holding_close_price: nil},
-        @usdc_season
+        %{@usdc_season | holding_open_price: nil, holding_close_price: nil}
       ]
 
-      assert Decimal.eq?(Rules.compounded(seasons), "0.1")
+      assert Decimal.eq?(
+               Rules.compounded([holding("100", "110") | unpriced] ++ [@usdc_season]),
+               "0.1"
+             )
+
+      assert Rules.compounded(unpriced) == nil
     end
 
     # A third and its inverse come back to exactly nothing, which rounding each

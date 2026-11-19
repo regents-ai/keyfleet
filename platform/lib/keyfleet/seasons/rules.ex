@@ -9,9 +9,11 @@ defmodule Keyfleet.Seasons.Rules do
   When a season ends, the best pick is the one with the highest result, and of
   equal results the one locked first. It takes the crown for the next season
   when its product differs from the season's holding and its result beats the
-  holding's own result over the season by more than the switching margin; a
-  holding without both prices counts as a result of 0. Otherwise the holding
-  and its captain stay.
+  holding's own result over the season by more than the switching margin.
+  Otherwise the holding and its captain stay. A holding without both prices
+  has no result and doesn't defend: the best pick takes the crown with no
+  margin, and with no pick scored the next season holds `USDC` with no
+  captain.
 
   Every comparison multiplies whole numbers instead of dividing prices, so
   equal results are equal however many digits the prices have. A result
@@ -102,13 +104,17 @@ defmodule Keyfleet.Seasons.Rules do
   def crown(nil, _picks), do: {@usdc, nil}
 
   def crown(%{holding: holding, captain_key: captain} = season, picks) do
-    case best(picks) do
-      %{product: product, token_id: key} = best when product != holding ->
-        if takes_crown?(best, holding_prices(season)),
-          do: {product, key},
-          else: {holding, captain}
+    case {best(picks), holding_prices(season)} do
+      {nil, nil} ->
+        {@usdc, nil}
 
-      _none_or_the_holding ->
+      {%{product: product, token_id: key}, nil} ->
+        {product, key}
+
+      {%{product: product, token_id: key} = best, prices} when product != holding ->
+        if takes_crown?(best, prices), do: {product, key}, else: {holding, captain}
+
+      {_none_or_the_holding, _prices} ->
         {holding, captain}
     end
   end
@@ -116,22 +122,25 @@ defmodule Keyfleet.Seasons.Rules do
   @doc """
   What holding the fleet's holding through each of `seasons` came to: the
   product of each one's close over open, less one, where a holding without
-  both prices counts as no change; nil for no seasons. The product is taken
-  of whole numbers and divided once, so that division, to 28 digits, is the
-  only rounding.
+  both prices counts as no change; nil when no season has both. The product
+  is taken of whole numbers and divided once, so that division, to 28
+  digits, is the only rounding.
   """
   @spec compounded([season()]) :: Decimal.t() | nil
-  def compounded([]), do: nil
-
   def compounded(seasons) do
-    {closes, opens} =
-      Enum.reduce(seasons, {1, 1}, fn season, {closes, opens} ->
-        {open, close} = holding_prices(season)
-        [close, open] = whole([close, open])
-        {closes * close, opens * open}
-      end)
+    case seasons |> Enum.map(&holding_prices/1) |> Enum.reject(&is_nil/1) do
+      [] ->
+        nil
 
-    Decimal.div(closes - opens, opens)
+      priced ->
+        {closes, opens} =
+          Enum.reduce(priced, {1, 1}, fn {open, close}, {closes, opens} ->
+            [close, open] = whole([close, open])
+            {closes * close, opens * open}
+          end)
+
+        Decimal.div(closes - opens, opens)
+    end
   end
 
   defp scored?(%{open_price: %Decimal{}, close_price: %Decimal{}}), do: true
@@ -155,14 +164,14 @@ defmodule Keyfleet.Seasons.Rules do
     best_close * open * per > (close * per + parts * open) * best_open
   end
 
-  # A holding without both prices has an unknown result, which counts as 0.
+  # A holding's prices over its season, or nil without both: no result.
   defp holding_prices(%{
          holding_open_price: %Decimal{} = open,
          holding_close_price: %Decimal{} = close
        }),
        do: {open, close}
 
-  defp holding_prices(_unknown), do: {Decimal.new(1), Decimal.new(1)}
+  defp holding_prices(_no_result), do: nil
 
   # Prices as whole numbers of the smallest unit any of them is written in,
   # so comparing them multiplies integers and rounds nothing.

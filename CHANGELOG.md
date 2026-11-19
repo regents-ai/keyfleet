@@ -13314,6 +13314,12 @@ step's report).
     place; a changed product never keeps the old reason. Before, the signed request and
     `seasons_pick`, which leave a missing reason out, kept the old reason and still took
     a new place.
+  - A holding with no price at its season's end is let go (`Rules.crown/2`): the season
+    keeps no result for it, the best scored pick takes the crown with no margin, and with
+    none scored the next season holds `USDC` with no captain. Before, it counted as a
+    result of 0 and was held again with no open price until a pick beat 0 by more than
+    the margin. `Rules.compounded/1` is nil when no season it counts has a result, so the
+    record's 24h shows a dash rather than 0%.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):
