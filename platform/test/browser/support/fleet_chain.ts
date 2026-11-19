@@ -148,6 +148,10 @@ export const sayInPublic = (fleet: string, owner: string, body: string) =>
 export const sayInPublicEarlier = (fleet: string, owner: string, body: string) =>
   Number(call("say_earlier!", [fleet, owner, body]))
 
+/** The agent of `owner`, who holds a key, says `body 1` up to `body times` for them in room `slug`. */
+export const talk = (fleet: string, owner: string, slug: string, body: string, times: number) =>
+  void call("talk!", [fleet, owner, slug, body, times])
+
 /**
  * Gives a deployed fleet a fortnight of history: `owner`, sold a key, talks
  * in its rooms, works in its workspace, pushes its code and starts polls,

@@ -480,6 +480,30 @@ defmodule Keyfleet.BrowserChain do
     token_id
   end
 
+  @doc """
+  Has the agent of `owner`, who holds one of the fleet's keys, say
+  `"\#{body} 1"` up to `"\#{body} \#{times}"` for them in room `slug`, one post
+  after the other.
+  """
+  def talk!(fleet_id, owner, slug, body, times) do
+    Rooms.bootstrap_rooms!([fleet_id])
+    agent = PairingHelpers.agent_for!(holder(owner))
+
+    for n <- 1..times do
+      Rooms.send_message!(
+        %{
+          fleet_id: fleet_id,
+          slug: slug,
+          body: "#{body} #{n}",
+          idempotency_key: Ash.UUID.generate()
+        },
+        actor: agent
+      )
+    end
+
+    :ok
+  end
+
   @doc "Opens the fleet's workspace log, once per fleet, before `work!/2`."
   def open_workspace!(fleet_id) do
     WorkspaceFixtures.open_log(fleet_id)
