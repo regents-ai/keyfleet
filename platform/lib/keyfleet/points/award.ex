@@ -73,8 +73,8 @@ defmodule Keyfleet.Points.Award do
   end
 
   policies do
-    # Each runs only as the listener of its own signal, after the action that
-    # emitted it was allowed; each records as the system, never as the actor.
+    # Each is the listener of its own signal: a direct call, and a call carrying
+    # another signal, is refused. Each records as the system, never as the actor.
     policy action(:account_registered) do
       authorize_if signal_in(Keyfleet.Accounts.Signals, :account_registered)
     end

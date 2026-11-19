@@ -14038,15 +14038,15 @@ step's report).
 
 ## 2026-11-19 — Points offers name their signal
 
-- Each Points listener action runs only for its own signal. `Keyfleet.Points.Award` has
+- Each Points listener action refuses a direct call. `Keyfleet.Points.Award` has
   one policy per action in place of its one open policy, each
   `authorize_if signal_in(SignalsModule, :signal)`: `:account_registered` and
   `:social_linked` from `Keyfleet.Accounts.Signals`, `:agent_paired` from
   `RegentAgents.Signals`. This is the template's shape (ash-template v293, 6afa0ebe).
   The same actions earn the same awards; no migration, no setting and no library change.
-- Proof: `test/keyfleet/points/account_rules_test.exs` gains one test: each action runs
-  only for its own signal, for a paired agent and for the system alike, and otherwise
-  queues no offer; with any one policy set back to `always()` it fails. The Points
+- Proof: `test/keyfleet/points/account_rules_test.exs` gains one test: a direct call, a
+  paired agent's and the system's alike, is refused and queues no offer; with any one
+  policy set back to `always()` it fails. The Points
   tests and the sign-in, linked account and pairing tests pass (ten files, 96 tests).
   Compile with warnings as errors, clean; format clean and `mix credo --strict` no
   issues on the changed files.
@@ -14059,7 +14059,9 @@ step's report).
   - An award goes only to the account its offer named. When the source, asked again
     just before the award, names another account, such as a social account linked to
     someone else since the offer, neither account earns: the event ends `rejected` and
-    the refusal is recorded as `account_changed`.
+    the refusal is recorded as `account_changed`. That social account then earns for
+    nobody, its present holder included; whether the holder may still earn it once is
+    the shared library's open question.
   - A rule that is off never refuses the action it rides in: `record_event/2` answers
     `disabled` before it looks at anything else.
   - One documentation line.

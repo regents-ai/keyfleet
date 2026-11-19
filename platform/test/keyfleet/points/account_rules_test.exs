@@ -358,7 +358,7 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert offers("social.x") == []
   end
 
-  test "an award is offered only for its own signal; nobody, the system included, asks for one directly" do
+  test "a direct call for an award, the system's included, is refused" do
     paired = PairingHelpers.pair_wallet!(wallet())
     offered = Enum.map(all_enqueued(worker: IntakeWorker), & &1.id)
     id = Ash.UUIDv7.generate()
