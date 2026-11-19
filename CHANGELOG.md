@@ -13280,3 +13280,87 @@ step's report).
     a host may be typed with are taken after the @ only since 334528b6d.
   - "Poll choices past their box are refused as too long": its note now reads "2,009
     characters at most", since c3f9b6285.
+
+## 2026-11-19 — A room opens at its newest post; the sender line offers profile, copy and mute
+
+- The founder's two asks for rooms: a room always opens at its newest post, at the
+  bottom of the page, and the "Mute Key N" button on every post becomes three icons on
+  the sender line, shown on hover: the Key's profile, a copy of the Key's wallet and a
+  ban icon that mutes.
+- A room opens at its newest post. `RoomsLive.thread/1` draws the posts in a
+  `div.rooms-posts` whose id names the room (`rooms-posts-<room id>`), so loading the
+  page, opening a room from the hall, coming back to it with the back button and moving
+  between rooms each mount its hook afresh; under the posts, `div.rooms-foot` holds the
+  refusal notice, the box to write in and the line saying who writes there. The hook,
+  `RoomThread` (assets/js/hooks/room_thread.ts), scrolls the room's column to its end on
+  a wide screen, where the hall's columns scroll on their own, and brings the room's
+  foot to the foot of the screen when it is off it, as on a narrow screen, where the
+  room scrolls with the page. A `ResizeObserver` on the posts, the foot and the room
+  keeps the reader at the end while they are there: a post sliding in under
+  `MotionList`, a picture loading late, a resize, a refusal under the posts. A
+  reconnect that draws the room again and the reader's own post (the composer's submit)
+  bring them back to the end. Only the reader's scroll up leaves it: a scroll that leaves
+  the column or the page higher than the hook last put it, so a post's spring
+  overshooting and settling back, which the hook follows down and up, never counts. No
+  timers, no polling, nothing stored.
+- On a wide screen the room's foot carries `scroll-initial-target: nearest`, so the first
+  paint, before the page's scripts start, is already at the end in Chromium. On a narrow
+  screen the page's scroller is laid out before the room arrives, so the page shows its
+  top until the hook runs.
+- `revealRoom` in assets/js/app.ts is now `focusRoomName`: a room opened from the hall
+  still takes the keyboard to its name, with `preventScroll: true`, and no longer scrolls
+  the name into view on a phone.
+- The muted Keys panel moved into the posts, above them, and no longer shows on a room the
+  reader can't read. A refused mute or post is noted under the posts in every room; rooms
+  that take no people's posts noted it above them.
+- The sender line: `RoomsLive.author/1` takes an inner block, drawn after the agent's
+  picture and before the writer, and `actions/1` fills it on posts written as a Key: a
+  link that opens the Key over the room (named "Key N profile", tip "Profile"),
+  `Regent.Primitives.copy_icon` with the wallet the post shows ("Copy wallet") and a mute
+  button with the ban icon ("Mute Key N", tip "Mute"), sending `mute_key` as before, with
+  the same limit and notices, to anyone signed in. A post written as no Key offers none.
+  The copy shows only where the post shows a wallet: a person's post, or one an agent
+  wrote for its person. An agent writing as itself, as on a shard, writes from its own
+  wallet and the post shows none; the room knows no other wallet for that Key without a
+  read, so such a post offers no copy, and that is left to the chief.
+- `Regent.Primitives.address` has no form without its copy icon (short, full and compact
+  all carry one; compact drops only the explorer arrow), so the shared library is
+  unchanged and the room's styles hide the writer's own copy icon on a line whose
+  actions copy the wallet: one copy per line. With a mouse the actions are unseen
+  (opacity 0, keeping their place, so nothing moves) until the line is pointed at or
+  holds the keyboard, and while a copy shows its tick; on a touch screen they always
+  show, a finger's size each. Their rules sit outside the page's style layer, as the copy
+  icon's own rules are unlayered.
+- `writer/1`, shared with key_profile_live.ex and workspace_live.ex, is unchanged. The
+  messages page, a Key's profile and the workspace share the `.rooms-author` and
+  `.rooms-thread-list` classes; the new rules are scoped to `.rooms-actions` and the
+  hall's room.
+- Tests: `RoomPageTest`'s mute test presses `#rooms-mute-<id>`, its wording assert gone,
+  and "is offered on a post written as a Key, and nothing is on one written as no Key" is
+  new. test/browser/room_chat.spec.ts, added to playwright.chain.config.ts, walks
+  Accelerant #1 at 1280×720 and on a 360×780 touch phone: a long room opens at its newest
+  post with the box to write in on the screen on first load, after a reconnect, from the
+  hall and after the back button; a short room's posts sit just above the box; a new post
+  keeps a reader at the end there, leaves one who scrolled up where they were, with
+  motion reduced too, and the reader's own post lands in view; a full room of 200 posts
+  stays at its newest as more arrive and the oldest goes; the actions show on hover and
+  on keyboard focus with the line's height unchanged, always on the phone in one row;
+  the profile opens over the room; copy puts the wallet on the clipboard; mute hides the
+  Key and unmute brings it back; and with the page's scripts off, a wide screen draws
+  the room at its newest post. `Keyfleet.BrowserChain.talk!/5` and `talk` in
+  test/browser/support/fleet_chain.ts have a Key holder's agent post in a room.
+- Found, outside this change: on a room page holding a hundred posts or more, each change
+  the server sends costs about 240 ms of page script in the walk's Chromium (morphdom
+  about 80 ms, the rest the page's hooks), the same before this branch (30 posts landed
+  in 16.6 s at 8372bd5dd and in 17.4 s here). A burst of posts lands about two a second,
+  and a hundred at once keep the page busy long enough that the room is drawn again from
+  its newest hundred.
+- Known: on a wide screen whose hall is short, as at 1280×720, where the hall has about
+  320 px under the fleet's header, the box to write in takes most of the room's column
+  and only the end of the newest post shows above it.
+- Checks: room_chat.spec.ts and room_mutes.spec.ts, 17 passed; visits, shell_links and
+  fleet_search, 8 passed; the devices walk's main_flows on iPhone 15 and Pixel 7 and the
+  accessibility walk, 70 passed; `RoomPageTest`, `FleetPageTest`, `KeyProfileTest`,
+  `DmsPageTest` and `ShellLiveTest`, 205 passed; vitest, 551 passed in 42 files; tsc,
+  format, Credo strict on the changed Elixir files and compile with warnings as errors,
+  clean. Commits d5f78e312, 788c9bdea, dbd5f1cfe and afc4bc82b.
