@@ -5,20 +5,21 @@ import type {Hook} from "../hook_composition"
  * it, and stay there while the reader is there. The rule, all of it:
  *
  * The end is the bottom of the foot under the posts, which holds a refusal and
- * the box to write in, where the foot is drawn: never how far the room
- * scrolls, which runs past what is drawn while posts move. The end is on
- * screen when it lies in the part of the room's column the window shows: the
- * column's own box on a wide screen, where the room scrolls by itself, and the
- * window on a narrow one, where the page scrolls.
+ * the box to write in, where the foot is drawn: never how far the room can
+ * scroll. The end is on screen when it lies in the part of the room's column
+ * the window shows: the column's own box on a wide screen, where the room
+ * scrolls by itself, and the window on a narrow one, where the page scrolls.
  *
  * Whenever the posts, the foot or the room change size, as a post arrives or
- * goes, a picture loads, the window resizes or a refusal shows, the room
- * follows to the end if the end was on screen before the change, at the place
- * the reader left the room, or is on screen now. Where the reader left it is
- * read from the first post on screen after the last change, or the foot when
- * no post is: the browser keeps that post in place when posts above it come or
- * go, so how far it has moved since is how far the reader scrolled. Nothing
- * listens to scrolling: a reader who scrolled up to read is left there.
+ * goes, a picture loads, the window resizes or a refusal shows, and whenever
+ * the server draws the posts again, which can swap the oldest post for a new
+ * one of the same height and change no size at all, the room follows to the
+ * end if the end was on screen before the change, at the place the reader
+ * left the room, or is on screen now. Where the reader left it is read from
+ * the first post on screen after the last change, or the foot when no post is:
+ * the browser keeps that post in place when posts above it come or go, so how
+ * far it has moved since is how far the reader scrolled. Nothing listens to
+ * scrolling: a reader who scrolled up to read is left there.
  *
  * Following puts the foot's bottom at the column's bottom, with the column's
  * own spacing under it, and scrolls the page only when the room's own bottom
@@ -41,6 +42,7 @@ type RoomThreadHook = {
   room?: HTMLElement
   mark?: Mark
   follow?: () => void
+  keep?: () => void
   watch?: ResizeObserver
 }
 
@@ -77,15 +79,21 @@ export const RoomThread: Hook = {
       toEnd(room, foot)
       this.mark = mark(room, foot)
     }
-    this.room = room
-    this.follow = follow
-    this.watch = new ResizeObserver(() => {
+    const keep = () => {
       if (wasAtEnd(this.mark!) || onScreen(foot.getBoundingClientRect().bottom, shown(room))) toEnd(room, foot)
       this.mark = mark(room, foot)
-    })
+    }
+    this.room = room
+    this.follow = follow
+    this.keep = keep
+    this.watch = new ResizeObserver(keep)
     for (const box of [this.el, foot, room]) this.watch.observe(box)
     room.addEventListener("submit", follow)
     follow()
+  },
+
+  updated(this: RoomThreadHook) {
+    this.keep!()
   },
 
   reconnected(this: RoomThreadHook) {
