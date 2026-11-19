@@ -65,13 +65,14 @@ defmodule Keyfleet.MixProject do
       {:ash_phoenix, "~> 2.3.26"},
       # The Claude connector's MCP address (/mcp), as ash-template serves its own.
       {:ash_ai, "~> 1.5"},
-      # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
+      # ash_postgres 2.16.0, which includes ash-project/ash_postgres#910: upserts
       # use the repo's prefix, which picks each site's schema on the shared
-      # database. It stands in for the copy the shared Regent libraries pin,
-      # until a release carries #910.
+      # database. It stays a Git pin so the required-fixes check can find the
+      # patch in its history, and stands in for the copy the shared Regent
+      # libraries pin.
       {:ash_postgres,
        git: "https://github.com/ash-project/ash_postgres.git",
-       ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
+       ref: "e36aa20a9f000f3f3bd89b0816fa9460156cb13c",
        override: true},
       {:oban, "~> 2.24"},
       # Each paired agent's activity, kept a few minutes for the account menu.
