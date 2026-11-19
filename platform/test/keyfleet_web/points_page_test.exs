@@ -2,8 +2,9 @@ defmodule KeyfleetWeb.PointsPageTest do
   # What a signed-in person gets from Points on the first render, with no wait: their
   # own figures and their place on the leaderboard beside other people's names or
   # wallets, and what their paired agent reads at /api/v1/account/points. Keyfleet
-  # earns nothing (no start time, no rule approved), so this test approves one rule and
-  # a start time for itself and records an award the way a site's checked action does.
+  # earns nothing (no start time, no rule approved), so this test approves two rules and
+  # a start time for itself and records an award for one the way a site's checked action
+  # does; the other stays to do.
   # The board every reader shares is then read once, as its producer reads it on notice.
   use KeyfleetWeb.ConnCase, async: false
 
@@ -22,6 +23,7 @@ defmodule KeyfleetWeb.PointsPageTest do
   end
 
   @rule "account.activated"
+  @open "keyfleet.first_message"
 
   setup %{conn: conn} do
     keys = [:starts_at, :approved_rules, :adapters, :test_facts]
@@ -37,8 +39,8 @@ defmodule KeyfleetWeb.PointsPageTest do
     end)
 
     Application.put_env(:regent_points, :starts_at, DateTime.add(DateTime.utc_now(), -86_400))
-    Application.put_env(:regent_points, :approved_rules, [@rule])
-    Application.put_env(:regent_points, :adapters, %{@rule => Source})
+    Application.put_env(:regent_points, :approved_rules, [@rule, @open])
+    Application.put_env(:regent_points, :adapters, %{@rule => Source, @open => Source})
 
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
@@ -83,6 +85,7 @@ defmodule KeyfleetWeb.PointsPageTest do
     assert text(page, "#points-total dl") =~ "+25"
     assert text(page, "#points-total dl") =~ "#1"
     assert text(page, ~s(#points-todo li[data-done="true"])) =~ "Account activated"
+    assert text(page, ~s(#points-todo li[data-done="false"])) =~ "First Keyfleet message"
 
     # Two accounts level on points share first place; only the reader's row is marked.
     ranks =
@@ -125,6 +128,9 @@ defmodule KeyfleetWeb.PointsPageTest do
 
     assert %{"done" => true, "left" => false} =
              Enum.find(answer["to_do"], &(&1["label"] == "Account activated"))
+
+    assert %{"done" => false, "left" => true} =
+             Enum.find(answer["to_do"], &(&1["label"] == "First Keyfleet message"))
 
     assert length(answer["leaderboard"]) ==
              page |> LazyHTML.query("#points-board li") |> Enum.count()

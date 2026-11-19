@@ -44,6 +44,11 @@ config :keyfleet, Keyfleet.OAuth,
   issuer: site_url,
   resource: site_url && site_url <> "/mcp"
 
+# The sign-in service asks the site at this same address whether an agent is
+# paired here before it gives the agent a hello card, and its token names it
+# (RegentAgents.HelloCard).
+config :regent_agents, :siwa, origin: site_url
+
 # The words after "The identity request could not be completed." when a tool
 # call gets no answer from the site, in Keyfleet's own words; every other
 # refusal is the site's own.

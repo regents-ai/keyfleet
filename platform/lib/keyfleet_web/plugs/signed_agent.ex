@@ -658,12 +658,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp registry_url(%{"registryUrl" => "https://" <> _rest = url}), do: {:ok, url}
   defp registry_url(_other), do: :error
 
+  # The hello card the agent shows beside its signed request, once it passes for
+  # this wallet, is `conn.assigns.hello_card`, else nil (`RegentAgents.HelloCard`);
+  # nothing reads it yet.
   defp admit(conn, actor) do
     cond do
       Agent.authenticated?(actor) ->
         case Keyfleet.Agents.with_pairing(actor) do
           {:ok, paired} ->
-            {:ok, assign(conn, :agent_actor, paired)}
+            {:ok,
+             conn
+             |> assign(:agent_actor, paired)
+             |> RegentAgents.HelloCard.put_card(paired.wallet_address)}
 
           {:error, :not_paired} ->
             {:error, %{reason: :agent_not_paired}}

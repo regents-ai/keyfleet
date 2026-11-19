@@ -11,9 +11,11 @@ config :regent_identity, repo: Keyfleet.Repo, ash_domains: [RegentIdentity]
 
 # Agents paired with a person's Regent account, shared by every Regent site. A
 # check-in names the person's Keyfleet account; the SIWA sign-in server is set
-# beside `:siwa_broker_url` in each environment. `allowed` is what an agent may do
-# here in each status, as GET /api/agents/v1/whoami tells it and the agent guides
-# list it: true to the routes and policies, so change it with them.
+# beside `:siwa_broker_url` in each environment. `person` names the person, by
+# their profile code, when the sign-in service asks before giving an agent a
+# hello card; the service's `origin` is in config/runtime.exs. `allowed` is what
+# an agent may do here in each status, as GET /api/agents/v1/whoami tells it and
+# the agent guides list it: true to the routes and policies, so change it with them.
 public_reads =
   "Read the public pages, docs, fleets, proposals and treasuries, by link or with the browser tools that need no sign-in."
 
@@ -22,6 +24,7 @@ config :regent_agents,
   pubsub: Keyfleet.PubSub,
   notifications: Keyfleet.Notifications,
   account: {Keyfleet.Agents, :account},
+  person: {Keyfleet.Agents, :person},
   allowed: %{
     "not_paired" => [
       public_reads,
@@ -48,22 +51,21 @@ config :regent_agents,
 # The Claude connector signs in with the person's verified Keyfleet account
 # (`Keyfleet.OAuth`). One permission keeps a Regents identity for the app,
 # pairs it and checks it in; the other lets it work in the person's fleets as
-# that paired agent, with its tools at /mcp (`KeyfleetWeb.Plugs.McpAgent`).
+# that paired agent, with its tools at /mcp (`KeyfleetWeb.Plugs.McpAgent`). The
+# Connect page shows one row for each, in the template's words, then `never`,
+# which holds for every tool both reach: the wallet tools are not at /mcp.
 # config/runtime.exs switches it on and sets its issuer and resource from the
 # site's own address.
 config :keyfleet, Keyfleet.OAuth,
   brand: "platform",
   scope: "regent.identity.manage",
-  permission_description:
-    "keep a Regents identity for this app, pair it with your account using your one-use code, and check it in",
+  permission: {"Pairs", "an agent identity with your account"},
   additional_scopes: %{
-    "keyfleet.agent" =>
-      "work in your fleets as the agent you pair it with: rooms, Key walls, direct messages, the workspace, polls, projects, code and notebooks, as your Keys"
+    "keyfleet.agent" => {"Acts", "as your paired agent here, with its rights"}
   },
-  consent_note:
-    "Through Keyfleet, this app works as any agent you pair works. Each app you connect here pairs on its own, with its own code from Pair New Agent. It never signs with your wallets or moves money."
+  never: "signs with your wallets or moves money"
 
-# Codes, verifiers and tokens never reach the logs.
+# Codes, verifiers, tokens and an app's signed client assertion never reach the logs.
 config :phoenix, :filter_parameters, [
   "password",
   "code",
@@ -71,6 +73,7 @@ config :phoenix, :filter_parameters, [
   "access_token",
   "refresh_token",
   "client_secret",
+  "client_assertion",
   "id_token"
 ]
 

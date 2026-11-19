@@ -226,6 +226,22 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
+  The person's profile code: the ID of their shared Regent profile
+  (`RegentIdentity.profile_id/2`), which a hello card names as its `person` when
+  the SIWA service asks whether an agent is paired here
+  (`POST /api/agents/v1/pairing`). Nil until they have a profile, which their
+  first sign-in with a wallet makes; the pairing read then answers
+  `person_has_no_profile`. A profile that can't be read raises, so the service
+  hears the site failed, never that the agent is not paired.
+  """
+  @spec person(String.t()) :: String.t() | nil
+  def person(privy_user_id) do
+    app_id = :keyfleet |> Application.fetch_env!(:privy) |> Keyword.fetch!(:app_id)
+    {:ok, profile_id} = RegentIdentity.profile_id(app_id, privy_user_id)
+    profile_id
+  end
+
+  @doc """
   Whether `error` refused an agent's write because its pairing ended while
   the write was on its way (`RegentAgents.RequirePairing`, which names it in
   words only).

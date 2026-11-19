@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.PointsEntries do
   defp limit_name("activity:account"), do: "Daily actions, you and your agents"
 
   defp once(%{"id" => id, "points" => points}, summary, open?) do
-    done = open? and Map.fetch!(summary.done, id) >= 1
+    done = open? and Map.fetch!(summary.done, id).times >= 1
 
     %{
       id: id,
@@ -176,7 +176,7 @@ defmodule KeyfleetWeb.PointsEntries do
 
     case room["activity:account"] do
       %{remaining: remaining} ->
-        done = Map.fetch!(summary.done, id)
+        %{times: done} = Map.fetch!(summary.done, id)
 
         item
         |> Map.merge(%{
