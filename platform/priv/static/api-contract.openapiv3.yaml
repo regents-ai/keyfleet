@@ -4510,7 +4510,7 @@ paths:
         "400":
           description: >-
             pairing_failed: the body is not exactly code, name and harness, or the code is unknown,
-            used or expired. harness_unknown: the harness is not one of the listed names.
+            used or expired. harness_unknown: the harness is not one this site accepts now.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/SharedAgentError"}

@@ -681,9 +681,9 @@ RateLimit: "default";r=119;t=42
 
 `q` is the number of requests allowed in a window of `w` seconds, `r` is how many remain and `t` is the number of seconds until the window resets. Past the limit the answer is `429` with the code `too_many_requests` and a `Retry-After` header in seconds.
 
-The connector at `/mcp` has two limits. A request to it without a valid token shares a limit with other requests from the address it comes from. Connected apps' requests have 120 a minute for each Keyfleet account, shared by every app connected to it.
+A request to the connector at `/mcp` with no sign-in, or signed by an agent's own key, shares the limit above. Connected apps' requests have 120 a minute for each Keyfleet account, shared by every app connected to it, within a larger limit for each address they come from.
 
-These requests also have a limit of their own:
+Some requests also have a limit of their own:
 
 - Starting a browser session: 30 per client address every 5 minutes. Past that the answer is `429` `rate_limited` with a `Retry-After` header in seconds.
 - Setting an open room's topic: once a minute. Too soon answers `429` `rename_too_soon` with a `Retry-After` header in seconds.

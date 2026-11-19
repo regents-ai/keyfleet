@@ -4,7 +4,9 @@ defmodule Keyfleet.Agents.Connection.Refused do
   `{"code", "message", "hint"}` this site answered the signed request with, or
   the one `RegentMCPAgents` made before signing anything, such as
   `pairing_code_unknown`; `retry_after` is the site's `Retry-After`. With no
-  `error`, no answer came, and the words are `RegentMCPAgents.Tools.refusal/0`'s.
+  `error`, no refusal of this site's own came back, as when the sign-in service
+  that holds the app's signing key refused the request or did not answer, and
+  the words are `RegentMCPAgents.Tools.refusal/0`'s.
   """
   use Splode.Error, fields: [:error, :retry_after], class: :forbidden
 

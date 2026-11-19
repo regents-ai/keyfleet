@@ -49,9 +49,10 @@ config :keyfleet, Keyfleet.OAuth,
 # (RegentAgents.HelloCard).
 config :regent_agents, :siwa, origin: site_url
 
-# The words after "The identity request could not be completed." when a tool
-# call gets no answer from the site, in Keyfleet's own words; every other
-# refusal is the site's own.
+# The words after "The identity request could not be completed." when an
+# identity tool call fails with no refusal of this site's own, as when the
+# sign-in service that holds the app's signing key refuses it or does not
+# answer; a refusal this site gives is passed on in its own words.
 config :regent_mcp_agents, :config,
   enabled?: claude_connector?,
   audience: "keyfleet",
@@ -60,8 +61,8 @@ config :regent_mcp_agents, :config,
     key: hosted_signing_key
   ],
   refusal:
-    "Try again in a moment. If it keeps failing, ask your person to connect Keyfleet again " <>
-      "in your app's settings, then call get_identity."
+    "Try again in a moment. If it keeps failing, tell your person that pairing and check-ins " <>
+      "aren't available for this app right now."
 
 # Claude and ChatGPT are the connected apps Keyfleet serves, through the one
 # connector; the pairing box offers them, and the pair request accepts them, only

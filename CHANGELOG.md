@@ -14169,31 +14169,27 @@ step's report).
   `claude` or `chatgpt`.
 - The public changelog keeps one 19 November heading, with the ChatGPT entry first.
 
-## 2026-11-19 — One agent for each app on an account, and the contract names the connected apps
+## 2026-11-19 — Connected apps
 
 - The shared library keys a connected app's identity by the site, the account and the
   app's sign-in client (`RegentMCPAgents.identity_key/3`). An app that signs in by its
   published identity has one client for its address (`RegentOAuth.ClientDocuments`), so
-  every connection of it to one account is the same identity: once paired, a later
-  ChatGPT connection to that account is the paired agent with no new code, and
-  Disconnect on Connected apps ends ChatGPT's tokens, not the pairing, which only Unpair
-  on the Agents page ends. An app registered here gets a new client, and so a new
-  identity, each time it registers. Whether real Claude signs in by its published
-  identity or registers is not known here: the site offers both, and the consent tests
-  run both.
-- `/agents/chatgpt` says every ChatGPT connection to the person's account is the same
-  agent, that disconnecting ends ChatGPT's access while the pairing stays until the
-  person unpairs it, and that reconnecting doesn't pair the agent; it no longer says a
-  reconnect makes a new identity. Its Coinbase line says only what Keyfleet does: it
-  places no order and never sees or touches that account. `/agents/claude` keeps only
-  what holds either way: another app's agent isn't Claude, an unpaired Claude asks for
-  a code of its own, disconnecting ends Claude's access and leaves the pairing, and
-  reconnecting doesn't pair it. The connector's instructions to apps say the same rule
-  for both kinds of app in place of "Removing and adding the connector again makes a
-  new identity". features.yml's `claude-connector` and `chatgpt-connector` rows,
-  docs/agent-parity.md's Connector and docs/agent-feature-map.md's ChatGPT row say it
-  too, with two new gaps: no test here signs ChatGPT in twice for one account, and how
-  real Claude signs in is not known.
+  every connection of it to one account is the same identity; an app registered here
+  gets a new client, and so a new identity, each time it registers. Disconnect on
+  Connected apps ends an app's tokens, not its pairing, which only Unpair on the Agents
+  page ends. Whether real Claude or real ChatGPT signs in by its published identity or
+  registers is not known here: the site offers both.
+- `/agents/chatgpt` and `/agents/claude` say only what holds either way: another app's
+  agent isn't this one, an agent that `get_identity` says isn't paired asks for a code
+  of its own, disconnecting ends the app's access and leaves the pairing, and
+  reconnecting doesn't pair it; neither says a reconnect makes a new identity. The
+  ChatGPT guide's Coinbase line says only what Keyfleet does: it places no order and
+  never sees or touches that account. The connector's instructions to apps drop
+  "Removing and adding the connector again makes a new identity" and say when a
+  pairing ends. features.yml's `claude-connector` and `chatgpt-connector` rows,
+  docs/agent-parity.md's Connector and docs/agent-feature-map.md's ChatGPT row say the
+  same, and both connector rows list as a gap that how the real app signs in is not
+  known.
 - API contract 36.5.0 (was 36.4.0, the one on main): `SharedAgentHarness`, the harness of
   the pair request and of the pair and check-in answers, lists `claude` and `chatgpt`,
   which the pair request takes only while the connector is on. A minor step: two
@@ -14201,13 +14197,51 @@ step's report).
   say so. `cli/commands.json` and the tool manifest give the harness as free text, so
   they don't change; `/skill.md` lists the harnesses an agent signing its own requests
   names, and stays 3.36.0. No contract test checks a pairing answer against the list.
-- docs.md's Rate limits no longer names the connector among what shares the per-address
-  budget; a paragraph of its own says a request to `/mcp` without a valid token shares
-  a limit with other requests from its address, and connected apps' requests have 120 a
-  minute for each Keyfleet account, shared by every app connected to it.
-- The public changelog's ChatGPT entry says every ChatGPT connection to a person's
-  account is the same agent until they unpair it, and names contract 36.5.0.
+- docs.md's Rate limits gives the connector a paragraph of its own: a request to `/mcp`
+  with no sign-in, or signed by an agent's own key, shares the per-address budget, and
+  connected apps' requests have 120 a minute for each Keyfleet account, shared by every
+  app connected to it, within a larger limit for each address they come from.
+- The public changelog's ChatGPT entry says disconnecting ends ChatGPT's access and
+  leaves its pairing until the person unpairs the agent, and names contract 36.5.0.
 - The root README names ChatGPT beside Claude at `/mcp` and among the setup notes. The
   library-move entry's heading reads as a sentence, its found line no longer waits on
   kf/seasons-1118, and the ChatGPT entry's guide line no longer speaks for OpenAI's help
   pages or for Coinbase's confirmations.
+
+## 2026-11-19 — Connector words
+
+- 14aacfc8a said in the ChatGPT guide, the public changelog, features.yml, the agent
+  docs and its own entry that every ChatGPT connection to an account is the same agent.
+  That holds only if ChatGPT signs in by its published identity, which nobody has seen.
+  Each now says only what holds either way, as for Claude, and the entry above, now
+  headed "Connected apps", is corrected to match. features.yml's `chatgpt-connector` row
+  says what Keyfleet takes from ChatGPT's published identity rather than how ChatGPT
+  signs in, and lists how real ChatGPT signs in as a gap, as the Claude row does;
+  docs/agent-feature-map.md's ChatGPT row makes no claim about how either app signs in.
+- docs.md's connector limits: 14aacfc8a's sentence about requests without a valid token
+  was untrue against `KeyfleetWeb.Endpoint`. It now says a request to `/mcp` with no
+  sign-in, or signed by an agent's own key, shares the per-address limit, and connected
+  apps' 120 a minute for each account sit within a larger limit for each address. The
+  list after it opens "Some requests also have a limit of their own", so it no longer
+  reads as the connector's.
+- The words an identity tool call gives when it fails with no refusal of this site's
+  own (`refusal:` in config/runtime.exs) no longer ask the person to connect Keyfleet
+  again, which the guides say never to do: "Try again in a moment. If it keeps failing,
+  tell your person that pairing and check-ins aren't available for this app right
+  now." They name check-ins beside pairing because every identity tool gives them. The
+  comment above the setting and `Keyfleet.Agents.Connection.Refused`'s description say
+  when: no refusal of this site's own came back, as when the sign-in service that holds
+  the app's signing key refused the call or did not answer.
+- The connector's instructions to apps replace the sentence about published and
+  registered apps with the guides' rule: whenever get_identity says you are not paired,
+  ask your person for a code of your own. The Disconnect and Unpair sentence stays.
+- The contract's 400 for the pair request says `harness_unknown` is a harness this site
+  does not accept now, in both copies. The contract stays 36.5.0: it is not released
+  (main has 36.4.0), and a change on top of an unreleased version keeps its number, as
+  36.4.0 did before release 65. The public changelog says `claude` and `chatgpt` are
+  among the names for what an agent runs on.
+- The public changelog's ChatGPT entry no longer links its guide, which is not found
+  while the connector is off. The ChatGPT and Claude guides name `workspace_packet` and
+  `messages_leave`, which both apps are listed.
+- features.yml's `claude-connector` row and docs/agent-parity.md no longer open with "An
+  app has one identity for each account", which their next words contradicted.

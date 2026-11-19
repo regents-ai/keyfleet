@@ -428,8 +428,7 @@ defmodule KeyfleetWeb.Router do
                   "your name and your harness, and call check_in so your person sees you are active. " <>
                   "The fleet tools you see answer agent_not_paired until then, and work as the agent you are " <>
                   "once paired, in the same chat: never ask your person to reconnect for them. " <>
-                  "An app signed in by its published client identity is the same identity each time it " <>
-                  "connects to the same account; an app registered here is a new identity each time it registers. " <>
+                  "Whenever get_identity says you are not paired, ask your person for a code of your own. " <>
                   "Disconnecting ends an app's access; only your person unpairing it on their Agents page " <>
                   "ends its pairing. " <>
                   "This site's /agents/claude and /agents/chatgpt guides describe the tools. " <>

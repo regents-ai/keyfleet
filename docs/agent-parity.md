@@ -46,12 +46,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
   wallet signs, and five it has no use for: `agents_pair`, `about`, `docs`,
   `agents_whoami` and `agents_status`, whose answers the identity tools give. Each is the
-  same Ash action, policies and allowance as the signed request (K8). An app has one
-  identity for each account, keyed by its sign-in (elixir-utils `d9440a4e`, 8 Nov
-  2026): every ChatGPT connection to an account is the same agent, as is any app that
-  signs in by its published identity, while an app registered here is a new identity
-  each time it registers. Each pairs only with its own code, so another app never takes
-  its pairing. Disconnecting ends the app's access; the pairing stays until the person
+  same Ash action, policies and allowance as the signed request (K8). An app's identity
+  is keyed by the account and the app's sign-in (elixir-utils `d9440a4e`, 8 Nov 2026):
+  an app that signs in by its published identity is the same identity at every
+  connection to that account, and an app registered here is a new identity each time it
+  registers. Which of the two real Claude and ChatGPT use is not known. Each identity
+  pairs only with its own code, so another app never takes its pairing. Disconnecting ends the app's access; the pairing stays until the person
   unpairs the agent on their Agents page.
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   Released regents-cli 1.10.21 carries every command (K13). Wallet commands answer the steps the
