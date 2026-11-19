@@ -13313,3 +13313,10 @@ step's report).
   foo_bar.com, ab--cd.com, xn--abc-.com and a 240-letter "xn--" part.
 - Not covered: no test times the long label; the ENS path was not exercised with a
   long name against a real chain record.
+
+## 2026-11-19 — The install line and checker pin name regents-cli 1.10.33
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.33 (tag commit `c12d8563`), the
+  newest release, published while the idna release was being checked. Its tag commit
+  was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
