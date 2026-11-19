@@ -2,7 +2,9 @@ defmodule Keyfleet.Points.StartAwardsTest do
   # Invariant: an account, its linked social accounts and its paired agent from
   # before the Points start earn their one-time awards at the start, once,
   # through this site's own checks, without the person doing anything; an
-  # account another site already recorded for a rule is not offered it again.
+  # account another site already recorded for a rule is not offered it again,
+  # and a social account linked in place of an earlier one after the start is
+  # not held from before it.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
@@ -14,9 +16,18 @@ defmodule Keyfleet.Points.StartAwardsTest do
 
   @rules ~w(account.activated social.x social.github social.farcaster agent.activated)
 
+  defmodule Elsewhere do
+    @moduledoc false
+    # Another site's own check of its award, which accepted it.
+    def verify(_reference), do: {:ok, %{}}
+  end
+
   setup do
     previous =
-      Map.new([:starts_at, :approved_rules], &{&1, Application.get_env(:regent_points, &1)})
+      Map.new(
+        [:starts_at, :approved_rules, :adapters],
+        &{&1, Application.get_env(:regent_points, &1)}
+      )
 
     on_exit(fn ->
       Enum.each(previous, fn {key, value} -> Application.put_env(:regent_points, key, value) end)
@@ -50,6 +61,12 @@ defmodule Keyfleet.Points.StartAwardsTest do
     Application.put_env(:regent_points, :approved_rules, @rules)
     rewarded_elsewhere(other.id, "x:" <> rewarded.subject, start)
 
+    # Signing in again with the same X account after the start keeps its time.
+    assert {:ok, _account, []} =
+             did |> session([%{x | username: "renamed"}]) |> VerifiedSession.establish()
+
+    assert all_enqueued(worker: IntakeWorker) == []
+
     assert :ok = perform_job(StartAwards, %{})
 
     mine = [to_string(account.id), "x:" <> x.subject, pairing.id]
@@ -72,6 +89,36 @@ defmodule Keyfleet.Points.StartAwardsTest do
     assert offered(mine ++ ["x:" <> rewarded.subject, to_string(other.id)]) == []
   end
 
+  test "an X account linked in place of another after the start is offered as it is linked" do
+    [before, replacement] = [social(:x), social(:x)]
+    did = "did:privy:replaced-after-start-" <> Ecto.UUID.generate()
+    assert {:ok, account, []} = did |> session([before]) |> VerifiedSession.establish()
+
+    start = after_clock(account)
+    Application.put_env(:regent_points, :starts_at, start)
+    Application.put_env(:regent_points, :approved_rules, @rules)
+
+    # After the start the person replaces the X account; the sign-in offers it.
+    assert {:ok, _account, []} = did |> session([replacement]) |> VerifiedSession.establish()
+    assert offered(["x:" <> replacement.subject]) == ["x:" <> replacement.subject]
+
+    # The start awards offer the account, and neither X account as held before the start.
+    assert :ok = perform_job(StartAwards, %{})
+    assert offered([to_string(account.id)]) == [to_string(account.id)]
+    assert offered(["x:" <> before.subject]) == []
+    assert offered(["x:" <> replacement.subject]) == ["x:" <> replacement.subject]
+
+    assert %{failure: 0} = Oban.drain_queue(queue: :points, with_recursion: true)
+    link = Accounts.get_linked_identity_by_subject!(:x, replacement.subject, actor: %System{})
+    assert DateTime.after?(link.inserted_at, start)
+
+    assert [{"account.activated", 25_000_000, activated_at}, {"social.x", 10_000_000, earned_at}] =
+             entries(account.id) |> Enum.map(&{&1.rule_id, &1.points_micro_delta, &1.earned_at})
+
+    assert DateTime.compare(activated_at, start) == :eq
+    assert DateTime.compare(earned_at, link.inserted_at) == :eq
+  end
+
   # The offers waiting for these source keys.
   defp offered(keys) do
     for %{args: %{"source_event_key" => key}} <- all_enqueued(worker: IntakeWorker),
@@ -80,7 +127,8 @@ defmodule Keyfleet.Points.StartAwardsTest do
   end
 
   # What another site's award of a linked X account leaves in the shared ledger:
-  # its event and its entry, under that site's name, earned at the start.
+  # its event and its entry, under that site's name, earned at the start, which
+  # its own source accepted.
   defp rewarded_elsewhere(account_id, key, start) do
     {:ok, rule} = RegentPoints.Rules.snapshot("social.x", start)
 
@@ -111,8 +159,13 @@ defmodule Keyfleet.Points.StartAwardsTest do
         actor: Store.system()
       )
 
+    adapters = Application.get_env(:regent_points, :adapters)
+    Application.put_env(:regent_points, :adapters, Map.put(adapters, "social.x", Elsewhere))
+
     assert {:ok, %{status: :confirmed}} =
              RegentPoints.process_event(event.id, actor: Store.system())
+
+    Application.put_env(:regent_points, :adapters, adapters)
   end
 
   defp entries(account_id) do

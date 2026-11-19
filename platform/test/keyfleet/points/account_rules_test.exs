@@ -3,13 +3,16 @@ defmodule Keyfleet.Points.AccountRulesTest do
   # first paired agent each earn their one-time award once, in one entry,
   # whichever site records it. Each is offered inside the save that makes it,
   # so a save that rolls back offers nothing, a sign-in that changes nothing
-  # offers nothing more, and a rule that is off offers nothing.
+  # offers nothing more, a social account that replaces another is offered as
+  # newly linked, and a rule that is off offers nothing. Points asks the source
+  # when it checks the offer and again just before it writes the award.
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
+  import Ash.Signals.Test
   require Ash.Query
   alias Keyfleet.Accounts
-  alias Keyfleet.Accounts.VerifiedSession
+  alias Keyfleet.Accounts.{Signals, VerifiedSession}
   alias Keyfleet.Actors.System
   alias Keyfleet.Repo
   alias RegentPoints.{Entry, Event, IntakeWorker, Rejection, Store}
@@ -20,6 +23,12 @@ defmodule Keyfleet.Points.AccountRulesTest do
     @moduledoc false
     # A source that cannot answer, as when its database is out of reach.
     def verify(_reference), do: {:retry, :source_unreachable}
+  end
+
+  defmodule Elsewhere do
+    @moduledoc false
+    # Another site's own check of its award, which accepted it.
+    def verify(_reference), do: {:ok, %{}}
   end
 
   setup do
@@ -41,8 +50,18 @@ defmodule Keyfleet.Points.AccountRulesTest do
 
     assert offers("account.activated") == []
 
-    assert {:ok, account, []} = did |> session([]) |> VerifiedSession.establish()
-    assert {:ok, %{id: same}, []} = did |> session([]) |> VerifiedSession.establish()
+    {:ok, account, []} =
+      assert_emits_signal(Signals, :account_registered, %{account_id: registered}, fn ->
+        did |> session([]) |> VerifiedSession.establish()
+      end)
+
+    assert registered == account.id
+
+    {:ok, %{id: same}, []} =
+      refute_emits_signal(Signals, :account_registered, fn ->
+        did |> session([]) |> VerifiedSession.establish()
+      end)
+
     assert same == account.id
 
     assert [%{args: %{"source_app" => "regents", "source_event_key" => key}}] =
@@ -60,17 +79,30 @@ defmodule Keyfleet.Points.AccountRulesTest do
     first = "did:privy:points-social-first-" <> Ecto.UUID.generate()
     second = "did:privy:points-social-second-" <> Ecto.UUID.generate()
 
-    assert {:ok, account, []} = first |> session([x]) |> VerifiedSession.establish()
+    {:ok, account, []} =
+      assert_emits_signal(Signals, :social_linked, %{provider: :x, subject: subject}, fn ->
+        first |> session([x]) |> VerifiedSession.establish()
+      end)
 
-    assert {:ok, _account, []} =
-             first |> session([%{x | username: "renamed"}]) |> VerifiedSession.establish()
-
+    assert subject == x.subject
     assert [%{args: %{"source_event_key" => key}}] = offers("social.x")
     assert key == "x:" <> x.subject
 
     settle_clock(account)
     assert %{failure: 0} = drain()
     assert entries(account.id, "social.x") == [{"social.x", 10_000_000, "keyfleet"}]
+    linked = link(x)
+
+    # Signing in with the same X account refreshes the link: it keeps the time it
+    # was linked, nothing is announced and nothing is offered.
+    {:ok, _account, []} =
+      refute_emits_signal(Signals, :social_linked, fn ->
+        first |> session([%{x | username: "renamed"}]) |> VerifiedSession.establish()
+      end)
+
+    assert all_enqueued(worker: IntakeWorker) == []
+    assert %{id: id, inserted_at: inserted_at, username: "renamed"} = link(x)
+    assert {id, inserted_at} == {linked.id, linked.inserted_at}
 
     # The first person lets the X account go, and a second person links it.
     assert {:ok, _account, []} = first |> session([]) |> VerifiedSession.establish()
@@ -87,6 +119,55 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert %{failure: 0} = drain()
     assert entries(other.id, "social.x") == []
     assert "source_identity_conflict" in rejections(key)
+  end
+
+  test "a replaced social account is linked anew; it earns only for an account yet to earn the rule" do
+    [first, second] = [social(:x), social(:x)]
+    did = "did:privy:points-replaced-" <> Ecto.UUID.generate()
+    assert {:ok, account, []} = did |> session([first]) |> VerifiedSession.establish()
+    settle_clock(account)
+    assert %{failure: 0} = drain()
+    assert entries(account.id, "social.x") == [{"social.x", 10_000_000, "keyfleet"}]
+    linked = link(first)
+
+    # The person replaces their X account: the new one is linked now, and announced.
+    replaced_at = DateTime.utc_now()
+
+    {:ok, _account, []} =
+      assert_emits_signal(Signals, :social_linked, %{subject: subject}, fn ->
+        did |> session([second]) |> VerifiedSession.establish()
+      end)
+
+    assert subject == second.subject
+    replacement = link(second)
+    assert replacement.id == linked.id
+    assert DateTime.compare(replacement.inserted_at, replaced_at) != :lt
+
+    # The account has had its X award, so the replacement earns nothing more.
+    assert [_offer] = offers("social.x")
+    assert %{failure: 0} = drain()
+    assert entries(account.id, "social.x") == [{"social.x", 10_000_000, "keyfleet"}]
+
+    # Another person linked an X account while that rule was off, so never earned
+    # it; the account replacing it earns, once, from when it was linked.
+    put_points_env(:approved_rules, @rules -- ["social.x"])
+    [early, later] = [social(:x), social(:x)]
+    other_did = "did:privy:points-replaced-other-" <> Ecto.UUID.generate()
+    assert {:ok, other, []} = other_did |> session([early]) |> VerifiedSession.establish()
+    settle_clock(other)
+    assert %{failure: 0} = drain()
+
+    put_points_env(:approved_rules, @rules)
+    assert {:ok, _other, []} = other_did |> session([later]) |> VerifiedSession.establish()
+    assert %{failure: 0} = drain()
+    assert %{failure: 0, success: 0} = drain()
+
+    assert [%{points_micro_delta: 10_000_000, earned_at: earned_at}] =
+             Entry
+             |> Ash.Query.filter(account_id == ^other.id and rule_id == "social.x")
+             |> Ash.read!(actor: Store.system())
+
+    assert DateTime.compare(earned_at, link(later).inserted_at) == :eq
   end
 
   test "a social account another site already rewarded earns nothing more here" do
@@ -142,10 +223,11 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert events(account.id, "agent.activated") == [{"keyfleet", :confirmed}]
   end
 
-  # Main's Points library asks the source once, when the offer is checked. An
-  # agent unpaired, or a link removed, after that check and before the award
-  # still earns; a link removed before the check earns nothing.
-  test "the source is asked once, when the offer is checked" do
+  # Points asks the source when it checks the offer and again just before it
+  # writes the award. A pairing is kept after an unpair, so an agent unpaired in
+  # between still earns; a link removed in between earns nothing, and neither
+  # does one removed before the check.
+  test "the source is asked again just before the award" do
     {account, person} = account()
     paired = pair(person, "Agent")
 
@@ -166,12 +248,31 @@ defmodule Keyfleet.Points.AccountRulesTest do
     assert {:ok, _account, []} = did |> session([]) |> VerifiedSession.establish()
     assert %{failure: 0} = drain()
 
-    assert entries(linked.id) == [
-             {"account.activated", 25_000_000, "regents"},
-             {"social.x", 10_000_000, "keyfleet"}
-           ]
-
+    assert entries(linked.id) == [{"account.activated", 25_000_000, "regents"}]
+    assert events(linked.id, "social.x") == [{"keyfleet", :rejected}]
+    assert "link_not_found" in rejections("x:" <> x.subject)
     assert "link_not_found" in rejections("github:" <> github.subject)
+  end
+
+  test "a source that cannot answer just before the award earns once it can" do
+    x = social(:x)
+    did = "did:privy:points-award-retry-" <> Ecto.UUID.generate()
+    assert {:ok, account, []} = did |> session([x]) |> VerifiedSession.establish()
+    settle_clock(account)
+    assert %{success: 2, failure: 0} = Oban.drain_queue(queue: :points)
+
+    # The offers passed their check; the link's source cannot answer at its award.
+    adapters = points_env(:adapters)
+    put_points_env(:adapters, Map.put(adapters, "social.x", Unreachable))
+    assert %{success: 1, failure: 1} = Oban.drain_queue(queue: :points)
+    assert entries(account.id, "social.x") == []
+    assert events(account.id, "social.x") == [{"keyfleet", :pending}]
+
+    put_points_env(:adapters, adapters)
+    assert %{success: 1, failure: 0} = drain(with_scheduled: true)
+    assert %{success: 0, failure: 0} = drain(with_scheduled: true)
+    assert entries(account.id, "social.x") == [{"social.x", 10_000_000, "keyfleet"}]
+    assert events(account.id, "social.x") == [{"keyfleet", :confirmed}]
   end
 
   test "a source that cannot answer leaves the offer to Oban and earns once when it can" do
@@ -227,7 +328,7 @@ defmodule Keyfleet.Points.AccountRulesTest do
   end
 
   # What another site's award of a linked X account leaves in the shared ledger:
-  # its event and its entry, under that site's name.
+  # its event and its entry, under that site's name, which its own source accepted.
   defp rewarded_elsewhere(account_id, key) do
     start = points_env(:starts_at)
     {:ok, rule} = RegentPoints.Rules.snapshot("social.x", start)
@@ -259,9 +360,17 @@ defmodule Keyfleet.Points.AccountRulesTest do
         actor: Store.system()
       )
 
+    adapters = points_env(:adapters)
+    put_points_env(:adapters, Map.put(adapters, "social.x", Elsewhere))
+
     assert {:ok, %{status: :confirmed}} =
              RegentPoints.process_event(event.id, actor: Store.system())
+
+    put_points_env(:adapters, adapters)
   end
+
+  defp link(%{provider: provider, subject: subject}),
+    do: Accounts.get_linked_identity_by_subject!(provider, subject, actor: %System{})
 
   defp offers(rule),
     do: Enum.filter(all_enqueued(worker: IntakeWorker), &(&1.args["rule_id"] == rule))
