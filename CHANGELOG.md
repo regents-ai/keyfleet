@@ -13599,3 +13599,21 @@ step's report).
   `platform/priv/tool_manifest.json` name regents-cli 1.10.33 (tag commit `c12d8563`), the
   newest release, published while the idna release was being checked. Its tag commit
   was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+
+## 2026-11-19 — Captain Seasons after its second review
+
+- A season opened again on the record page before the browser has let its list go
+  shows its picks. `KeyfleetWeb.SeasonsLive` numbers each opening
+  (`System.unique_integer/1`) and gives it to the season's two rows as `opened`, nil
+  while closed, in place of `open?`; `KeyfleetWeb.Components.SeasonPicks` reads its
+  first hundred again, with `reset: true`, whenever `opened` changes (`changed?/2` after
+  `assign/2`), and reads nothing when the row is only drawn again. Before, a component
+  that still had its number read nothing, so a list the browser had dropped came back
+  empty and More added only pick 101. Two ways a browser gets there, both walked in
+  Chromium at 390 and 1280 wide, failing on the old code and passing now: another
+  season and then this one pressed back to back, and this one closed and opened again
+  while the browser's word that the list is gone is still on its way, as on a slow
+  connection. One button pressed twice before its first answer does not reach the
+  server twice in a browser: LiveView's script drops a press on a button still waiting
+  for its answer. `SeasonsPageTest` presses a season twice, and another season then
+  this one, before the page answers, and finds the first hundred both times.

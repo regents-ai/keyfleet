@@ -7,7 +7,11 @@ defmodule KeyfleetWeb.Components.SeasonPicks do
   the next hundred start, and a list past two hundred lets go of its first
   ones as More adds more.
 
-  Assigns: `id`, `fleet_id` and `number`, the season's.
+  Assigns: `id`, `fleet_id` and `number`, the season's, and `opened`, which
+  the page gives anew each time the row opens. A row closed and opened again
+  before the browser has let the list go keeps this component, so the list
+  reads its first hundred again whenever `opened` changes, in place of any it
+  sent, and reads nothing when the row is only drawn again.
   """
   use KeyfleetWeb, :live_component
 
@@ -23,17 +27,15 @@ defmodule KeyfleetWeb.Components.SeasonPicks do
   @impl true
   def mount(socket), do: {:ok, stream_configure(socket, :picks, dom_id: & &1.id)}
 
-  # The season's first picks are read as its row opens; the row drawn again
-  # while it is open reads nothing.
   @impl true
-  def update(_assigns, %{assigns: %{number: _number}} = socket), do: {:ok, socket}
-
-  def update(%{id: id, fleet_id: fleet_id, number: number}, socket),
-    do: {:ok, socket |> assign(id: id, fleet_id: fleet_id, number: number) |> read(nil)}
+  def update(%{id: id, fleet_id: fleet_id, number: number, opened: opened}, socket) do
+    socket = assign(socket, id: id, fleet_id: fleet_id, number: number, opened: opened)
+    {:ok, if(changed?(socket, :opened), do: read(socket, nil, reset: true), else: socket)}
+  end
 
   @impl true
   def handle_event("more", _params, %{assigns: %{more: place}} = socket) when is_integer(place),
-    do: {:noreply, read(socket, place)}
+    do: {:noreply, read(socket, place, [])}
 
   def handle_event("more", _params, socket), do: {:noreply, socket}
 
@@ -64,13 +66,14 @@ defmodule KeyfleetWeb.Components.SeasonPicks do
     """
   end
 
-  # The page of the season's picks after `place`, under those on show.
-  defp read(%{assigns: %{fleet_id: fleet_id, number: number}} = socket, place) do
+  # The page of the season's picks after `place`, under those on show (or in
+  # their place, with `reset: true`).
+  defp read(%{assigns: %{fleet_id: fleet_id, number: number}} = socket, place, opts) do
     {picks, _more?} = page = Seasons.settled_picks_page(fleet_id, number, place, @page)
 
     socket
     |> assign(:more, Seasons.next_after(page))
-    |> stream(:picks, Enum.map(picks, &pick(&1, number)), limit: -@kept)
+    |> stream(:picks, Enum.map(picks, &pick(&1, number)), [limit: -@kept] ++ opts)
   end
 
   defp pick(pick, number),

@@ -159,10 +159,10 @@ defmodule KeyfleetWeb.SeasonsLive do
               <tr
                 :for={{dom_id, item} <- @rows}
                 id={dom_id}
-                hidden={item.kind == :picks and not item.open?}
+                hidden={item.kind == :picks and is_nil(item.opened)}
               >
-                <.season :if={item.kind == :season} row={item.row} open?={item.open?} />
-                <td :if={item.kind == :picks and item.open?} colspan="5">
+                <.season :if={item.kind == :season} row={item.row} open?={not is_nil(item.opened)} />
+                <td :if={item.kind == :picks and item.opened} colspan="5">
                   <p :if={item.row.pick_count == 0} class="fleet-detail">
                     No Key picked this season.
                   </p>
@@ -172,6 +172,7 @@ defmodule KeyfleetWeb.SeasonsLive do
                     id={"seasons-#{item.row.number}-pick-list"}
                     fleet_id={@seasons.fleet_id}
                     number={item.row.number}
+                    opened={item.opened}
                   />
                 </td>
               </tr>
@@ -231,20 +232,22 @@ defmodule KeyfleetWeb.SeasonsLive do
   defp seasons_counted(count), do: "#{count} seasons"
 
   # Closes the season open, if any, and opens `row`, if given, each where it
-  # stands on the page; a season the page has let go of stays gone.
+  # stands on the page; a season the page has let go of stays gone. Each
+  # opening is numbered anew, so the season's picks read their first hundred
+  # again even when its list is still the one drawn before.
   defp opened(socket, record, row) do
     socket
-    |> update_rows(record.open, false)
-    |> update_rows(row, true)
+    |> update_rows(record.open, nil)
+    |> update_rows(row, System.unique_integer([:positive, :monotonic]))
     |> assign(:seasons, %{record | open: row})
   end
 
-  defp update_rows(socket, nil, _open?), do: socket
+  defp update_rows(socket, nil, _opened), do: socket
 
-  defp update_rows(socket, row, open?),
+  defp update_rows(socket, row, opened),
     do:
       Enum.reduce(
-        items(row, open?),
+        items(row, opened),
         socket,
         &stream_insert(&2, :season_rows, &1, update_only: true)
       )
@@ -263,13 +266,14 @@ defmodule KeyfleetWeb.SeasonsLive do
     end
   end
 
-  defp rows(seasons), do: Enum.flat_map(seasons, &items(row(&1), false))
+  defp rows(seasons), do: Enum.flat_map(seasons, &items(row(&1), nil))
 
-  # A season's two rows: its own, and its picks' under it.
-  defp items(row, open?),
+  # A season's two rows: its own, and its picks' under it; `opened` is nil
+  # while the season is closed, and the number of its opening while open.
+  defp items(row, opened),
     do: [
-      %{id: "seasons-#{row.number}", kind: :season, row: row, open?: open?},
-      %{id: "seasons-#{row.number}-picks", kind: :picks, row: row, open?: open?}
+      %{id: "seasons-#{row.number}", kind: :season, row: row, opened: opened},
+      %{id: "seasons-#{row.number}-picks", kind: :picks, row: row, opened: opened}
     ]
 
   defp row(season),

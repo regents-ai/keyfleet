@@ -188,6 +188,80 @@ defmodule KeyfleetWeb.Live.SeasonsPageTest do
     refute has_element?(view, "#seasons-1-pick-list")
   end
 
+  # Season 1 with a pick from each of 101 Keys, season 2 with none. A season
+  # closed and opened again before the page has answered, as a double click
+  # sends it, or by way of another season, keeps its list on the page; the
+  # list starts again at its first hundred all the same.
+  test "a season opened again before the page answers starts at its first hundred",
+       %{conn: conn} do
+    [b0, b1, b2, b3 | _] = SeasonHelpers.boundaries(3)
+    SeasonHelpers.coinbase!(%{"SOL-USD" => [{b1, "100"}, {b2, "103"}, {b3, "104"}]})
+    SeasonHelpers.turn!(@fleet, b0)
+
+    for key <- 1..101 do
+      wallet = "0x" <> String.pad_leading(Integer.to_string(key), 40, "0")
+      holds!(key, wallet)
+      human = %Actors.Human{human_account_id: key, wallet_addresses: [wallet]}
+      Seasons.pick!(@fleet, 1, %{product: "SOL-USD"}, actor: human)
+    end
+
+    for boundary <- [b1, b2, b3], do: SeasonHelpers.turn!(@fleet, boundary)
+
+    {:ok, view, _html} = live(conn, @path)
+    view |> element("#seasons-1 button") |> render_click()
+    view |> element("#seasons-1-picks-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(1..101)
+
+    back_to_back(view, ["#seasons-1 button", "#seasons-1 button"])
+    assert has_element?(view, "#seasons-1 button[aria-expanded=true]")
+    assert shown_picks(view) == Enum.to_list(1..100)
+
+    view |> element("#seasons-1-picks-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(1..101)
+
+    back_to_back(view, ["#seasons-2 button", "#seasons-1 button"])
+    assert has_element?(view, "#seasons-2-picks[hidden]")
+    assert shown_picks(view) == Enum.to_list(1..100)
+  end
+
+  # Presses sent one after another before the page answers any, as a browser
+  # sends a double click: the page is held while the first reaches it, and
+  # the test client queues the rest behind the first's answer.
+  defp back_to_back(view, [first | rest]) do
+    {_ref, _topic, client} = view.proxy
+    :sys.suspend(view.pid)
+    pressed = [Task.async(fn -> view |> element(first) |> render_click() end)]
+    queued!(view.pid)
+
+    pressed =
+      Enum.reduce(rest, pressed, fn selector, pressed ->
+        press = Task.async(fn -> view |> element(selector) |> render_click() end)
+        queued!(client)
+        [press | pressed]
+      end)
+
+    :sys.resume(view.pid)
+    pressed |> Enum.reverse() |> Enum.each(&Task.await/1)
+  end
+
+  # Waits, a few milliseconds at a time for at most a second, until `pid`
+  # has a message waiting.
+  defp queued!(pid, tries \\ 500)
+  defp queued!(pid, 0), do: flunk("#{inspect(pid)} never had a message waiting")
+
+  defp queued!(pid, tries) do
+    case Process.info(pid, :message_queue_len) do
+      {:message_queue_len, queued} when queued > 0 ->
+        :ok
+
+      _none ->
+        receive do
+        after
+          2 -> queued!(pid, tries - 1)
+        end
+    end
+  end
+
   defp shown_numbers(html) do
     ~r/<tr id="seasons-(\d+)"/
     |> Regex.scan(html, capture: :all_but_first)
