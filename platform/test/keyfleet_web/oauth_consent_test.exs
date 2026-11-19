@@ -13,8 +13,9 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   #   callback on the app's own host, and the site's form-action stays 'self';
   # - Claude's published identity and an app registered here connect and
   #   refresh as before;
-  # - an address that has spent its request budget is refused at every sign-in
-  #   address before anything is read or written.
+  # - each kind of sign-in request has its own count for each client address,
+  #   which no other kind spends; past it, escaped or not, consent reads no
+  #   identity and registration writes no app.
   # Published identities and key sets are served without a network, and the
   # hosted signer is a stand-in; the rest is the site's.
   use KeyfleetWeb.ConnCase, async: false
@@ -22,6 +23,7 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   @moduletag :capture_log
 
   alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.RequestRateLimiter
 
   @chatgpt "https://chatgpt.com/oauth/client.json"
   @chatgpt_keys "https://chatgpt.com/oauth/jwks.json"
@@ -272,7 +274,7 @@ defmodule KeyfleetWeb.OAuthConsentTest do
 
     assert "register_identity" in tool_names(access, c.from)
 
-    assert {200, %{"access_token" => _}} =
+    assert {200, %{"access_token" => refreshed}} =
              token(
                %{
                  "grant_type" => "refresh_token",
@@ -282,53 +284,81 @@ defmodule KeyfleetWeb.OAuthConsentTest do
                },
                c.from
              )
+
+    assert "register_identity" in tool_names(refreshed, c.from)
   end
 
-  # Every address under /oauth spends the per-address request budget, here at
-  # its release size, over an hour's window so a run that crosses a minute
-  # mark keeps its count.
-  test "an address that has spent its request budget is refused at every sign-in address before anything is read or written",
+  # Each count runs in fixed 60-second windows, so the requests, under a second
+  # of them, start with more than five seconds of one left: a window that ended
+  # among them would start every count again. Each kind is spent with a request
+  # that reads and writes nothing, and each kind spent after the first admits
+  # its whole count while the kinds before it stay spent.
+  test "each kind of sign-in request is refused past its own count and no other's; past it, consent reads and registration writes nothing, escaped or not",
        c do
-    put_env(:keyfleet, :api_rate_limit, limit: 120, window_seconds: 3600)
     rows = sign_in_rows()
     anonymous = Map.put(build_conn(), :remote_ip, c.from)
-
-    spent = for _n <- 1..120, do: get(anonymous, "/healthz").status
-    refute 429 in spent
-
+    page = put_req_header(c.browser, "accept", "text/html")
     form = "application/x-www-form-urlencoded"
-    grant = %{"grant_type" => "authorization_code", "client_id" => @chatgpt, "code" => "code"}
+    json = "application/json"
 
-    refused = [
-      consent(c.browser, query(@chatgpt, @chatgpt_callback, "state")),
-      c.browser |> put_req_header("content-type", form) |> post("/oauth/authorize", ""),
-      c.browser |> put_req_header("accept", "text/html") |> get("/oauth/connections"),
-      c.browser |> put_req_header("content-type", form) |> post("/oauth/connections/revoke", ""),
-      anonymous
-      |> put_req_header("content-type", "application/json")
-      |> post(
-        "/oauth/register",
-        Jason.encode!(%{
-          "client_name" => "Agent",
-          "redirect_uris" => ["https://agent.example/cb"]
-        })
-      ),
-      anonymous
-      |> put_req_header("content-type", form)
-      |> post(
-        "/oauth/token",
-        URI.encode_query(Map.merge(grant, assertion(c.key, RegentOAuth.issuer())))
-      ),
-      anonymous
-      |> put_req_header("content-type", form)
-      |> post("/oauth/revoke", URI.encode_query(%{"client_id" => @chatgpt, "token" => "token"}))
+    app =
+      Jason.encode!(%{"client_name" => "Agent", "redirect_uris" => ["https://agent.example/cb"]})
+
+    asking = "?" <> query(@chatgpt, @chatgpt_callback, "state")
+
+    kinds = [
+      {30,
+       fn ->
+         anonymous |> put_req_header("content-type", json) |> post("/oauth/register", "{}")
+       end},
+      {120,
+       fn -> anonymous |> put_req_header("content-type", form) |> post("/oauth/token", "") end},
+      {120,
+       fn -> anonymous |> put_req_header("content-type", form) |> post("/oauth/revoke", "") end},
+      {120, fn -> get(page, "/oauth/authorize") end},
+      {120,
+       fn -> c.browser |> put_req_header("content-type", form) |> post("/oauth/authorize", "") end},
+      {120, fn -> get(page, "/oauth/connections") end},
+      {120,
+       fn ->
+         c.browser
+         |> put_req_header("content-type", form)
+         |> post("/oauth/connections/revoke", "")
+       end}
     ]
 
-    assert Enum.map(refused, & &1.status) == List.duplicate(429, 7)
+    {:ok, %{reset: left}} = RequestRateLimiter.admit({:window_left, make_ref()}, 1, 60)
+    if left <= 5, do: Process.sleep(:timer.seconds(left))
+
+    for {count, request} <- kinds do
+      admitted = for _n <- 1..count, do: request.().status
+      refute 429 in admitted
+
+      refused = request.()
+      assert refused.status == 429
+      assert get_resp_header(refused, "retry-after") == ["60"]
+      assert Jason.decode!(refused.resp_body) == %{"error" => "rate_limited"}
+    end
+
+    for {_count, request} <- kinds, do: assert(request.().status == 429)
+
+    # An escape after the first part is the same address, counted; one in the
+    # first part names nothing.
+    register = fn path -> anonymous |> put_req_header("content-type", json) |> post(path, app) end
+
+    for path <- ["/oauth/authorize", "/oauth/%61uthorize"],
+        do: assert(get(page, path <> asking).status == 429)
+
+    for path <- ["/oauth/register", "/oauth/%72egister"],
+        do: assert(register.(path).status == 429)
+
+    assert get(page, "/%6Fauth/authorize" <> asking).status == 404
+    assert register.("/%6Fauth/register").status == 404
+
     refute_received {:read, _}
     assert sign_in_rows() == rows
 
-    # The same consent from an address with budget left reads the identity.
+    # The same consent from an address with its count left reads the identity.
     assert consent(signed_in({10, 0, 0, 1}), query(@chatgpt, @chatgpt_callback, "state")).status ==
              200
 

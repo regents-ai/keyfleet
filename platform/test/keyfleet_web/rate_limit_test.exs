@@ -85,12 +85,14 @@ defmodule KeyfleetWeb.RateLimitTest do
 
   test "a first part with a percent escape is not found and spends nothing; a later one spends",
        %{conn: conn} do
-    for {method, plain, escaped, plain_status} <- [
-          {:get, "/healthz", "/%68ealthz", 200},
-          {:get, "/api/v1/fleets", "/%61pi/v1/fleets", 200},
-          {:get, "/share/nothing.png", "/%73hare/nothing.png", 404},
-          {:get, "/oauth/authorize", "/%6Fauth/authorize", 404},
-          {:post, "/mcp", "/%6Dcp", 404}
+    budget = [~s("default";q=120;w=60)]
+
+    for {method, plain, escaped, plain_status, plain_budget} <- [
+          {:get, "/healthz", "/%68ealthz", 200, budget},
+          {:get, "/api/v1/fleets", "/%61pi/v1/fleets", 200, budget},
+          {:get, "/share/nothing.png", "/%73hare/nothing.png", 404, budget},
+          {:get, "/oauth/authorize", "/%6Fauth/authorize", 404, []},
+          {:post, "/mcp", "/%6Dcp", 404, budget}
         ] do
       for accept <- ["text/html", "application/json", "text/markdown"] do
         asking = put_req_header(conn, "accept", accept)
@@ -105,11 +107,11 @@ defmodule KeyfleetWeb.RateLimitTest do
 
       answer = dispatch(conn, @endpoint, method, plain)
       assert answer.status == plain_status, plain
-      assert get_resp_header(answer, "ratelimit-policy") == [~s("default";q=120;w=60)], plain
+      assert get_resp_header(answer, "ratelimit-policy") == plain_budget, plain
     end
 
     answer = get(conn, "/api/v1/%66leets")
     assert answer.status == 200
-    assert get_resp_header(answer, "ratelimit-policy") == [~s("default";q=120;w=60)]
+    assert get_resp_header(answer, "ratelimit-policy") == budget
   end
 end

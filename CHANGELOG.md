@@ -13426,8 +13426,9 @@ step's report).
   `never` in config.exs); its button is Allow. Refusals carry `error_description`, and a
   failure logs "oauth failed" with its endpoint and exception. `connected_clients` adds
   `connected_at`. config.exs filters `client_assertion` from logs.
-- oauth: a refusal at registration, token, revocation, consent or Allow logs one warning,
-  `oauth refused endpoint=… reason=…`, with no value from the request.
+- oauth: each refusal the library makes at registration, token, revocation, consent or
+  Allow logs one warning, `oauth refused endpoint=… reason=…`, with no value from the
+  request. Keyfleet's own refusal past a sign-in count logs nothing.
 - oauth: one new telemetry event, `[:regent_oauth, :client_keys, :read]` with its result,
   for each read of an app's key set; Keyfleet's metrics don't list it.
 - oauth: Connected apps shows "Connected <date>" beside each app, the day of its oldest
@@ -13489,10 +13490,10 @@ step's report).
 - Found, outside this change: siwa-server's hosted signer lets a Keyfleet identity pair
   only as `claude` (lib/siwa_server/hosted_requests.ex), so ChatGPT's pair_identity with
   the `chatgpt` harness, once kf/seasons-1118 lists it, would be refused
-  `hosted_request_not_allowed` until siwa-server allows it. The library's hello-card key
-  read keeps nothing when it fails, so while SIWA's key address is down each signed
-  request carrying a card reads it again, up to seven seconds. At the 2,048-byte limit the
-  session cookie is 3,374 of its 4,096 bytes.
+  `hosted_request_not_allowed` until siwa-server allows it. The library reads SIWA's
+  published keys to check a card or a pairing question's token when it holds none read in
+  the last hour, and may read them sooner for a key not among those it holds; otherwise it
+  reuses the keys it holds.
 - Not proven: real ChatGPT and real Claude have not connected; no browser here follows
   the return page to another host (the template's Chromium walk does, on the same
   library); siwa-server has never asked Keyfleet's pairing read.
@@ -13523,25 +13524,27 @@ step's report).
   untracked adversarial test files. No page script changed, so vitest and tsc were not
   run.
 
-## 2026-11-19 — Sign-in addresses spend the per-address request budget
+## 2026-11-19 — Each kind of sign-in request has its own count for each address
 
-- Every address under `/oauth` (registration, token, revocation, the consent page with
-  its Allow and Cancel, Connected apps and Disconnect) spends the per-address budget
-  `/api` spends (`KeyfleetWeb.Endpoint.api_rate_limit/0`, 120 a minute), counted in the
-  endpoint before the router. Past it the answer is the same 429 `too_many_requests`
-  with `Retry-After`, in JSON, on the consent page and Connected apps too.
-- `KeyfleetWeb.OAuthController` keeps only registration's own 30 a minute for each
-  address. Its 120 a minute for each of token, revocation, consent and Allow is gone:
-  the shared budget counts every one of those requests, so it always ran out first.
-- Tests: `OAuthConsentTest` (6) puts the release budget back and spends it from one
-  address; then all seven sign-in addresses answer 429, no published identity is read
-  and no app, document, code or token row is written, while the same consent from
-  another address reads ChatGPT's identity. It fails on the endpoint before this change.
-- Docs: docs.md's Rate limits names the sign-in addresses. features.yml's
-  claude-connector row, the README's two sign-in rows and the endpoint's, router's and
-  controller's notes say the rule, and the router and README say that a refusal there
-  logs its endpoint and reason, though no request is logged. No version changes: the
-  API contract and `/skill.md` are untouched.
+- `KeyfleetWeb.OAuthController` counts each kind of sign-in request for each client
+  address in fixed one-minute windows (`RequestRateLimiter`): 30 registrations, and 120
+  each of token, revocation, the consent page, Allow or Cancel, Connected apps and
+  Disconnect. Past a count the answer is 429 `{"error":"rate_limited"}` with
+  `Retry-After: 60`, in JSON on the two pages too, given before the library sees the
+  request, so no `oauth refused` line is written. The per-address budget `/api` spends
+  does not count sign-in requests.
+- Tests: `OAuthConsentTest` (6) spends each kind's count in turn from one address within
+  one window, each with a request that reads and writes nothing: every kind admits its
+  whole count while the kinds before it stay spent, and the next request is refused.
+  Then the consent and registration requests a real app sends are refused at their plain
+  addresses and with an escape after the first part, and are not found with one in the
+  first part, with no published identity read and no app, document, code or token row
+  written; the same consent from another address reads ChatGPT's identity.
+- Docs: features.yml's claude-connector row, the README's two sign-in rows and the
+  router's and controller's notes say the counts, and the router and README say that a
+  refusal past a count logs nothing, while one the library makes logs its endpoint and
+  reason. docs.md's Rate limits does not name sign-in. No version changes: the API
+  contract and `/skill.md` are untouched.
 
 ## 2026-11-19 — The library move's record says only what is proved
 
@@ -13549,10 +13552,10 @@ step's report).
   `ui_locales` as changes, both so before the move; it gives the migration's lock wait as
   up to five seconds for each of its two tables, and it adds one line for each change the
   library brought that it left out.
-- `OAuthConsentTest`'s registered app now refreshes its token as well, so the entry's
-  "connect, exchange and refresh" holds for it; features.yml's claude-connector row says
-  what the consent tests run for each app, and the hello-cards row says when the
-  sign-in server's keys are read.
+- `OAuthConsentTest`'s registered app now refreshes its token as well, and the new token
+  lists the tools as the first does, so the entry's "connect, exchange and refresh" holds
+  for it; features.yml's claude-connector row says what the consent tests run for each
+  app, and the hello-cards row says when the sign-in server's keys are read.
 - docs.md's and agents.md's hello-card sentences say only what a card is and that
   sending one changes nothing in the answer. Neither file has a version to bump.
 
@@ -13569,7 +13572,8 @@ step's report).
 - Tests: `RateLimitTest` (4): `/healthz`, `/api/v1/fleets`, `/share/…`, `/oauth/authorize`
   and `/mcp` with the first part escaped answer 404 exactly as an unknown address does,
   asked for HTML, JSON or Markdown, with no budget header; written plainly they answer as
-  before and are counted; `/api/v1/%66leets` is counted and answers 200.
+  before, and the four on the per-address budget carry its header; `/api/v1/%66leets` is
+  counted and answers 200.
   `AgentJoinJourneyTest`'s escaped agent addresses keep their escape in the second or
   third part, and `PublicPagesControllerTest` opens an agent page with an escaped part
   after the first.
