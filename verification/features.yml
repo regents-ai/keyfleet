@@ -857,7 +857,7 @@ features:
       - platform/test/keyfleet/points/start_awards_test.exs
       - platform/test/keyfleet_web/points_page_test.exs
     gaps:
-      - Points asks a source once, when it checks the offer. An agent unpaired, or a link removed, after that check and before the award still earns.
+      - Points asks a source once, when it checks the offer, not again just before the award.
       - A person who replaces the X, GitHub or Farcaster account linked here with a different one is not offered it again, and the link keeps the time the provider was first linked.
       - Something made, linked or paired here between the Points start and the release that approves the five is never offered and earns nothing unless it happens again.
       - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer is proven with a stand-in that answers later, not a real outage.
