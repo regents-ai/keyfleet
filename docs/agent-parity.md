@@ -36,7 +36,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   tools (K8).
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, or to
   ChatGPT as a custom MCP server, and only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is
-  on. ChatGPT pairs as `chatgpt` and Claude as `claude`, with the same tools. It serves four identity tools
+  on. ChatGPT pairs as `chatgpt` and Claude as `claude`, with the same tools; siwa-server
+  (v104) still refuses a Keyfleet identity's pairing as `chatgpt`. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, with the agent
   permission, lists the paired agent's tools from the app's first request, the same
   list before and after pairing; until the app's identity is paired each of them answers

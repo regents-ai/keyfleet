@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   alias Keyfleet.Rooms
   alias Keyfleet.SeasonHelpers
   alias Keyfleet.Seasons
+  alias KeyfleetWeb.OAuthSignIn
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -37,17 +38,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
   @agent_scopes "regent.identity.manage keyfleet.agent"
   @wallets __MODULE__.HostedWallets
 
-  # The apps a person connects, as each registers itself.
+  # The app a person connects, as it registers itself.
   @claude %{
     "client_name" => "Claude",
     "redirect_uris" => ["https://claude.ai/api/mcp/auth_callback"]
-  }
-  @chatgpt %{
-    "client_name" => "ChatGPT",
-    "redirect_uris" => [
-      "https://chatgpt.com/connector/oauth/keyfleet-callback",
-      "https://chatgpt.com/connector_platform_oauth_redirect"
-    ]
   }
 
   setup do
@@ -898,15 +892,20 @@ defmodule KeyfleetWeb.McpConnectorTest do
         do: assert(not_paired?(call(unpaired, name, input, c)), name)
   end
 
-  # ChatGPT connects as Claude does: it registers with its own callbacks, keeps
-  # its identity, pairs it as `chatgpt` through the tool with its person's code,
-  # and in the same chat locks a season pick as its person's Key.
-  test "ChatGPT registers, pairs as chatgpt and picks as its person's Key", c do
+  # ChatGPT connects by its published identity, as the consent tests sign it
+  # in: its person presses Allow on the consent page and ChatGPT trades the
+  # code signed with its own key. It keeps its identity, pairs it as `chatgpt`
+  # through the tool with its person's code, and in the same chat locks a
+  # season pick as its person's Key.
+  test "ChatGPT signs in by its published identity, pairs as chatgpt and picks as its person's Key",
+       c do
     subject = "did:privy:connector-" <> Ecto.UUID.generate()
     wallet = new_wallet()
-    Accounts.register_verified!(subject, wallet, [wallet], actor: %Actors.System{})
+    account = Accounts.register_verified!(subject, wallet, [wallet], actor: %Actors.System{})
     holds!(2, wallet)
-    token = connect_app!(subject, @agent_scopes, nil, @chatgpt).access
+    key = JOSE.JWK.generate_key({:rsa, 2048})
+    OAuthSignIn.publish!(key)
+    token = OAuthSignIn.chatgpt_access!(account, key, c.from)
     hosted_signer!(c)
 
     assert %{"isError" => false} = result(call(token, "register_identity", %{}, c))
@@ -1298,9 +1297,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
     do: connect_app!(subject, scope, wallet).access
 
   # The same app as its client id and the access and refresh tokens it holds.
-  defp connect_app!(subject, scope, wallet, app \\ @claude) do
+  defp connect_app!(subject, scope, wallet) do
     register =
-      conn(:post, "/oauth/register", app)
+      conn(:post, "/oauth/register", @claude)
       |> put_req_header("accept", "application/json")
       |> @endpoint.call([])
 

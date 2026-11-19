@@ -13584,23 +13584,25 @@ step's report).
 - The switch keeps its name, `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: renaming it is a
   production setting, the founder's. config/runtime.exs and platform/README.md say it
   is named for Claude, its first app.
-- Found, not changed: ChatGPT's default sign-in names its client by its own published
-  identity (`https://chatgpt.com/oauth/client.json`), which declares
-  `token_endpoint_auth_method: private_key_jwt`. Keyfleet's sign-in library
-  (elixir-utils `regent_oauth`, `RegentOAuth.ClientDocuments.validate/2`) takes only a
-  published identity whose method is `none`, so that sign-in ends at consent with 400
-  `invalid_request`. A person who chooses registration in ChatGPT's settings registers
-  as Claude does; ChatGPT's registration body is unverified. The callbacks ChatGPT
-  uses, `resource`, S256 and its `ui_locales` all pass.
-- Tests: `McpConnectorTest` "ChatGPT registers, pairs as chatgpt and picks as its
-  person's Key" registers ChatGPT's two callbacks, calls `register_identity`, is
+- Sign-in: ChatGPT's default sign-in names its client by its own published identity
+  (`https://chatgpt.com/oauth/client.json`), which declares
+  `token_endpoint_auth_method: private_key_jwt`. Since the move to the shared sign-in
+  library, Keyfleet takes it: consent reads that identity, and ChatGPT signs its code
+  exchange and each refresh with its own key (`OAuthConsentTest`). The callbacks
+  ChatGPT uses, `resource`, S256 and its `ui_locales` all pass.
+- Pairing: siwa-server (main, released through v104) lets a hosted signer pair a
+  Keyfleet identity only as `claude` (lib/siwa_server/hosted_requests.ex), so
+  ChatGPT's `pair_identity` is refused there until that service changes.
+- Tests: `McpConnectorTest` "ChatGPT signs in by its published identity, pairs as
+  chatgpt and picks as its person's Key": the person presses Allow on the consent
+  page, ChatGPT trades its code signed with its own key, calls `register_identity`, is
   refused `agent_not_paired` before pairing, pairs as `chatgpt` through
   `pair_identity` with the hosted signer signing and the sign-in server checking the
   signature, and locks a season pick as Key 2 in the same chat. With ChatGPT left out
   of the switch's apps it fails at the pairing.
 - Docs: `docs/agent-parity.md` (the Connector surface), `docs/agent-feature-map.md`,
   platform/README.md (the switch) and `verification/features.yml`
-  (`chatgpt-connector`, with the sign-in gap).
+  (`chatgpt-connector`, with the pairing gap).
 
 ## 2026-11-19 — idna 8.0: a long "xn--" name no longer holds the server
 
@@ -14135,3 +14137,34 @@ step's report).
   is counted by its /64 block. The public changelog says an address whose first part is
   written with a percent escape is not found. No version changes: the API contract and
   `/skill.md` are untouched.
+
+## 2026-11-19 — ChatGPT on the connector, as it is on the shared library
+
+- The two ChatGPT commits held on kf/seasons-1118, "ChatGPT pairs through the connector
+  as Claude does" and "Documents name ChatGPT beside Claude on the connector", are
+  picked onto this branch; their entry above now says what is true here. ChatGPT's own
+  published identity, which declares `private_key_jwt`, is taken: consent reads it and
+  ChatGPT signs its code exchange and each refresh with its own key. features.yml's
+  `chatgpt-connector` row says so in what it does, no longer lists it as a gap, names
+  `OAuthConsentTest` among its proofs and the consent and token addresses as its entry,
+  and states the gap that stands: siwa-server (main, released through v104) lets a
+  hosted signer pair a Keyfleet identity only as `claude`
+  (lib/siwa_server/hosted_requests.ex), so ChatGPT's `pair_identity` is refused there
+  until that service changes. docs/agent-feature-map.md's row and docs/agent-parity.md's
+  Connector say the same.
+- `/agents/chatgpt` says the person presses Allow once, the consent page's one button
+  (`RegentOAuth.Consent`), covering both of the site's permissions; that an optional
+  input sent as null at the top of a tool's input counts as left out, as Claude's guide
+  says; and that results are records, not forecasts, beside following the holding.
+- Tests: `McpConnectorTest`'s ChatGPT test signs ChatGPT in as `OAuthConsentTest` does,
+  through `KeyfleetWeb.OAuthSignIn` (test/support), which now holds what both use:
+  ChatGPT's and Claude's published identities served without a network, the consent
+  page in a signed-in session, Allow on the page's own form, and the code traded with
+  ChatGPT's signed assertion. The connector test no longer registers a ChatGPT app.
+  `OAuthConsentTest`'s connector names both apps, as config/runtime.exs does.
+- No version changes. The API contract's pair request lists only the runtimes that
+  sign their own requests, never the connector's apps; the tool manifest's harness is
+  free text; the route catalog names `/agents/:agent`; `cli/commands.json` and
+  `/skill.md` are untouched. The connector lists its own `pair_identity` input, now
+  `claude` or `chatgpt`.
+- The public changelog keeps one 19 November heading, with the ChatGPT entry first.
