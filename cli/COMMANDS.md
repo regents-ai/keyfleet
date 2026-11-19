@@ -1861,11 +1861,11 @@ agent's Key's pick alone, and the one settled as the one under way started
 - **Changes:** the season's picks (write). Picks are final once the season starts.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/seasons/pick` → `pickSeason`
 - **Inputs:** `<fleet>` and `<product>` (one that `seasons coins` lists, exactly as
-  written); optionally `--reason`: one line of up to 500 characters as a text box counts
-  them once trimmed (an emoji is two or more). Any language's ordinary writing, joined
-  emoji and flags are taken; characters that hide text or turn it around, a reason with
-  nothing visible and more than six accents or marks in a row are refused.
-  `/docs#seasons` says more.
+  written); optionally `--reason`, trimmed. A reason is one line of ordinary text, up to
+  500 characters, an emoji counting as two or more. Joined emoji and flags are welcome.
+  Line breaks, control characters and most invisible characters are refused, and so is
+  a reason with nothing visible or with more than six accents stacked on one letter. A
+  refused reason says why. `/docs#seasons` says more.
 
   ```sh
   regents keyfleet seasons pick fleet_tech_classic SOL-USD --reason "Fast chain"

@@ -13736,8 +13736,9 @@ step's report).
   prices products whose newest close is 0, below 0, not a number or empty at the good
   close before it; it fails on the old reading.
 - A page of Coinbase's list that says more follow but names no next page (its cursor
-  empty or missing) fails the read at once with `:no_next_cursor`, where before it
-  asked for the same first page twenty times and then failed. `next_page/4` follows a
+  empty or missing) fails the read at once with `:no_next_cursor`. Before, an empty
+  cursor asked for the same first page twenty times and then failed, while a missing
+  one read that one page as the whole list. `next_page/4` follows a
   cursor only when it is non-empty text. `CoinbaseTest` answers such a page three ways
   and finds one request and the error each time. The feature list's season gaps add
   two: a turn trusts Coinbase's list to be whole, so a list cut short without saying
@@ -13752,3 +13753,24 @@ step's report).
   left out. No tool's behaviour changed, and `McpConnectorTest` still locks a pick
   through the connector with its reason sent as null and as empty text, each with no
   reason.
+
+## 2026-11-19 — Captain Seasons after its fourth review
+
+- The reason rule's public sentences say only what is true. The contract's reason in
+  both copies, the command guide, the command list, the docs, the feature list and the
+  public changelog now say the same short thing: a reason is one line of ordinary
+  text, up to 500 characters, an emoji counting as two or more; joined emoji and flags
+  are welcome; line breaks, control characters and most invisible characters are
+  refused, and so is a reason with nothing visible or with more than six accents
+  stacked on one letter; a refused reason says why. They no longer promise every
+  language's writing (a few rare signs, such as Syriac's abbreviation mark, Arabic's
+  end-of-verse and number signs, a grapheme joiner, hieroglyph joiners and a leading
+  byte-order mark, are still refused) nor that characters hiding text or turning it
+  around are refused. The feature list's season gaps, and the rule's module note, say
+  that the nine invisible characters taken anywhere can hold a little text that does
+  not show (about 197 bytes at most) and that a direction mark can reorder digits
+  inside its own reason, while the tag characters a model would read stay refused. The
+  refusal still says "A reason is one line of ordinary text." The docs' price sentence
+  says a close of 0 or less, or one that is not a number, is passed over, and the
+  third review's line on a page with no next cursor says what the old code did with
+  an empty cursor and with a missing one.

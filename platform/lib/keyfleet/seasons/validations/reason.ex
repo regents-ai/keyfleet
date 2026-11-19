@@ -31,9 +31,11 @@ defmodule Keyfleet.Seasons.Validations.Reason do
       through the characters taken anywhere, so no letter carries a tower of
       them over the lines around it.
 
-  Known and accepted: a direction mark can change the order digits and the
-  signs between them show in within that one reason. Each reason is drawn as
-  its own block, so nothing outside it turns.
+  Known and accepted: the characters taken anywhere draw nothing, so a reason
+  can hold a little text that does not show (about 197 bytes at most), and a
+  direction mark can change the order digits and the signs between them show
+  in within that one reason. Each reason is drawn as its own block, so nothing
+  outside it turns.
 
   Broken UTF-8 is refused before any other rule reads it, so a check never
   raises on it.

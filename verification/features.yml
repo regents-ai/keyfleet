@@ -1697,12 +1697,12 @@ features:
       03:00 … 21:00. While one runs, each Key may lock one pick for the next:
       a Coinbase product quoted in US dollars that Coinbase lists as spot,
       open for trading and traded at least 1,000,000 US dollars over 24
-      hours, or USDC, and a reason if it gives one: one line of at most 500
-      characters as a text box counts them once trimmed, in which any
-      language's ordinary writing, joined emoji and flags are taken, while
-      characters that hide text or turn it around, a reason with nothing
-      visible and more than six marks in a row are refused, each refusal
-      naming the rule it broke. A pick is the whole pick:
+      hours, or USDC, and a reason if it gives one, trimmed. A reason is one
+      line of ordinary text, up to 500 characters, an emoji counting as two
+      or more. Joined emoji and flags are welcome. Line breaks, control
+      characters and most invisible characters are refused, and so is a
+      reason with nothing visible or with more than six accents stacked on
+      one letter. A refused reason says why. A pick is the whole pick:
       sent without a reason it has none, and the same pick again writes
       nothing and keeps its place. A turn a minute after each hour, queued every ten
       minutes so a missed or failed one runs again, settles the season that
@@ -1743,6 +1743,7 @@ features:
       - Read against a stand-in for Coinbase; Coinbase's live answers are not read by any test.
       - Coinbase reads per turn are per fleet and one after another, at each boundary one read of the whole spot list, kept to the products the starting season's picks name (no read when they name only USDC; one request a page should the list run to more pages; a list past twenty pages fails the turn, and a page that says more follow but names no next page fails it at once), and one price request for each distinct product other than USDC whose price decides something (the ended season's holding and picks, and the starting season's picks still open to picks). At worst that is twenty list requests, however many products the picks name, and one price request for each Key's pick in the two seasons plus the holding, never more than the products those picks could name; the list comes on one page today, about 70 KB sent compressed. A turn catching up after downtime does this once for each boundary missed. Nothing is shared between fleets and one failure retries the whole turn.
       - A server clock more than a minute fast would price on an unfinished minute.
+      - Nine invisible characters ordinary writing uses are taken anywhere in a reason, so a reason can hold a little text that does not show (about 197 bytes at most) and a direction mark can reorder digits inside its own reason; the tag characters a model would read stay refused.
       - A turn trusts Coinbase's list to be whole; if Coinbase ever returned it cut short without saying more follow, picks on the missing products would be void.
       - A coin with no trade for up to three hours before a boundary opens at that older trade.
 

@@ -11846,7 +11846,7 @@ components:
       required: [product]
       properties:
         product: {$ref: "#/components/schemas/SeasonProduct"}
-        reason: {type: string, maxLength: 500, description: "Why, on one line, trimmed; left out or empty, the pick has none. At most 500 UTF-16 code units; any language's ordinary writing, joined emoji and flags are taken, while characters that hide text or turn it around, a reason with nothing visible and more than six marks in a row are refused, answering invalid_pick, whose hint names the rule. The fleet's members read it once the season starts, and anyone once it is settled"}
+        reason: {type: string, maxLength: 500, description: "Why, trimmed; left out or empty, the pick has none. A reason is one line of ordinary text, up to 500 characters (UTF-16 code units), an emoji counting as two or more. Joined emoji and flags are welcome. Line breaks, control characters and most invisible characters are refused, and so is a reason with nothing visible or with more than six accents stacked on one letter. A refused reason says why: invalid_pick, whose hint names the rule. The fleet's members read it once the season starts, and anyone once it is settled"}
     SeasonListRequest:
       type: object
       additionalProperties: false
