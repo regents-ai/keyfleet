@@ -80,6 +80,8 @@ defmodule Keyfleet.Rooms do
         action: :under_send_key,
         args: [:fleet_id, :author_wallets, :idempotency_key],
         not_found_error?: false
+
+      define :get_post, action: :one, args: [:id], not_found_error?: false
     end
 
     resource Keyfleet.Rooms.WallRemoval do

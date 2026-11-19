@@ -304,7 +304,13 @@ defmodule Keyfleet.Code do
 
   defp standing(actor, fleet_id, token_id, wallet) do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
-    holder = %{token_id: token_id, wallet: wallet, restricted?: false}
+
+    holder = %{
+      token_id: token_id,
+      wallet: wallet,
+      person_wallets: Keys.person_wallets(actor),
+      restricted?: false
+    }
 
     holder =
       case actor do
@@ -371,8 +377,11 @@ defmodule Keyfleet.Code do
   Records the branches and tags `holder` moved in one push to the project's
   repository, each `%{ref:, head:}`, and tells the fleet's open pages. The
   store has already taken the push and git has its answer, so a push that
-  can't be recorded is saved with the site's errors
-  (`Keyfleet.Code.RecordsDownError`) and never raises.
+  can't be saved is saved with the site's errors
+  (`Keyfleet.Code.RecordsDownError`) rather than raised. The job that records
+  its commits and its Regent Points offer are queued in the same transaction:
+  the site's database failing as they are queued raises, and none of the
+  three is recorded.
   """
   def record_pushes(_fleet_id, _project, _holder, []), do: :ok
 
@@ -403,7 +412,8 @@ defmodule Keyfleet.Code do
             fleet_id: fleet_id,
             project: project,
             token_id: holder.token_id,
-            wallet: holder.wallet
+            wallet: holder.wallet,
+            person_wallets: holder.person_wallets
           },
           Map.take(holder, [:acting_agent_wallet, :beneficiary_privy_user_id, :agent_pairing_id])
         )

@@ -14757,3 +14757,105 @@ step's report).
   leaving every row as it was, its lock wait ending at 5 seconds, its `down` working
   before any sharing and refused after, and the sign-in save and Points' check
   behaving as above.
+
+## 2026-11-20 — Points: Keyfleet's own seven, built and not yet earning
+
+- Seven Keyfleet actions are offered to Regent Points: a wallet coming to hold
+  a Key (`keyfleet.first_membership`), a Key's sale to its first holder
+  (`keyfleet.key_bought`), a shard issued to the holder's paired agent
+  (`keyfleet.first_authorized_agent`), a post (`keyfleet.first_message`), a
+  poll vote (`keyfleet.first_vote`), a push (`keyfleet.integration.git`) and a
+  member's work in the shared workspace (`keyfleet.integration.activegraph`).
+  A sale earns for each Key, up to the rule's daily limit. The others earn
+  once per account, and each Key earns each of them once, for the first of
+  its holders to earn it.
+- Each is offered only when it can be a first, and only while its rule is
+  earning, which the site tells from Points' settings alone:
+  - a wallet coming to hold a Key: each time one does, as before;
+  - a Key's sale: once;
+  - a shard: the first one the holder lends in each ownership period of the
+    Key;
+  - a post, a poll vote, a push and a workspace write: the first one made as
+    the Key in each ownership period, by its holder or the holder's own paired
+    agent.
+  So one Key causes at most one offer of each rule per ownership period, and
+  one sale offer in its life. A second post, vote, push, write or shard in the
+  same period offers nothing, and so does an earlier post or vote sent again.
+  While a rule is not earning, the action reads and writes nothing for it.
+- Each Key ownership period keeps the rules already offered for it, a new
+  column `points_offered` on `keyfleet_app.key_attachments`
+  (`Keyfleet.Keys.mark_points_offered/2`). The save that may offer adds the
+  rule to it in one statement, only if it is not there yet, and offers only
+  when that statement added it; a rollback takes back both. Whether the person
+  acting is the holder or the holder's own agent is read from their wallets
+  today; Points still decides from the wallets they had when they acted.
+- The first six are offered in the save that records them. A workspace write is
+  made on the graph machine, which never offers anything to Points; the site
+  offers a member's first new write in the period as it answers it, naming the
+  write's first change in the fleet's log (`Keyfleet.Points.GraphEvent.offer/3`).
+  A write sent again offers nothing, and a change the read tables have not
+  copied yet is looked for again on Points' later tries. Points' check of a
+  workspace change takes its time only as the log writes it, in UTC; a time in
+  any other shape fails that check's job, where it can be seen.
+- Each earns for the account whose wallets held the Key when it was done, read
+  from Keyfleet's record of the Key's holders and the shared wallet history
+  (`Keyfleet.Points.Holder`); every award names the Key and its ownership epoch.
+  An agent's action names the agent and its pairing and earns for its person.
+- These earn nothing: an action done as a Key by anyone but its holder or the
+  holder's own paired agent; workspace work that is not a member's; a Key whose
+  holder no account owned at the time; notebooks (Marimo), direct messages,
+  on-chain votes and Key reveals. Nothing done before the seven are switched
+  on, or before the Points start, is offered; the first such action after it in
+  each ownership period of the Key is.
+- Not offered, and so lost: a shard lent to the holder's own agent after an
+  earlier shard to another wallet in the same ownership period, since the
+  period's first shard takes the offer; and anything more of a rule in a
+  period whose first offer Points refused.
+- Built and not yet earning: the seven are set up in
+  `platform/config/config.exs`, and production still approves only the five
+  account rules (`platform/config/prod.exs`). While a rule is not earning the
+  action it comes with reads, writes and queues nothing for it. Switching them
+  on is its own one-line release, with the Points line in
+  `platform/priv/public/docs.md`.
+- The first six offers, and their marks, are saved in the transaction of the
+  action they come with: an offer can fail only when the site's own database is
+  failing, and then the action fails too. Once a period is marked, a later
+  action only reads it, locking and writing nothing; the period's first mark
+  holds its row until that save commits, so of two first actions at once one
+  offers and the other waits for that commit. Only a wait past the site's
+  5-second lock limit would fail the waiting action. The check of who held the
+  Key runs later, in its own job. A workspace write's
+  offer runs in a task of its own on the site (`Keyfleet.Points.Offers`, at
+  most twenty at once), so the write is answered as made at once whatever
+  Points answers; the task marks the period and offers in one transaction, so
+  an offer lost because the database failed just then, or refused because
+  twenty were already running, marks nothing, is logged, and the person's next
+  write offers it again. Posts and workspace events gain a read by id that only
+  the site itself uses.
+- Migration `20261120004859_points_offered_once_per_period`, on
+  `keyfleet_app.key_attachments` alone, in one transaction that waits at most 5
+  seconds for its lock: `ALTER TABLE key_attachments ADD COLUMN points_offered
+  text[] NOT NULL DEFAULT ARRAY[]::text[]`. The default is a constant, so no row
+  is rewritten and every existing period reads as offered nothing. Its lock
+  (`ACCESS EXCLUSIVE`, held a moment until commit) makes the chain reader's
+  ownership records and every read of who holds a Key wait behind it. The
+  table's guard on ownership records still refuses every change but this
+  column. Rolling back to the release before this one leaves the column in
+  place, filled for new rows by its default and read by nothing.
+- Checks: `make check` passes every gate; the compile-connected count stays 145.
+  A hand run on a throwaway PostgreSQL 17, prepared with the release's staging
+  bootstrap, showed: the migration rewrote no row, and with a reader holding
+  the table it gave up after 5 seconds and changed nothing, a later reader
+  waiting about 4 seconds behind it; with production's settings a post, vote,
+  push, workspace write and shard read or wrote nothing for Points and queued
+  nothing; with the seven on, a Key's first post offered once and its next 100
+  offered nothing, each of those 100 doing one indexed read of about 0.2 ms in
+  the database; posts and votes sent again offered nothing; two first posts at
+  once offered once; a Key moved to a new holder offered once in its new
+  period and earned nothing more; the period's first shard, lent to another
+  wallet, took the offer and earned nothing, and the later shard to the
+  holder's own agent offered nothing; a workspace write from a site node to a
+  graph node that runs no job queue was offered by the site alone; and a
+  workspace change whose time was written with another offset failed its
+  Points job where it shows. An agent's own post, vote, push or write was not
+  run by hand.

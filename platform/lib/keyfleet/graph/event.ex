@@ -30,7 +30,7 @@ defmodule Keyfleet.Graph.Event do
   # How many of one object's changes its page lists at a time.
   @history 50
   @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
-  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
+  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@([0-9]+)\/(human|agent):(0x[0-9a-f]{40})\z/
 
   # The changes worth telling people who watch a fleet: every new object; a
   # patch that moves a status or progress, archives an object, changes a goal
@@ -400,6 +400,12 @@ defmodule Keyfleet.Graph.Event do
       public? false
     end
 
+    # One event of the fleet's log, for Regent Points' check of it.
+    read :one do
+      public? false
+      get_by [:fleet_id, :seq]
+    end
+
     create :record do
       public? false
       accept [:fleet_id, :seq, :event_id, :type, :actor, :timestamp, :payload, :projects]
@@ -426,6 +432,7 @@ defmodule Keyfleet.Graph.Event do
 
     policy action([
              :record,
+             :one,
              :with_event_ids,
              :taken_before,
              :changes_after,
@@ -565,9 +572,22 @@ defmodule Keyfleet.Graph.Event do
   the workspace's own doing.
   """
   def member(actor) do
+    with {token_id, _ownership_epoch, kind, wallet} <- member_with_epoch(actor),
+         do: {token_id, kind, wallet}
+  end
+
+  @doc """
+  As `member/1`, with the Key's ownership epoch the write was admitted in, as
+  `{token_id, ownership_epoch, kind, wallet}`; nil for the workspace's own
+  doing.
+  """
+  def member_with_epoch(actor) do
     case Regex.run(@member, actor, capture: :all_but_first) do
-      [token_id, kind, wallet] -> {String.to_integer(token_id), kind, wallet}
-      nil -> nil
+      [token_id, ownership_epoch, kind, wallet] ->
+        {String.to_integer(token_id), String.to_integer(ownership_epoch), kind, wallet}
+
+      nil ->
+        nil
     end
   end
 

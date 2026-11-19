@@ -791,6 +791,89 @@ features:
       - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
       - Several accounts holding one X account was proven once by hand on a throwaway database (19 Nov), through the sign-in save and Points' check with a stand-in Privy session; nothing runs it again.
 
+  - id: points-keyfleet-actions
+    what: >-
+      Seven Keyfleet actions are offered to Regent Points, each only while its
+      rule is earning: a wallet coming to hold a Key, once for each time it
+      does; a Key's sale, once; the first shard the holder lends in each
+      ownership period of the Key; and the first post, the first poll vote,
+      the first push and the first workspace write made as the Key in each
+      ownership period, by its holder or the holder's own paired agent. A
+      repeat in the same period, or an earlier post or vote sent again, offers
+      nothing. Each is offered in the save that records it, except the
+      workspace write, which the site offers as it answers it, naming the
+      write's first change in the fleet's log, in a task of its own so the
+      answer never waits for Points; the graph machine never offers anything.
+      Each ownership period keeps the rules already offered for it. Each earns
+      for the account whose wallets held the Key when it was done; an agent's
+      action names the agent and its pairing and earns for its person, and
+      done as a Key by anyone else it earns nothing. A sale earns for each
+      Key, up to the rule's daily limit. The others earn once per account, and
+      each Key earns each of them once, for the first of its holders to earn
+      it. Production does not approve the seven yet, so none earns: while a
+      rule is not earning nothing is read, written or queued for it and the
+      action is untouched.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/points/award.ex
+      - platform/lib/keyfleet/points/holder.ex
+      - platform/lib/keyfleet/points/key_epoch.ex
+      - platform/lib/keyfleet/points/shard_issue.ex
+      - platform/lib/keyfleet/points/room_post.ex
+      - platform/lib/keyfleet/points/poll_vote.ex
+      - platform/lib/keyfleet/points/code_push.ex
+      - platform/lib/keyfleet/points/graph_event.ex
+      - platform/lib/keyfleet/keys/signals.ex
+      - platform/lib/keyfleet/rooms/signals.ex
+      - platform/lib/keyfleet/polls/signals.ex
+      - platform/lib/keyfleet/code/signals.ex
+      - platform/lib/keyfleet/graph/workspace/relay.ex
+      - platform/lib/keyfleet/application.ex
+      - platform/lib/keyfleet/keys/key_attachment.ex
+      - platform/lib/keyfleet/keys/shard_event.ex
+      - platform/lib/keyfleet/rooms/message.ex
+      - platform/lib/keyfleet/rooms/changes/emit_posted.ex
+      - platform/lib/keyfleet/polls/vote.ex
+      - platform/lib/keyfleet/code/push.ex
+      - platform/lib/keyfleet/code.ex
+      - platform/lib/keyfleet/graph/event.ex
+      - platform/lib/keyfleet/keys.ex
+      - platform/lib/keyfleet/rooms.ex
+      - platform/lib/keyfleet/polls.ex
+      - platform/lib/keyfleet/graph.ex
+      - platform/priv/repo/migrations/20261120004859_points_offered_once_per_period.exs
+      - platform/priv/resource_snapshots/repo/key_attachments/20261120004900.json
+      - platform/config/config.exs
+      - platform/config/prod.exs
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send
+      - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/send
+      - route: POST /api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote
+      - route: POST /{repository}.git/git-receive-pack
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/patch
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/link
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/unlink
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/archive
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/join
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/leave
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/submit
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/fork
+      - live: KeyfleetWeb.FleetLive
+    proofs: []
+    gaps:
+      - Not switched on; production approves only the five account rules. The Points line in platform/priv/public/docs.md changes in the release that approves the seven.
+      - Checked by a hand run on a throwaway database prepared with the release's staging bootstrap, with a made-up deployment record, Keys, accounts and pairings written straight to their tables, Key moves and shards recorded through the chain reader's own record actions, and the Points queue run by hand. The workspace rule ran through real writes from a development site node to a development graph node with no job queue, over the graph's private listener; the release image, the chain reader itself, a real sign-in and an agent's own post, vote, push or write were not run.
+      - Two first offers of one Key's ownership period at the same moment wait for each other; the second waits until the first's save commits, and fails only if that wait passes the site's 5-second lock limit.
+      - The holder is read at the time Keyfleet recorded the Key's holder, not the block's time, and a workspace change's time is the workspace's own; an action after a sale on chain but before Keyfleet records it is judged by Keyfleet's record.
+      - A Key whose wallet joins an account only after Keyfleet recorded it earns no holding or sale, and a Key held by a wallet no account had then earns for no one. An agent's own wallet counts only when it is also one of a person's sign-in wallets, and then for that person.
+      - Nothing done before the switch-on, or before the Points start, is offered; the first such action after it in each ownership period of the Key is. A workspace write sent again offers nothing.
+      - A workspace write's offer is lost if the site's database fails just as it is made, and refused when twenty offers are already running; neither marks the period, so the person's next write offers it again.
+      - Shards: the first shard the holder lends in an ownership period of the Key takes that period's offer, and it earns only if it went to the holder's own agent. So a shard lent to the holder's own agent after an earlier shard to another wallet in the same period is never offered.
+      - Whether the person acting holds the Key, or is the holder's own agent, is read at the save from the person's wallets today; Points still decides from the wallets they had when they acted. When Points refuses a period's first offer, for that or any reason, nothing more of that rule is offered in that period.
+
   - id: account-ens-name
     what: >-
       Account › Profile's Details list the ENS name Ethereum publishes for the

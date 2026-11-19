@@ -58,6 +58,10 @@ defmodule Keyfleet.Application do
       Keyfleet.SharedReading,
       # Jobs announce what they change, so they start after PubSub.
       oban_child(),
+      # Offers to Regent Points made outside a save, each in its own task
+      # (`Keyfleet.Points.GraphEvent.offer/3`); they queue jobs, so after Oban.
+      # Past 20 at once, an offer is only logged, and the next write offers again.
+      {Task.Supervisor, name: Keyfleet.Points.Offers, max_children: 20},
       KeyfleetWeb.Telemetry.site_poller(),
       # Who was let into a fleet's notebooks or code lately; a key changing
       # hands clears its holder at once, through PubSub.

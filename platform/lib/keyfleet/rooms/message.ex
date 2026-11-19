@@ -183,6 +183,9 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+      change Keyfleet.Rooms.Changes.EmitPosted
+
+      emit Keyfleet.Rooms.Signals, :message_posted, dynamic?: true
     end
 
     # A post written to one of the fleet's keys, in that key's thread, which
@@ -217,6 +220,9 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+      change Keyfleet.Rooms.Changes.EmitPosted
+
+      emit Keyfleet.Rooms.Signals, :message_posted, dynamic?: true
     end
 
     # The line an open room takes when a member names it, written inside the
@@ -247,6 +253,12 @@ defmodule Keyfleet.Rooms.Message do
     read :read do
       primary? true
       public? false
+    end
+
+    # One post, for Regent Points' check of it.
+    read :one do
+      public? false
+      get_by [:id]
     end
 
     read :read_messages do
@@ -837,6 +849,11 @@ defmodule Keyfleet.Rooms.Message do
 
     # So is the month's count of the fleet's chat.
     policy action(:written_between) do
+      authorize_if actor_attribute_equals(:role, :system)
+    end
+
+    # So is Regent Points' check of one post.
+    policy action(:one) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

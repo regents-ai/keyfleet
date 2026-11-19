@@ -109,6 +109,8 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :token_id, :wallet],
         not_found_error?: false
 
+      define :get_shard_event, action: :read, get_by: [:id], not_found_error?: false
+
       define :active_shards_held_by, action: :active_held_by, args: [:wallet]
       define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
       define :active_shards_in_fleet, action: :active_in_fleet, args: [:fleet_id]
@@ -513,6 +515,49 @@ defmodule Keyfleet.Keys do
   def person_wallets(%Human{wallet_addresses: wallets}), do: wallets
   def person_wallets(%Agent{pairing: %Human{wallet_addresses: wallets}}), do: wallets
   def person_wallets(_actor), do: []
+
+  @doc """
+  Marks Regent Points' one-time rule `rule_id` offered in one ownership period
+  of the Key `period` names (`:fleet_id`, `:token_id`), in one statement:
+  `{:ok, true}` when this call marked it, `{:ok, false}` when it was marked
+  already or no such period matched, or `{:error, error}`.
+
+  The period is `:ownership_epoch`, or the Key's current one without it;
+  `:owner_wallets` keeps it to a period one of those wallets holds. A period
+  already marked is only read: no row is locked or written. The first marking
+  locks its row until the save it is part of ends, so of two at once one marks
+  and the other, waiting, finds it marked.
+  """
+  def mark_points_offered(period, rule_id) do
+    system = %Keyfleet.Actors.System{}
+
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(
+      :not_offered,
+      %{fleet_id: period[:fleet_id], token_id: period[:token_id], rule_id: rule_id},
+      actor: system
+    )
+    |> in_period(period[:ownership_epoch])
+    |> held_by(period[:owner_wallets])
+    |> Ash.bulk_update(:mark_offered, %{rule_id: rule_id},
+      strategy: :atomic,
+      return_records?: true,
+      return_errors?: true,
+      actor: system
+    )
+    |> case do
+      %Ash.BulkResult{status: :success, records: records} -> {:ok, records != []}
+      %Ash.BulkResult{errors: [error | _]} -> {:error, error}
+    end
+  end
+
+  defp in_period(query, nil),
+    do: Ash.Query.filter(query, ownership_epoch == current_ownership_epoch)
+
+  defp in_period(query, epoch), do: Ash.Query.filter(query, ownership_epoch == ^epoch)
+
+  defp held_by(query, nil), do: query
+  defp held_by(query, wallets), do: Ash.Query.filter(query, owner_wallet in ^wallets)
 
   # The key the person chose to write as, while one of their wallets holds it.
   defp chosen_key(%Human{wallet_addresses: wallets} = actor, fleet_id) do

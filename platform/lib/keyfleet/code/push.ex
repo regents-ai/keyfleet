@@ -33,6 +33,14 @@ defmodule Keyfleet.Code.Push do
         :beneficiary_privy_user_id,
         :agent_pairing_id
       ]
+
+      # The wallets of the person who pushed or whose agent did
+      # (`Keyfleet.Keys.person_wallets/1`), for Regent Points' offer only.
+      argument :person_wallets, {:array, :string}, allow_nil?: false
+
+      emit Keyfleet.Code.Signals, :push_recorded,
+        fields: [push_id: :id],
+        values: [wallets: arg(:person_wallets)]
     end
 
     # Every push to one project's repository, for its deletion.

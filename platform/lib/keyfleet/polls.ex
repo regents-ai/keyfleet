@@ -51,6 +51,7 @@ defmodule Keyfleet.Polls do
       define :cast_vote, action: :cast
       define :votes_in_poll, action: :in_poll, args: [:fleet_id, :poll_id]
       define :my_vote, action: :mine, args: [:fleet_id, :poll_id], not_found_error?: false
+      define :get_vote, action: :read, get_by: [:id], not_found_error?: false
     end
   end
 

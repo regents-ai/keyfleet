@@ -64,6 +64,7 @@ defmodule Keyfleet.Graph do
         args: [:fleet_id, :object_id, :after_seq, :limit]
 
       define :record_events, action: :record
+      define :get_event, action: :one, args: [:fleet_id, :seq], not_found_error?: false
       define :events_with_ids, action: :with_event_ids, args: [:fleet_id, :event_ids]
       define :command_records, action: :command, args: [:fleet_id, :command_id]
       define :changes_after, action: :changes_after, args: [:fleet_id, :after_seq]

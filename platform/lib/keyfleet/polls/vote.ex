@@ -74,6 +74,26 @@ defmodule Keyfleet.Polls.Vote do
       return_skipped_upsert? true
 
       change Keyfleet.Polls.Changes.CastVote
+
+      # A vote the database handed back emits nothing.
+      change after_action(fn changeset, vote, context ->
+               if Ash.Resource.get_metadata(vote, :upsert_skipped) do
+                 {:ok, vote}
+               else
+                 payload = %{
+                   vote_id: vote.id,
+                   fleet_id: Ash.Changeset.get_argument(changeset, :fleet_id),
+                   token_id: vote.token_id,
+                   wallets: Keyfleet.Keys.person_wallets(context.actor)
+                 }
+
+                 with :ok <-
+                        Ash.Signals.emit(changeset, Keyfleet.Polls.Signals, :vote_cast, payload),
+                      do: {:ok, vote}
+               end
+             end)
+
+      emit Keyfleet.Polls.Signals, :vote_cast, dynamic?: true
     end
 
     # Only for checking whether a Key has voted.

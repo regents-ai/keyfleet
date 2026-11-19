@@ -4,6 +4,10 @@ defmodule Keyfleet.Keys.KeyAttachment do
   @moduledoc """
   An immutable ownership epoch: who held a key, and from which transfer.
   `record_seq` is the fleet's count of epochs when it was recorded.
+
+  `points_offered` is the one thing about an epoch that changes: the one-time
+  Regent Points rules already offered for the Key in this ownership period
+  (`Keyfleet.Keys.mark_points_offered/2`), so each is offered once per period.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -147,6 +151,8 @@ defmodule Keyfleet.Keys.KeyAttachment do
 
       # A dealt Key has its card from its mint, its first ownership record.
       change Keyfleet.Keys.Changes.QueuePicture, where: [attribute_equals(:ownership_epoch, 1)]
+
+      emit Keyfleet.Keys.Signals, :key_epoch_recorded
     end
 
     # The keys of the epochs recorded after the fleet's epoch number
@@ -396,6 +402,32 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare build(sort: [token_id: :asc], limit: 1)
       get? true
     end
+
+    # A Key's ownership periods that have not been offered `rule_id` yet, for
+    # `:mark_offered`.
+    read :not_offered do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false
+      argument :rule_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and
+                 not has(points_offered, ^arg(:rule_id))
+             )
+    end
+
+    # Adds `rule_id` to the rules offered in the period, in one statement.
+    update :mark_offered do
+      public? false
+      argument :rule_id, :string, allow_nil?: false
+
+      change atomic_update(
+               :points_offered,
+               expr(fragment("array_append(?, ?)", points_offered, ^arg(:rule_id))),
+               cast_atomic?: false
+             )
+    end
   end
 
   policies do
@@ -403,7 +435,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
       authorize_if always()
     end
 
-    policy action(:record_epoch) do
+    policy action([:record_epoch, :mark_offered]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -450,6 +482,12 @@ defmodule Keyfleet.Keys.KeyAttachment do
       generated?: true,
       writable?: false,
       public?: true
+
+    # Only `:mark_offered` reads it, inside its own statement.
+    attribute :points_offered, {:array, :string},
+      allow_nil?: false,
+      default: [],
+      select_by_default?: false
   end
 
   relationships do

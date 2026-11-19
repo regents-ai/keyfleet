@@ -128,6 +128,26 @@ defmodule Keyfleet.Keys.ShardEvent do
               identity: [:transaction_hash, :log_index], number: :shard_seq}
 
       change {Keyfleet.Notebooks.Changes.UpdateRoster, ends: :expires_at}
+
+      # A new issue only: a shard read again emits nothing.
+      change after_action(fn changeset, shard, _context ->
+               if shard.kind == :issued and !Ash.Resource.get_metadata(shard, :upsert_skipped) do
+                 payload = %{
+                   shard_event_id: shard.id,
+                   fleet_id: shard.fleet_id,
+                   token_id: shard.token_id,
+                   ownership_epoch: shard.ownership_epoch
+                 }
+
+                 with :ok <-
+                        Ash.Signals.emit(changeset, Keyfleet.Keys.Signals, :shard_issued, payload),
+                      do: {:ok, shard}
+               else
+                 {:ok, shard}
+               end
+             end)
+
+      emit Keyfleet.Keys.Signals, :shard_issued, dynamic?: true
     end
 
     # What was recorded from a stretch of the fleet's blocks, and from the

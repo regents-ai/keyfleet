@@ -28,7 +28,10 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   A new write by an agent is recorded as its latest contribution to the
   fleet: taking a task, handing one in, a review, or another workspace write. The write
   already stands in the graph, so a record that fails is logged and the write
-  is answered as it was.
+  is answered as it was. A member's first new write in the Key's ownership
+  period is also offered to Regent Points while that rule earns, in a task of
+  its own (`Keyfleet.Points.GraphEvent.offer/3`), so the answer never waits
+  for it.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -68,7 +71,11 @@ defmodule Keyfleet.Graph.Workspace.Relay do
          kind
        ) do
     watermark = Client.await(fleet_id, run_id, head_seq)
-    unless reply["replayed"], do: Keyfleet.Agents.record_contribution(actor, fleet_id, kind)
+
+    unless reply["replayed"] do
+      Keyfleet.Agents.record_contribution(actor, fleet_id, kind)
+      Keyfleet.Points.GraphEvent.offer(fleet_id, reply["events"], actor)
+    end
 
     {:ok,
      %{

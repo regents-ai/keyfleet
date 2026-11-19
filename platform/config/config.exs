@@ -94,6 +94,13 @@ config :regent_points,
   adapters: %{
     "account.activated" => Keyfleet.Points.AccountActivated,
     "agent.activated" => Keyfleet.Points.PairedAgent,
+    "keyfleet.first_authorized_agent" => Keyfleet.Points.ShardIssue,
+    "keyfleet.first_membership" => Keyfleet.Points.KeyEpoch,
+    "keyfleet.first_message" => Keyfleet.Points.RoomPost,
+    "keyfleet.first_vote" => Keyfleet.Points.PollVote,
+    "keyfleet.integration.activegraph" => Keyfleet.Points.GraphEvent,
+    "keyfleet.integration.git" => Keyfleet.Points.CodePush,
+    "keyfleet.key_bought" => Keyfleet.Points.KeyEpoch,
     "social.farcaster" => Keyfleet.Points.LinkedSocial,
     "social.github" => Keyfleet.Points.LinkedSocial,
     "social.x" => Keyfleet.Points.LinkedSocial
