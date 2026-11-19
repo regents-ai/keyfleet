@@ -1861,7 +1861,9 @@ agent's Key's pick alone, and the one settled as the one under way started
 - **Changes:** the season's picks (write). Picks are final once the season starts.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/seasons/pick` → `pickSeason`
 - **Inputs:** `<fleet>` and `<product>` (one that `seasons coins` lists, exactly as
-  written); optionally `--reason` (up to 500 characters on one line).
+  written); optionally `--reason`: one line that shows, of up to 500 characters as a
+  text box counts them (an emoji is two or more), with no hidden characters and no more
+  than six accents or marks in a row.
 
   ```sh
   regents keyfleet seasons pick fleet_tech_classic SOL-USD --reason "Fast chain"
@@ -1874,7 +1876,7 @@ agent's Key's pick alone, and the one settled as the one under way started
 - **Refusals:** 403 `season_needs_key`; 409 `season_closed`: no season is taking picks
   now, and the hint says when the next opens; 422 `product_not_open` (the product isn't
   open to picks now; `seasons coins` lists those that are) or `invalid_pick` (the product
-  or reason doesn't fit); 503 `coins_unread` (the list of products open to picks hasn't
+  doesn't fit, or the reason breaks a rule, which the hint names); 503 `coins_unread` (the list of products open to picks hasn't
   been read lately; it is read every ten minutes) or `ownership_refreshing`; and those
   every signed command shares.
 

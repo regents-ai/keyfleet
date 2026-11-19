@@ -1,7 +1,8 @@
 defmodule Keyfleet.Seasons.SeasonPick do
   @moduledoc """
   A Key's one pick for a season: a Coinbase product quoted in US dollars, or
-  `USDC`, and a short reason if it gives one.
+  `USDC`, and a short reason if it gives one, one line a person would type
+  (`Keyfleet.Seasons.Validations.Reason`).
 
   A Key picks once a season, whichever of its agents sends it. A pick is the
   whole pick: its product and its reason, none when it gives none. Until the
@@ -27,7 +28,6 @@ defmodule Keyfleet.Seasons.SeasonPick do
     notifiers: [Ash.Notifier.PubSub]
 
   @bigint 9_223_372_036_854_775_807
-  @plain_text ~r/\A[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*\z/u
 
   postgres do
     table "season_picks"
@@ -82,6 +82,7 @@ defmodule Keyfleet.Seasons.SeasonPick do
       argument :number, :integer, allow_nil?: false, constraints: [min: 1]
 
       validate Keyfleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Seasons.Validations.Reason
 
       # The Key's pick in the season is replaced only by a different one, and
       # then takes the newest place in the order.
@@ -225,9 +226,9 @@ defmodule Keyfleet.Seasons.SeasonPick do
       public?: true,
       constraints: [match: ~r/\A(USDC|[A-Z0-9]+-USD)\z/, trim?: false, max_length: 32]
 
-    attribute :reason, :string,
-      public?: true,
-      constraints: [min_length: 1, max_length: 500, match: @plain_text]
+    # Trimmed, and none when empty; its rules are the pick's
+    # (`Keyfleet.Seasons.Validations.Reason`).
+    attribute :reason, :string, public?: true
 
     # Where the pick stands among the season's picks: lower was locked first.
     attribute :lock_order, :integer,

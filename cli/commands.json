@@ -1927,7 +1927,7 @@
           "type": "string",
           "in": "body",
           "field": "reason",
-          "description": "The reason, up to 500 characters on one line; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
+          "description": "The reason, one line that shows, of up to 500 characters as a text box counts them (an emoji is two or more), with no hidden characters and no more than six accents or marks in a row; leave it out for none. The fleet's members read it once the season starts, and anyone once it is settled."
         }
       ]
     },

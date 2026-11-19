@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.Rooms
   alias Keyfleet.SeasonHelpers
   alias Keyfleet.Seasons.CoinList
+  alias Keyfleet.Seasons.Errors.ReasonError
   alias Keyfleet.SharedReading
   alias KeyfleetWeb.Plugs.SignedAgent
   alias RegentChain.BuilderCode
@@ -1951,13 +1952,22 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @season_pick, @address, %{"product" => "DOGE-USD"}, 422).body ==
              refused("product_not_open")
 
-    for misfit <- [
-          %{"product" => "sol-usd"},
-          %{pick | "reason" => "Line one\nline two"},
-          %{pick | "reason" => String.duplicate("r", 501)}
+    assert answer(c, c.signer, "POST", @season_pick, @address, %{"product" => "sol-usd"}, 422).body ==
+             refused("invalid_pick")
+
+    # A reason's refusal names the rule it broke.
+    for {reason, rule} <- [
+          {"Line one\nline two", :plain},
+          {String.duplicate("r", 501), :too_long},
+          {"\u{3164}", :blank},
+          {"a" <> String.duplicate("\u{0301}", 7), :marks}
         ] do
-      assert answer(c, c.signer, "POST", @season_pick, @address, misfit, 422).body ==
-               refused("invalid_pick")
+      misfit = %{pick | "reason" => reason}
+
+      assert %{"error" => %{"code" => "invalid_pick", "hint" => hint}} =
+               answer(c, c.signer, "POST", @season_pick, @address, misfit, 422).body
+
+      assert hint =~ Exception.message(ReasonError.exception(rule: rule))
     end
 
     # While the list of products open to picks isn't read, no pick is made.

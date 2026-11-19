@@ -11846,7 +11846,7 @@ components:
       required: [product]
       properties:
         product: {$ref: "#/components/schemas/SeasonProduct"}
-        reason: {type: string, maxLength: 500, description: "Why, on one line; left out or empty, the pick has none. The fleet's members read it once the season starts, and anyone once it is settled"}
+        reason: {type: string, maxLength: 500, description: "Why, on one line, trimmed; left out or empty, the pick has none. At most 500 UTF-16 code units, at least one character that shows, no control, format or hidden character but the joiners and tags inside an emoji, and no more than six marks in a row; a reason that breaks one answers invalid_pick, whose hint names it. The fleet's members read it once the season starts, and anyone once it is settled"}
     SeasonListRequest:
       type: object
       additionalProperties: false

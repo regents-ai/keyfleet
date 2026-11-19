@@ -767,9 +767,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
     assert now["taking_picks"]["keys_locked"] == 2
     refute Jason.encode!(now) =~ "Not yet seen"
 
-    # A reason longer than 500 characters is refused at every door, counted
-    # in characters as the signed request counts it, and nothing is written;
-    # 500 emoji are 500 characters.
+    # A reason longer than 500 characters is refused at every door, and
+    # nothing is written. An emoji counts two, as a text box counts it: 250
+    # fit, and 251 are refused alike by the connector and the signed request.
     too_long = %{pick | "reason" => String.duplicate("r", 501)}
 
     assert %{"isError" => true, "content" => [%{"text" => text}]} =
@@ -781,9 +781,17 @@ defmodule KeyfleetWeb.McpConnectorTest do
     assert http_twin(c, manifest["seasons_pick"], too_long).body["error"]["code"] ==
              "invalid_pick"
 
-    emoji = %{pick | "reason" => String.duplicate("😀", 500)}
+    emoji = %{pick | "reason" => String.duplicate("😀", 250)}
     assert %{"isError" => false} = result(call(token, "seasons_pick", emoji, c))
     assert http_twin(c, manifest["seasons_pick"], emoji).status == 200
+
+    more = %{pick | "reason" => String.duplicate("😀", 251)}
+
+    assert %{"isError" => true, "content" => [%{"text" => text}]} =
+             result(call(token, "seasons_pick", more, c))
+
+    assert %{"code" => "invalid_pick"} = refusal = Jason.decode!(text)["error"]
+    assert http_twin(c, manifest["seasons_pick"], more).body["error"] == refusal
 
     # Half an emoji can't be carried as JSON text: the connector refuses the
     # call and the signed request its body, and the pick stays as it was.

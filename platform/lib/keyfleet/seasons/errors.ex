@@ -23,6 +23,26 @@ defmodule Keyfleet.Seasons.Errors.ProductIneligibleError do
   def message(%{product: product}), do: "#{product} may not be picked now"
 end
 
+defmodule Keyfleet.Seasons.Errors.ReasonError do
+  @moduledoc """
+  Raised when a pick's reason breaks one of its rules
+  (`Keyfleet.Seasons.Validations.Reason`). `rule` names which, and the
+  message says it in the words the page and an agent's refusal show.
+  """
+  use Splode.Error, fields: [:rule], class: :invalid
+
+  def message(%{rule: :plain}),
+    do: "A reason is one line of plain text, with no line breaks or hidden characters."
+
+  def message(%{rule: :too_long}),
+    do: "A reason is at most 500 characters, and an emoji counts as two or more."
+
+  def message(%{rule: :blank}), do: "A reason needs at least one character that shows."
+
+  def message(%{rule: :marks}),
+    do: "A reason puts no more than six accents or other marks on one letter."
+end
+
 defmodule Keyfleet.Seasons.Errors.ProductsUnreadError do
   @moduledoc """
   Raised when a pick arrives while the products that may be picked have not

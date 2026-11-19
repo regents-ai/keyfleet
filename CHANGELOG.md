@@ -13333,6 +13333,21 @@ step's report).
     documents and docs.md say so. Contract 36.4.0, the public OpenAPI file 16.1.0 and the
     guide 3.36.0 stay, as none is released yet (main has 36.3.0, 16.0.0 and 3.35.0), the
     same as the seasons' first hard cutover below.
+  - A reason has its own rule (`Keyfleet.Seasons.Validations.Reason`, in place of the
+    attribute's pattern and length): once trimmed, valid UTF-8 on one line, with no
+    control or format character but the joiner between two emoji and the tags of the
+    three flag sequences; at most 500 UTF-16 units, as a text box counts it
+    (`KeyfleetWeb.BoxLimit`); at least one letter, digit, punctuation mark or symbol that
+    shows, the default-ignorable ones, the blank Braille pattern and the null notehead
+    aside; and no more than six marks in a row. The rule broken is
+    `Keyfleet.Seasons.Errors.ReasonError`'s `rule`, and its message is the hint of the
+    agent's 422 `invalid_pick` and the panel's note. Broken UTF-8 is refused before any
+    pattern reads it, so `Seasons.pick/4` answers an error rather than raising. Before, a
+    reason of fillers, blanks or a lone mark was kept and printed as an empty quote, one
+    letter with 499 accents was kept, a family or flag emoji was refused for its joiner or
+    tags, 500 emoji passed as 500 characters, and broken UTF-8 raised inside the pattern.
+    The panel's box now takes 502 units (it took 1,002). No rule elsewhere fitted: rooms
+    and polls share the old pattern, and the early-access address rule takes no emoji.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):
@@ -13351,9 +13366,9 @@ step's report).
     `read_at`.
   - A Key's holder and its agents are members as polls count them; anyone else is
     refused 403 `season_needs_key`, and a fleet whose Keys are being read again 503
-    `ownership_refreshing`. A reason is at most 500 characters, counted as characters,
-    on one line, with no control or invisible character; a lone surrogate is refused
-    before anything is written.
+    `ownership_refreshing`. A reason follows its own rule (the review fixes above): one
+    line that shows, of at most 500 units as a text box counts them; a lone surrogate is
+    refused before anything is written.
 - The public record: `GET /api/v1/fleets/:fleet_id/seasons`, signed out, `no-store`,
   answers what `seasons_list` answers: settled seasons only, Keys by number, no wallet,
   agent or person, paged by `next_before` and `has_more`.
@@ -13369,15 +13384,14 @@ step's report).
   against the contract, a stranger's 403 and a 503 while Keys are read again;
   `McpConnectorTest` runs each tool through the connector and signed `/mcp` against its
   signed request, an outsider, an unpaired app, another Key's pick taking picks never
-  shown, 500 emoji, 501 characters and a lone surrogate; `PublicSeasonsTest` reads the
+  shown, 250 and 251 emoji, 501 characters and a lone surrogate; `PublicSeasonsTest` reads the
   record signed out (settled only, the exact fields, no wallet), pages 21 settled
   seasons, and refuses a bad cursor, another query and an unknown fleet.
 - Not covered:
   - No page shows seasons yet.
   - A real Coinbase is never asked in tests; `Keyfleet.CoinbaseStub` stands in.
-  - A reason over 500 characters is refused `invalid_pick` signed and `invalid_request`
+  - A reason over 500 letters is refused `invalid_pick` signed and `invalid_request`
     with its length through the connector, as polls do.
-  - A reason with a zero-width joiner is refused, so some joined emoji are.
   - Each page of the public record carries every pick of its seasons, and a database
     failure there answers a server error, not a 503.
   - Not yet run by a real agent.

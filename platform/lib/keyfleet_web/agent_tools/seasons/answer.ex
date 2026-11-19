@@ -196,6 +196,13 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
       Enum.any?(errors, &is_struct(&1, Errors.ProductIneligibleError)) ->
         refusal(422, "product_not_open")
 
+      reason = Enum.find(errors, &is_struct(&1, Errors.ReasonError)) ->
+        refusal(
+          422,
+          "invalid_pick",
+          Exception.message(reason) <> " Correct it, then send the request again."
+        )
+
       true ->
         refusal(422, "invalid_pick")
     end

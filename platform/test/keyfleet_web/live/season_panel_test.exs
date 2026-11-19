@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.CoinList
+  alias Keyfleet.Seasons.Errors.ReasonError
   alias Keyfleet.Seasons.Season
   alias Keyfleet.SharedReading
   alias KeyfleetWeb.FleetNow
@@ -114,14 +115,26 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
     assert %{product: "SOL-USD", reason: nil} = changed
     assert changed.lock_order > first.lock_order
 
-    # The same domain function the agent's pick goes through refuses these.
-    for {params, note} <- [
-          {%{product: "THIN-USD"}, "isn’t open to picks"},
-          {%{product: "SOL-USD", reason: "Line one\nline two"}, "plain text of up to 500"},
-          {%{product: "SOL-USD", reason: String.duplicate("😀", 501)}, "plain text of up to 500"}
+    # The same domain function the agent's pick goes through refuses these,
+    # and a reason's refusal says the rule it broke; 251 emoji, 502 units as
+    # a box counts them, are refused as typed, in the rule's words.
+    view
+    |> element("#fleet-season-form")
+    |> render_submit(%{pick: %{product: "THIN-USD"}})
+
+    assert has_element?(view, "#fleet-season-note[data-refused]", "isn’t open to picks")
+
+    for {reason, rule} <- [
+          {"Line one\nline two", :plain},
+          {"\u{3164}", :blank},
+          {String.duplicate("😀", 251), :too_long}
         ] do
-      view |> element("#fleet-season-form") |> render_submit(%{pick: params})
-      assert has_element?(view, "#fleet-season-note[data-refused]", note)
+      view
+      |> element("#fleet-season-form")
+      |> render_submit(%{pick: %{product: "SOL-USD", reason: reason}})
+
+      note = Exception.message(ReasonError.exception(rule: rule))
+      assert has_element?(view, "#fleet-season-note[data-refused]", note), inspect(reason)
     end
 
     # The box keeps what was refused, so the next press sends it again unless

@@ -1695,7 +1695,10 @@ features:
       03:00 … 21:00. While one runs, each Key may lock one pick for the next:
       a Coinbase product quoted in US dollars that Coinbase lists as spot,
       open for trading and traded at least 1,000,000 US dollars over 24
-      hours, or USDC, and a reason if it gives one. A pick is the whole pick:
+      hours, or USDC, and a reason if it gives one: one line that shows, of at
+      most 500 characters as a text box counts them, with no hidden character
+      but the joiners and tags inside an emoji and no more than six marks in a
+      row, each refusal naming the rule it broke. A pick is the whole pick:
       sent without a reason it has none, and the same pick again writes
       nothing and keeps its place. A turn a minute after each hour, queued every ten
       minutes so a missed or failed one runs again, settles the season that
@@ -1714,6 +1717,7 @@ features:
       - platform/lib/keyfleet/seasons.ex
       - platform/lib/keyfleet/seasons/season.ex
       - platform/lib/keyfleet/seasons/season_pick.ex
+      - platform/lib/keyfleet/seasons/validations/reason.ex
       - platform/lib/keyfleet/seasons/rules.ex
       - platform/lib/keyfleet/seasons/coinbase.ex
       - platform/lib/keyfleet/seasons/coin_list.ex
@@ -1743,7 +1747,8 @@ features:
       season with the best pick and whether the crown changed; and the rules.
       It locks or changes its Key's pick (seasons_pick), refused with a hint
       that says what to do when the season is closed, the product is not
-      open to picks or the product list hasn't been read. Any paired agent
+      open to picks or the product list hasn't been read, or names the rule a
+      reason broke. Any paired agent
       reads the settled seasons (seasons_list), a settled season's picks
       (seasons_picks) and the products open to picks (seasons_coins). No
       answer grows with the number of Keys. A non-member is refused
@@ -1779,7 +1784,7 @@ features:
       - platform/test/keyfleet_web/mcp_connector_test.exs
       - platform/test/keyfleet/seasons_test.exs
     gaps:
-      - A reason over 500 characters is refused at both doors with nothing written, but signed HTTP answers invalid_pick and the connector invalid_request with the length, as polls do.
+      - A reason over 500 letters is refused at both doors with nothing written, but signed HTTP answers invalid_pick and the connector invalid_request with the length, as polls do; the connector counts letters, and one of 500 letters or fewer but over 500 units as a text box counts them answers invalid_pick at both.
       - Not yet run by a real agent.
 
   - id: seasons-public-record
@@ -1822,9 +1827,9 @@ features:
       A person signed in with a Key of the fleet also reads the season under
       way's picks in lock order, ten at a time with More, and
       locks or changes the Key's pick for the season taking picks: a product
-      from those open to picks and an optional reason of up to 500
-      characters, through the same rule as seasons_pick, refused in plain
-      words beside the button. The season taking picks shows only how many
+      from those open to picks and an optional reason, through the same rule
+      as seasons_pick, refused in plain words beside the button, a reason with
+      the rule it broke. The season taking picks shows only how many
       Keys locked, never whose or what. A turn or a lock reaches open pages
       without a reload. Keyfleet places no order and holds no money.
     who: person

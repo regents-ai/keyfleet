@@ -1,5 +1,6 @@
 defmodule Keyfleet.SeasonsTest do
   use ExUnit.Case, async: false
+  use ExUnitProperties
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
@@ -13,6 +14,7 @@ defmodule Keyfleet.SeasonsTest do
   alias Keyfleet.Seasons.Errors.PicksClosedError
   alias Keyfleet.Seasons.Errors.ProductIneligibleError
   alias Keyfleet.Seasons.Errors.ProductsUnreadError
+  alias Keyfleet.Seasons.Errors.ReasonError
   alias Keyfleet.Seasons.Errors.SeasonUnknownError
   alias Keyfleet.Seasons.Season
   alias Keyfleet.Seasons.SeasonPick
@@ -185,14 +187,68 @@ defmodule Keyfleet.SeasonsTest do
              Seasons.pick(@fleet, 1, %{product: "SOL-USD"}, actor: human("a"))
   end
 
-  test "a reason is plain text of at most 500 characters" do
-    for reason <- [String.duplicate("a", 501), "Line one\nline two", "Zero​width"] do
-      assert {:error, %Ash.Error.Invalid{}} =
+  # Each reason refused names the one rule it broke; the joined emoji and
+  # flags people type, and letters of any script with their marks, are taken.
+  test "a reason is one line that shows, of at most 500 units as a box counts them" do
+    for {reason, rule} <- [
+          {String.duplicate("a", 501), :too_long},
+          {String.duplicate("😀", 251), :too_long},
+          {"Line one\nline two", :plain},
+          {"Zero\u{200B}width", :plain},
+          {"Turned \u{202E}around", :plain},
+          {"Joined a\u{200D}b", :plain},
+          {"Tagged a\u{E0067}\u{E0062}\u{E007F}", :plain},
+          {<<0xED, 0xA0, 0xBD>>, :plain},
+          {<<0xF0, 0x9F>>, :plain},
+          {"\u{3164}", :blank},
+          {"\u{2800}", :blank},
+          {"\u{115F}\u{1160}", :blank},
+          {"\u{FFA0}", :blank},
+          {"\u{034F}", :blank},
+          {"\u{FE0F}", :blank},
+          {"\u{0301}", :blank},
+          {"a" <> String.duplicate("\u{0301}", 499), :marks},
+          {"a" <> String.duplicate("\u{0301}", 7), :marks}
+        ] do
+      assert {:error, %Ash.Error.Invalid{errors: errors}} =
                Seasons.pick(@fleet, 1, %{product: "SOL-USD", reason: reason}, actor: human("a"))
+
+      assert Enum.any?(errors, &match?(%ReasonError{rule: ^rule}, &1)), inspect(reason)
     end
 
-    assert %{reason: reason} = pick!(human("a"), "SOL-USD", String.duplicate("é", 500))
-    assert String.length(reason) == 500
+    assert Seasons.my_pick!(@fleet, 1, actor: human("a")) == nil
+
+    for reason <- [
+          String.duplicate("é", 500),
+          String.duplicate("😀", 250),
+          "Builders \u{1F469}\u{200D}\u{1F4BB}",
+          "Family \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}",
+          "Pride \u{1F3F3}\u{FE0F}\u{200D}\u{1F308}",
+          "Coder \u{1F469}\u{1F3FD}\u{200D}\u{1F4BB}",
+          "Scotland \u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+          "Japan \u{1F1EF}\u{1F1F5}",
+          "Burmese \u{1000}\u{103C}\u{103D}\u{1031}\u{1037}",
+          "a" <> String.duplicate("\u{0301}", 6)
+        ] do
+      assert %{reason: ^reason} = pick!(human("a"), "SOL-USD", reason)
+    end
+  end
+
+  # Whatever bytes a caller sends as a reason, a pick is taken or refused,
+  # never raised; one taken fits its box.
+  property "any reason is taken or refused, never raised" do
+    check all reason <- one_of([binary(), string(:printable), string(:utf8)]), max_runs: 60 do
+      case Seasons.pick(@fleet, 1, %{product: "SOL-USD", reason: reason}, actor: human("a")) do
+        {:ok, %{reason: nil}} ->
+          assert String.trim(reason) == ""
+
+        {:ok, %{reason: kept}} ->
+          assert byte_size(:unicode.characters_to_binary(kept, :utf8, :utf16)) <= 1000
+
+        {:error, %Ash.Error.Invalid{}} ->
+          :ok
+      end
+    end
   end
 
   test "an agent without a pairing picks nothing, even for a Key it holds a shard of" do

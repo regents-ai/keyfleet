@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.CoinList
   alias Keyfleet.Seasons.Errors
+  alias Keyfleet.Seasons.Validations.Reason
   alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.SeasonsLive
   alias KeyfleetWeb.ShellLive
@@ -40,9 +41,9 @@ defmodule KeyfleetWeb.SeasonPanel do
   @picks 10
 
   # The longest reason the rule takes, in the UTF-16 units a box counts
-  # (`KeyfleetWeb.BoxLimit`): 500 letters, each an emoji of two units. More,
-  # as typed, is refused before the rule is asked; the rule may refuse more.
-  @longest_reason 500 * 2
+  # (`KeyfleetWeb.BoxLimit`), as the rule counts it. More, as typed, is refused
+  # before the rule is asked; the rule may refuse more.
+  @longest_reason Reason.longest()
 
   @coinbase "https://docs.cdp.coinbase.com/ai-agents/coinbase-for-agents/coinbase-mcp"
 
@@ -51,7 +52,6 @@ defmodule KeyfleetWeb.SeasonPanel do
     closed: "Season closed. Pick again for the next one.",
     not_open: "That product isn’t open to picks now.",
     unread: "The list of products isn’t read yet. Try again in a few minutes.",
-    reason: "A reason is plain text of up to 500 characters.",
     no_key: "Only a Key holder picks."
   }
 
@@ -299,7 +299,8 @@ defmodule KeyfleetWeb.SeasonPanel do
     typed = Map.take(params, ["product", "reason"])
 
     if BoxLimit.too_long?(to_string(typed["reason"]), @longest_reason) do
-      {:noreply, assign(socket, :season, %{season | form: pick_form(typed), note: :reason})}
+      note = Errors.ReasonError.exception(rule: :too_long)
+      {:noreply, assign(socket, :season, %{season | form: pick_form(typed), note: note})}
     else
       actor = ShellLive.human_actor(socket)
 
@@ -505,14 +506,16 @@ defmodule KeyfleetWeb.SeasonPanel do
       ) ->
         :closed
 
-      Enum.any?(errors, &is_struct(&1, Errors.ProductIneligibleError)) ->
-        :not_open
+      reason = Enum.find(errors, &is_struct(&1, Errors.ReasonError)) ->
+        reason
 
       true ->
-        :reason
+        :not_open
     end
   end
 
+  # A reason's refusal says the rule it broke, as an agent's does.
+  defp note(%Errors.ReasonError{} = reason), do: Exception.message(reason)
   defp note(note), do: Map.fetch!(@notes, note)
 
   defp locked(1), do: "1 Key locked"
