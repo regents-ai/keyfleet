@@ -36,10 +36,6 @@ defmodule KeyfleetWeb.PointsPageTest do
       SharedReading.delete(Board.key())
     end)
 
-    Application.put_env(:regent_points, :starts_at, DateTime.add(DateTime.utc_now(), -86_400))
-    Application.put_env(:regent_points, :approved_rules, [@rule])
-    Application.put_env(:regent_points, :adapters, %{@rule => Source})
-
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
     {:ok, signer} = Siwa.LocalSigner.new()
@@ -61,6 +57,11 @@ defmodule KeyfleetWeb.PointsPageTest do
       Accounts.register_verified!("did:privy:points-other", other_wallet, [other_wallet],
         actor: %System{}
       )
+
+    # Switched on after the accounts are made, so only `earn/1` offers anything.
+    Application.put_env(:regent_points, :starts_at, DateTime.add(DateTime.utc_now(), -86_400))
+    Application.put_env(:regent_points, :approved_rules, [@rule])
+    Application.put_env(:regent_points, :adapters, %{@rule => Source})
 
     for account <- [person, other], do: earn(account)
     assert %{failure: 0, discard: 0} = Oban.drain_queue(queue: :points, with_recursion: true)
