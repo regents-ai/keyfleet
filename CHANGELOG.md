@@ -13911,3 +13911,22 @@ step's report).
   an agent wrote as itself, and the box to write in is unchanged on a short wide screen.
   Commits f471998ec, 1fc869e5d, ebc5afaeb, cd5b253eb, 6b420bc2f, a9a4bd3ce and
   27b5c742d.
+
+## 2026-11-19 — Ash libraries move with the template's version refresh
+
+- The six packages of the six-site refresh, at the versions ash-template runs live as
+  v290 (f513e944): ash 3.37.3 to 3.37.7, ash_ai 1.5.4 to 1.5.6, ash_sql 0.8.7 to 0.8.9,
+  and ash_postgres from the Git commit 55db7d44 to e36aa20a, the 2.16.0 release, which
+  has 55db7d44 (ash-project/ash_postgres#910) in its history, so the required-fixes
+  check still finds it. spark 2.7.10 and websock_adapter 0.7.2 were already there.
+- Held where they were, as on the template: finch 0.24.0, nimble_pool 1.1.0 and
+  reactor 1.0.7, which the update would have pulled forward. Keyfleet has no llm_db or
+  req_llm. Every other package is unchanged, the shared Regent libraries included.
+- `platform/mix.exs` and `platform/mix.lock` only. No migration, no setting and no
+  page or answer changes.
+- From the libraries' changelogs, for anyone reading a later fault: a generic action's
+  argument default now applies only when the argument is left out (Ash 3.37.4); a bulk
+  update's notifications are dropped if its batch rolls back (3.37.7); policy fixes
+  for related field policies in filters and for "can read" checks with exists (3.37.4,
+  3.37.5); Ash AI update and destroy tools take a read action and write decimals out
+  in full (1.5.5).
