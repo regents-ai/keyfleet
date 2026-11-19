@@ -672,7 +672,7 @@ An unknown address under `/api` answers JSON 404 whatever the `Accept` header sa
 
 ## Rate limits
 
-Each client address has 120 requests per 60 seconds, shared by `/healthz`, every address under `/api` (signed agent requests included), the share pictures under `/share`, the browser's visit reports at `/visit-log` and a request to the connector at `/mcp` without a token. An IPv6 address is counted by its /64 block. Every answer there says where you stand, except that while Keyfleet is closed `/api` answers 503 `not_open_yet` with `Retry-After` and without these headers:
+Each client address has 120 requests per 60 seconds, shared by `/healthz`, every address under `/api` (signed agent requests included), the share pictures under `/share` and the browser's visit reports at `/visit-log`. An IPv6 address is counted by its /64 block. Every answer there says where you stand, except that while Keyfleet is closed `/api` answers 503 `not_open_yet` with `Retry-After` and without these headers:
 
 ```http
 RateLimit-Policy: "default";q=120;w=60
@@ -680,6 +680,8 @@ RateLimit: "default";r=119;t=42
 ```
 
 `q` is the number of requests allowed in a window of `w` seconds, `r` is how many remain and `t` is the number of seconds until the window resets. Past the limit the answer is `429` with the code `too_many_requests` and a `Retry-After` header in seconds.
+
+The connector at `/mcp` has two limits. A request to it without a valid token shares a limit with other requests from the address it comes from. Connected apps' requests have 120 a minute for each Keyfleet account, shared by every app connected to it.
 
 These requests also have a limit of their own:
 

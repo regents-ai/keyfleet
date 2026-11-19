@@ -1452,10 +1452,14 @@ features:
       its own for that app, pairs it with the person's one-use code as `claude`
       and checks in, which
       sets its last contact on Account (not its check-in light), and the person
-      can disconnect it from Connected apps. Each app a person connects keeps
-      its own identity and pairs only with its own code, so a second app never
-      takes the first one's pairing. Allow and Cancel answer a page that leads
-      back to the app's own callback, carrying a state of any length that fits
+      can disconnect it from Connected apps. An app has one identity for each
+      account it connects to, keyed by its sign-in: one that signs in by its
+      published identity, as ChatGPT does, is the same identity at every
+      connection to that account, and one registered here is a new identity
+      each time it registers. Each identity pairs only with its own code, so
+      another app never takes its pairing. Disconnecting ends an app's tokens,
+      not its pairing, which only Unpair on the Agents page ends. Allow and
+      Cancel answer a page that leads back to the app's own callback, carrying a state of any length that fits
       the 2,048 bytes allowed for the whole sign-in request. /mcp is the shared
       RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
       token, 120 requests a minute per connected account; before that a
@@ -1515,6 +1519,7 @@ features:
       - The first migration runs with every release since it reached main. 20261119120000 (the library's V4, which lifts the 255-character limit off a code's state and callback and off an app's name, callbacks and key address) has run only on test databases; while the graph machine runs it, the site machine still serving fails each sign-in query it prepared once on each database connection. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
       - Consent, Allow, the code exchange, refresh and a tool list run through Keyfleet's own endpoint for ChatGPT's and Claude's published identities and for an app registered here, and Cancel for ChatGPT's (oauth_consent_test), with the browser session set directly rather than through Privy's sign-in. The return page is checked as an answer; no browser here follows it to another host. Disconnecting, an /mcp call with a revoked token, the 405 for a GET and a 401 when the account can't be read are unchecked on Keyfleet.
       - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
+      - Whether real Claude signs in here by its published identity or registers as an app is not known: the site offers both, and the consent tests run both.
       - The connector's packages are pinned to elixir-utils `caba486c` (main). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
       - siwa-server (main, released through v104) limits what a hosted signer may sign (e9a822d) and lets it pair a Keyfleet identity only as `claude` (lib/siwa_server/hosted_requests.ex).
       - The browser walk does not open the Claude guide with the connector on; WebKit is not run on the Mac.
@@ -1558,10 +1563,12 @@ features:
       and presses Allow once. ChatGPT names itself by its own published
       identity (https://chatgpt.com/oauth/client.json) and signs its code
       exchange and each refresh with its own key, as that identity declares
-      (private_key_jwt). It keeps an identity of its own for that app and
-      pairs it with the person's one-use code as `chatgpt`, through the same
-      /mcp, sign-in, tools and limits as Claude. The pairing box offers
-      ChatGPT with its own setup words, and its guide at /agents/chatgpt, its
+      (private_key_jwt). Every ChatGPT connection to one account is one
+      identity, which pairs once with the person's one-use code as `chatgpt`,
+      through the same /mcp, sign-in, tools and limits as Claude; a later
+      ChatGPT connection to that account is the paired agent with no new code,
+      and Disconnect ends ChatGPT's tokens, not the pairing. The pairing box
+      offers ChatGPT with its own setup words, and its guide at /agents/chatgpt, its
       skill and its place on /agents and the sitemap exist only while the
       switch is on. The guide ends with Coinbase's own app in the same
       ChatGPT: it follows the fleet's holding in the person's own Coinbase
@@ -1588,6 +1595,7 @@ features:
     gaps:
       - siwa-server (main, released through v104) lets a hosted signer pair a Keyfleet identity only as `claude` (lib/siwa_server/hosted_requests.ex), so ChatGPT's `pair_identity` is refused there until that service changes.
       - Real ChatGPT has never connected. The connector test signs ChatGPT in by its published identity, served without a network, with the browser session set directly rather than through Privy's sign-in, and pairs through the tool with the hosted signer and the sign-in server stubbed.
+      - No test here signs ChatGPT in twice for one account, or again after Disconnect: that both are the same paired identity follows from the library keying an identity by the account and the app's sign-in.
       - The guide's authentication label, the plans and platforms ChatGPT offers custom MCP servers on, how a person removes Keyfleet from ChatGPT, and Coinbase's own app in ChatGPT are not checked against ChatGPT.
       - Nothing checks /agents/chatgpt, its skill, /agents or the sitemap with the switch on and off.
   - id: agent-key-page-activity-walls

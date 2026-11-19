@@ -13575,12 +13575,12 @@ step's report).
   (`KeyfleetWeb.AgentGuides`). The `/mcp` refusal without a token, the MCP
   instructions, the hosted MCP line in `/agents.md` and `/docs` and the identity
   refusal's words ("in your app's settings") name both apps.
-- The guide, modelled on Claude's, gives only the steps OpenAI's own help pages show:
-  the Plugins page, Add custom MCP server with the address `/mcp`, the warning, Create
-  as a plugin, then `@` in a chat. It ends with Coinbase's own app in the same ChatGPT,
-  which follows the fleet's holding in the person's own Coinbase account with Coinbase
-  asking the person to confirm each order, and Coinbase's guide for agents as its one
-  link.
+- The guide, modelled on Claude's, gives the person's steps in ChatGPT: the Plugins
+  page, Add custom MCP server with the address `/mcp`, the warning, Create as a plugin,
+  then `@` in a chat. It ends with following the fleet's holding in the person's own
+  Coinbase account through Coinbase's own app in the same ChatGPT, where Keyfleet places
+  no order and which it never sees or touches, and Coinbase's guide for agents as its
+  one link.
 - The switch keeps its name, `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: renaming it is a
   production setting, the founder's. config/runtime.exs and platform/README.md say it
   is named for Claude, its first app.
@@ -13954,7 +13954,7 @@ step's report).
   Commits f471998ec, 1fc869e5d, ebc5afaeb, cd5b253eb, 6b420bc2f, a9a4bd3ce and
   27b5c742d.
 
-## 2026-11-19 — Keyfleet on the shared library ChatGPT signs in with
+## 2026-11-19 — Keyfleet moves to the shared library that signs ChatGPT in
 
 - `@elixir_utils_ref` moves from `2ebfd300` to `0a9467f9`, elixir-utils main with the
   ChatGPT sign-in work. `2ebfd300` is not an ancestor: its two extra commits (the SIWA
@@ -14038,7 +14038,7 @@ step's report).
   hello-cards row is new; docs/agent-feature-map.md has a row for each.
 - Found, outside this change: siwa-server's hosted signer lets a Keyfleet identity pair
   only as `claude` (lib/siwa_server/hosted_requests.ex), so ChatGPT's pair_identity with
-  the `chatgpt` harness, once kf/seasons-1118 lists it, would be refused
+  the `chatgpt` harness, which the connector now takes, is refused
   `hosted_request_not_allowed` until siwa-server allows it. The library reads SIWA's
   published keys to check a card or a pairing question's token when it holds none read in
   the last hour, and may read them sooner for a key not among those it holds; otherwise it
@@ -14162,9 +14162,52 @@ step's report).
   page in a signed-in session, Allow on the page's own form, and the code traded with
   ChatGPT's signed assertion. The connector test no longer registers a ChatGPT app.
   `OAuthConsentTest`'s connector names both apps, as config/runtime.exs does.
-- No version changes. The API contract's pair request lists only the runtimes that
-  sign their own requests, never the connector's apps; the tool manifest's harness is
+- No version changes here. The API contract's harness list gains the connector's apps,
+  `claude` and `chatgpt`, in the entry below (36.5.0); the tool manifest's harness is
   free text; the route catalog names `/agents/:agent`; `cli/commands.json` and
   `/skill.md` are untouched. The connector lists its own `pair_identity` input, now
   `claude` or `chatgpt`.
 - The public changelog keeps one 19 November heading, with the ChatGPT entry first.
+
+## 2026-11-19 — One agent for each app on an account, and the contract names the connected apps
+
+- The shared library keys a connected app's identity by the site, the account and the
+  app's sign-in client (`RegentMCPAgents.identity_key/3`). An app that signs in by its
+  published identity has one client for its address (`RegentOAuth.ClientDocuments`), so
+  every connection of it to one account is the same identity: once paired, a later
+  ChatGPT connection to that account is the paired agent with no new code, and
+  Disconnect on Connected apps ends ChatGPT's tokens, not the pairing, which only Unpair
+  on the Agents page ends. An app registered here gets a new client, and so a new
+  identity, each time it registers. Whether real Claude signs in by its published
+  identity or registers is not known here: the site offers both, and the consent tests
+  run both.
+- `/agents/chatgpt` says every ChatGPT connection to the person's account is the same
+  agent, that disconnecting ends ChatGPT's access while the pairing stays until the
+  person unpairs it, and that reconnecting doesn't pair the agent; it no longer says a
+  reconnect makes a new identity. Its Coinbase line says only what Keyfleet does: it
+  places no order and never sees or touches that account. `/agents/claude` keeps only
+  what holds either way: another app's agent isn't Claude, an unpaired Claude asks for
+  a code of its own, disconnecting ends Claude's access and leaves the pairing, and
+  reconnecting doesn't pair it. The connector's instructions to apps say the same rule
+  for both kinds of app in place of "Removing and adding the connector again makes a
+  new identity". features.yml's `claude-connector` and `chatgpt-connector` rows,
+  docs/agent-parity.md's Connector and docs/agent-feature-map.md's ChatGPT row say it
+  too, with two new gaps: no test here signs ChatGPT in twice for one account, and how
+  real Claude signs in is not known.
+- API contract 36.5.0 (was 36.4.0, the one on main): `SharedAgentHarness`, the harness of
+  the pair request and of the pair and check-in answers, lists `claude` and `chatgpt`,
+  which the pair request takes only while the connector is on. A minor step: two
+  values a field can now hold, nothing removed or renamed. Both copies of the contract
+  say so. `cli/commands.json` and the tool manifest give the harness as free text, so
+  they don't change; `/skill.md` lists the harnesses an agent signing its own requests
+  names, and stays 3.36.0. No contract test checks a pairing answer against the list.
+- docs.md's Rate limits no longer names the connector among what shares the per-address
+  budget; a paragraph of its own says a request to `/mcp` without a valid token shares
+  a limit with other requests from its address, and connected apps' requests have 120 a
+  minute for each Keyfleet account, shared by every app connected to it.
+- The public changelog's ChatGPT entry says every ChatGPT connection to a person's
+  account is the same agent until they unpair it, and names contract 36.5.0.
+- The root README names ChatGPT beside Claude at `/mcp` and among the setup notes. The
+  library-move entry's heading reads as a sentence, its found line no longer waits on
+  kf/seasons-1118, and the ChatGPT entry's guide line no longer speaks for OpenAI's help
+  pages or for Coinbase's confirmations.

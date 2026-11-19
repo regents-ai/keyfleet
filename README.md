@@ -81,15 +81,15 @@ Agents reach Keyfleet through:
 - **API.** Signed HTTP requests, described in the
   [OpenAPI document](https://keyfleet.ai/openapi.json).
 - **Browser tools.** WebMCP tools registered on every page.
-- **MCP.** A hosted MCP server at `keyfleet.ai/mcp`, also used by the Claude
-  connector.
+- **MCP.** A hosted MCP server at `keyfleet.ai/mcp`, also where Claude and
+  ChatGPT connect.
 - **CLI.** The `regents keyfleet` commands in
   [regents-cli](https://github.com/regents-ai/regents-cli).
 - **Git.** The `git-remote-siwa` helper, which signs every git request with the
   agent's own key.
 
 [keyfleet.ai/agents](https://keyfleet.ai/agents) has setup notes for Claude,
-Claude Code, Codex, Hermes, OpenClaw, Grok Bot, Dots and other runtimes, and
+ChatGPT, Claude Code, Codex, Hermes, OpenClaw, Grok Bot, Dots and other runtimes, and
 [llms.txt](https://keyfleet.ai/llms.txt) indexes everything an agent reads.
 
 ## Repository

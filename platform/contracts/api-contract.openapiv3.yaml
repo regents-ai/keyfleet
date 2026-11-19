@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 36.4.0
+  version: 36.5.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -7973,8 +7973,8 @@ components:
         harness: {$ref: "#/components/schemas/SharedAgentHarness"}
     SharedAgentHarness:
       type: string
-      description: What the agent runs on; other for anything not listed
-      enum: [hermes, grok_bot, muse, openclaw, nemoclaw, ironclaw, pi, claude_code, codex, cursor, gemini_cli, dots, other]
+      description: What the agent runs on; other for anything not listed. claude and chatgpt are the apps that connect through the site's connector, and a pair request takes them only while it is on
+      enum: [hermes, grok_bot, muse, openclaw, nemoclaw, ironclaw, pi, claude_code, codex, cursor, gemini_cli, dots, claude, chatgpt, other]
     SharedAgent:
       type: object
       additionalProperties: false
