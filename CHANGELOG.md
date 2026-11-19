@@ -13617,3 +13617,15 @@ step's report).
   server twice in a browser: LiveView's script drops a press on a button still waiting
   for its answer. `SeasonsPageTest` presses a season twice, and another season then
   this one, before the page answers, and finds the first hundred both times.
+- A product's price at a boundary is the newest one-minute close of the season that
+  ended there, not of the last 15 minutes, so a holding still listed and trading is no
+  longer let go for one quiet quarter hour. `Keyfleet.Seasons.Coinbase.price/2` asks
+  for the season's minutes in its one request, the length from
+  `Keyfleet.Seasons.season_hours/0`; Coinbase's reference for Get Public Product
+  Candles gives 350 as the most a request answers, and a season is 180. Only a product
+  with no trade all season, or one Coinbase no longer knows, has no price. Late turns
+  and catch-ups read the same history as before. `Keyfleet.CoinbaseStub` answers no
+  more than those 350. `CoinbaseTest` prices a product quiet for 97 minutes and one
+  whose only trade is the season's first minute, and finds none for one whose last
+  trade is the minute before the season; it fails on the old reading. The docs and
+  the feature list say so.

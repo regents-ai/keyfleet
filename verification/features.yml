@@ -1703,9 +1703,10 @@ features:
       nothing and keeps its place. A turn a minute after each hour, queued every ten
       minutes so a missed or failed one runs again, settles the season that
       ended, locks the one starting and opens the next, in one step. A pick
-      scores close over open less one, from Coinbase's one-minute candles; a
-      price of 0 or below is no price, and a pick without both prices is
-      void. The best pick takes the crown, the fleet's holding and captain,
+      scores close over open less one, from Coinbase's one-minute candles: a
+      price at a boundary is the newest close of the three hours before it,
+      read in one request, a price of 0 or below is no price, and a pick
+      without both prices is void. The best pick takes the crown, the fleet's holding and captain,
       only when it beats the holding by more than 0.01; a holding with no
       price at its season's end doesn't defend, so the best pick takes it
       with no margin, or USDC when none scored. The product list is

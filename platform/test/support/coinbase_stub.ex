@@ -147,12 +147,14 @@ defmodule Keyfleet.CoinbaseStub do
     end
   end
 
-  # Every candle from `start` to `end`, both included, newest first.
+  # Every candle from `start` to `end`, both included, newest first. Coinbase
+  # answers at most 350 candles a request.
   defp candles(conn, closes, product_id) do
     query = Map.new(URI.query_decoder(conn.query_string))
     first = String.to_integer(query["start"])
     last = String.to_integer(query["end"])
     "ONE_MINUTE" = query["granularity"]
+    true = div(last - first, 60) < 350
 
     case Map.fetch(closes, product_id) do
       {:ok, :down} ->

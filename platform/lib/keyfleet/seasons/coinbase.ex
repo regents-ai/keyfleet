@@ -10,18 +10,21 @@ defmodule Keyfleet.Seasons.Coinbase do
   traded over the last 24 hours (`approximate_quote_24h_volume`). `USDC`
   always may. A list that goes on past twenty pages is not read.
 
-  A product's price at boundary T is the close of the one-minute candle that
-  started at T - 60 s (`GET /market/products/{product_id}/candles`), or, when
-  that minute had no trade, the newest one-minute close of the 15 minutes
-  before T. With none it has no price, and a close of 0 or below is no price
-  either. `USDC`'s price is 1. Prices are the
-  decimals Coinbase sent.
+  A product's price at boundary T is the close of the newest one-minute
+  candle of the season that ended at T (`GET /market/products/{product_id}/candles`,
+  one request for every minute of the season, which Coinbase answers up to
+  350 at a time): the minute that started at T - 60 s, or, when that minute
+  had no trade, the last that did. With no trade all season it has no
+  price, and a close of 0 or below is no price either. `USDC`'s price is 1.
+  Prices are the decimals Coinbase sent.
 
   A product Coinbase no longer knows has no price. Any other answer but a
   reading is an error, and nothing is decided on it.
 
   The address comes from `config :keyfleet, Keyfleet.Seasons.Coinbase, url:`.
   """
+
+  alias Keyfleet.Seasons
 
   # The least a product must have traded over 24 hours, in US dollars, to be picked.
   @volume_floor Decimal.new(1_000_000)
@@ -60,8 +63,8 @@ defmodule Keyfleet.Seasons.Coinbase do
   def price(@usdc, _boundary), do: {:ok, Decimal.new(1)}
 
   def price(product_id, %DateTime{} = boundary) do
+    first = boundary |> DateTime.add(-Seasons.season_hours(), :hour) |> DateTime.to_unix()
     last = DateTime.to_unix(boundary) - 60
-    first = last - 14 * 60
 
     case get("/market/products/:product_id/candles",
            path_params: [product_id: product_id],

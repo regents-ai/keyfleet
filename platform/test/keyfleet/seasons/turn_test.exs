@@ -128,8 +128,9 @@ defmodule Keyfleet.Seasons.TurnTest do
         {before(b3, 1), "99"},
         {before(b4, 1), "120"}
       ],
-      # ETH has its start price, and no trade in the 15 minutes before b2.
-      "ETH-USD" => [{before(b1, 1), "2000"}, {before(b2, 20), "2500"}]
+      # ETH has its start price, its last trade the minute before season 1, and
+      # none in season 1, so no price at its end.
+      "ETH-USD" => [{before(b1, 1), "2000"}]
     })
 
     assert :ok = turn(b0)
