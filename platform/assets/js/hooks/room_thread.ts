@@ -1,88 +1,99 @@
 import type {Hook} from "../hook_composition"
 
+/**
+ * A room's posts, which open at the newest one, with the box to write in under
+ * it, and stay there while the reader is there. The rule, all of it:
+ *
+ * The end is the bottom of the foot under the posts, which holds a refusal and
+ * the box to write in, where the foot is drawn: never how far the room
+ * scrolls, which runs past what is drawn while posts move. The end is on
+ * screen when it lies in the part of the room's column the window shows: the
+ * column's own box on a wide screen, where the room scrolls by itself, and the
+ * window on a narrow one, where the page scrolls.
+ *
+ * Whenever the posts, the foot or the room change size, as a post arrives or
+ * goes, a picture loads, the window resizes or a refusal shows, the room
+ * follows to the end if the end was on screen before the change, at the place
+ * the reader left the room, or is on screen now. Where the reader left it is
+ * read from the first post on screen after the last change, or the foot when
+ * no post is: the browser keeps that post in place when posts above it come or
+ * go, so how far it has moved since is how far the reader scrolled. Nothing
+ * listens to scrolling: a reader who scrolled up to read is left there.
+ *
+ * Following puts the foot's bottom at the column's bottom, with the column's
+ * own spacing under it, and scrolls the page only when the room's own bottom
+ * is off the screen. Opening the room, which mounts this element afresh, the
+ * reader's own post and a connection that comes back take the room to the end.
+ */
+
+// How near the end still counts as on screen: what zoom loses to rounding.
+const NEAR = 2
+
+// The part of the room's column the window shows, as drawn in the window.
+type Shown = {top: number; bottom: number}
+
+// The room as the last change left it: the first post on screen, or the foot,
+// and its top; the foot's bottom; and the part of the column then shown.
+type Mark = {first: Element; top: number; end: number; shown: Shown}
+
 type RoomThreadHook = {
   el: HTMLElement
   room?: HTMLElement
-  atEnd: boolean
+  mark?: Mark
   follow?: () => void
   watch?: ResizeObserver
-  onScroll?: (event: Event) => void
-  onSubmit?: () => void
 }
 
-// How near the end still counts as at it: what zoom loses to rounding.
-const NEAR = 2
-
-/**
- * Whether the reader is at the room's end: the room scrolled to its end, on a
- * wide screen where it scrolls in its own column, and its foot on the screen,
- * on a narrow one where it scrolls with the page.
- */
-function atEnd(room: HTMLElement) {
-  const {bottom} = room.getBoundingClientRect()
-  return room.scrollHeight - room.scrollTop - room.clientHeight <= NEAR && bottom >= 0 && bottom <= innerHeight + NEAR
+function shown(room: HTMLElement): Shown {
+  const top = room.getBoundingClientRect().top + room.clientTop
+  return {top: Math.max(top, 0), bottom: Math.min(top + room.clientHeight, innerHeight)}
 }
 
-/** The newest post at the foot of the screen, with the box to write in under it. */
-function toEnd(room: HTMLElement) {
-  room.scrollTop = room.scrollHeight
+const onScreen = (y: number, {top, bottom}: Shown) => y > top && y <= bottom + NEAR
+
+function mark(room: HTMLElement, foot: HTMLElement): Mark {
+  const now = shown(room)
+  const posts = [...room.querySelectorAll("[data-post]")]
+  const first = posts.find(post => post.getBoundingClientRect().bottom > now.top) ?? foot
+  return {first, top: first.getBoundingClientRect().top, end: foot.getBoundingClientRect().bottom, shown: now}
+}
+
+function wasAtEnd({first, top, end, shown}: Mark) {
+  return first.isConnected && onScreen(end + first.getBoundingClientRect().top - top, shown)
+}
+
+function toEnd(room: HTMLElement, foot: HTMLElement) {
+  const column = room.getBoundingClientRect().top + room.clientTop + room.clientHeight
+  room.scrollTop += foot.getBoundingClientRect().bottom + parseFloat(getComputedStyle(room).paddingBottom) - column
   const {bottom} = room.getBoundingClientRect()
   if (bottom > innerHeight || bottom < 0) room.scrollIntoView({block: "end", behavior: "instant"})
 }
 
-/**
- * A room's posts, which open at the newest one whenever the room comes to be
- * shown: the element is the room's own, so opening another room, coming back
- * to this one or loading the page mounts it afresh. While the reader is at the
- * newest post, anything that changes the room's size keeps them there: a new
- * post as it slides in, a picture loading, the window resizing, a refusal
- * under the posts. Only the reader scrolling up leaves the end: a scroll that
- * leaves the room's column or the page higher than the page last put it. A
- * post sliding in can overshoot and settle back, and the page follows it
- * down and up again, so where the page puts each box is noted as it does.
- * Once the reader has left, nothing moves them until they are back at the
- * end, send a post of their own or the page reconnects and draws the room
- * again.
- */
 export const RoomThread: Hook = {
   mounted(this: RoomThreadHook) {
     const room = this.el.closest<HTMLElement>(".rooms-thread")!
-    // Where each box holding the room last stood, after the page or the
-    // reader moved it.
-    const tops = new WeakMap<Element, number>()
+    const foot = room.querySelector<HTMLElement>(".rooms-foot")!
+    const follow = () => {
+      toEnd(room, foot)
+      this.mark = mark(room, foot)
+    }
     this.room = room
-    this.atEnd = true
-    this.follow = () => {
-      toEnd(room)
-      for (let box: Element | null = room; box; box = box.parentElement) tops.set(box, box.scrollTop)
-    }
-    this.onScroll = event => {
-      const scroller = event.target instanceof Element ? event.target : document.scrollingElement!
-      if (!scroller.contains(room)) return
-      const up = scroller.scrollTop < (tops.get(scroller) ?? scroller.scrollTop)
-      tops.set(scroller, scroller.scrollTop)
-      this.atEnd = atEnd(room) || (this.atEnd && !up)
-    }
-    this.onSubmit = () => {
-      this.atEnd = true
-      this.follow!()
-    }
-    this.watch = new ResizeObserver(() => this.atEnd && this.follow!())
-    for (const box of [this.el, room.querySelector(".rooms-foot")!, room]) this.watch.observe(box)
-    // Scrolls of the room's column and of the page, neither of which bubbles.
-    document.addEventListener("scroll", this.onScroll, {capture: true, passive: true})
-    room.addEventListener("submit", this.onSubmit)
-    this.follow()
+    this.follow = follow
+    this.watch = new ResizeObserver(() => {
+      if (wasAtEnd(this.mark!) || onScreen(foot.getBoundingClientRect().bottom, shown(room))) toEnd(room, foot)
+      this.mark = mark(room, foot)
+    })
+    for (const box of [this.el, foot, room]) this.watch.observe(box)
+    room.addEventListener("submit", follow)
+    follow()
   },
 
   reconnected(this: RoomThreadHook) {
-    this.atEnd = true
     this.follow!()
   },
 
   destroyed(this: RoomThreadHook) {
     this.watch?.disconnect()
-    document.removeEventListener("scroll", this.onScroll!, {capture: true})
-    this.room?.removeEventListener("submit", this.onSubmit!)
+    this.room?.removeEventListener("submit", this.follow!)
   },
 }
