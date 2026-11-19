@@ -828,6 +828,40 @@ features:
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
+  - id: points-account-awards
+    what: >-
+      A person earns Regent Points on Keyfleet for five account actions, each
+      once across every Regent site: their account, linking X, GitHub or
+      Farcaster, and their first paired agent. Each is offered to Points in the
+      save that makes it; what they already had when Points started earns at
+      the start, from an hourly run. Only production approves the five.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/points.ex
+      - platform/lib/keyfleet/points/award.ex
+      - platform/lib/keyfleet/points/account_activated.ex
+      - platform/lib/keyfleet/points/linked_social.ex
+      - platform/lib/keyfleet/points/paired_agent.ex
+      - platform/lib/keyfleet/accounts/signals.ex
+      - platform/lib/keyfleet/accounts/human_account.ex
+      - platform/lib/keyfleet/accounts/linked_identity.ex
+      - platform/lib/keyfleet/accounts/verified_session.ex
+      - platform/lib/keyfleet/accounts.ex
+      - platform/config/config.exs
+      - platform/config/prod.exs
+    entry:
+      - route: POST /auth/privy/session
+      - route: POST /api/agents/v1/pair
+    proofs:
+      - platform/test/keyfleet/points/account_rules_test.exs
+      - platform/test/keyfleet/points/start_awards_test.exs
+      - platform/test/keyfleet_web/points_page_test.exs
+    gaps:
+      - Something made, linked or paired here between the Points start and the release that approves the five is never offered and earns nothing unless it happens again.
+      - An X, GitHub or Farcaster account that replaced another one here before this release keeps the time the first one was linked, so if that was before the Points start it earns at the start.
+      - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
+
   - id: account-ens-name
     what: >-
       Account › Profile's Details list the ENS name Ethereum publishes for the

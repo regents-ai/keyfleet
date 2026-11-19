@@ -101,6 +101,17 @@ defmodule Keyfleet.Accounts.HumanAccount do
       filter expr(id in ^arg(:ids))
     end
 
+    # The accounts made before a moment, such as the Points start.
+    read :created_before do
+      argument :at, :utc_datetime_usec, allow_nil?: false
+      filter expr(created_at < ^arg(:at))
+    end
+
+    read :by_privy_dids do
+      argument :privy_dids, {:array, :string}, allow_nil?: false
+      filter expr(privy_user_id in ^arg(:privy_dids))
+    end
+
     # The accounts linking any of these wallets, which are lowercase; the
     # accounts may keep theirs in any case.
     read :holding_wallets do
@@ -121,7 +132,32 @@ defmodule Keyfleet.Accounts.HumanAccount do
       accept [:privy_user_id, :wallet_address, :wallet_addresses]
       upsert? true
       upsert_identity :unique_privy_user_id
-      upsert_fields []
+      # A sign-in to an existing account writes nothing to it, and the account
+      # comes back marked as skipped.
+      upsert_condition expr(false)
+      return_skipped_upsert? true
+
+      emit Keyfleet.Accounts.Signals, :account_registered,
+        dynamic?: true,
+        description: "Only when the sign-in inserted the account."
+
+      # A sign-in to an account that already exists skips the upsert, and Ash marks
+      # the account it returns with `upsert_skipped`.
+      change after_action(fn
+               _changeset, %{__metadata__: %{upsert_skipped: true}} = account, _context ->
+                 {:ok, account}
+
+               changeset, account, _context ->
+                 with :ok <-
+                        Ash.Signals.emit(
+                          changeset,
+                          Keyfleet.Accounts.Signals,
+                          :account_registered,
+                          %{account_id: account.id}
+                        ),
+                      do: {:ok, account}
+             end)
+
       change load([:display_name])
     end
 
@@ -141,7 +177,9 @@ defmodule Keyfleet.Accounts.HumanAccount do
              :by_ids,
              :register_verified,
              :refresh_verified,
-             :points_account
+             :points_account,
+             :created_before,
+             :by_privy_dids
            ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end

@@ -13958,6 +13958,84 @@ step's report).
   With them the smoke runs to its end again: built on Node 26.13.1, both machines up,
   every migration applied, on PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1).
 
+## 2026-11-19 — Points: the five account actions earn on Keyfleet
+
+- Keyfleet offers Regent Points the five account actions the template offers, each once
+  per account across every Regent site: a new account (`account.activated`), a linked X,
+  GitHub or Farcaster account (`social.x`, `social.github`, `social.farcaster`) and a
+  first paired agent (`agent.activated`). None of Keyfleet's own rules (`keyfleet.*`)
+  earns; they have no source, no adapter and no approval.
+- The switch is the release: `platform/config/prod.exs` sets the shared program start,
+  `~U[2026-11-16 17:00:00Z]`, the same moment on every Regent site and never moved, and
+  approves the five. `platform/config/config.exs` keeps `starts_at: nil` and
+  `approved_rules: []`, so development and tests earn nothing unless a test says so, and
+  names the five sources. No backfill, no resubmission, no Keyfleet-only start, no
+  migration.
+- Each action is offered inside the save that makes it, through Ash signals as the
+  template does: `Keyfleet.Accounts.Signals` (new) carries `:account_registered` and
+  `:social_linked`; `RegentAgents.Signals` already carries `:agent_paired`.
+  `Keyfleet.Points.Award` (new, in the new `Keyfleet.Points` domain) listens to the three
+  and calls `RegentPoints.record_event/2`, so the Points job commits or rolls back with
+  the action.
+- The sign-in's two saves now match the template's main (ash-template 560ee24b).
+  `HumanAccount :register_verified` announces `:account_registered` only when it inserted
+  the account: a sign-in to an account that already exists now writes nothing to it
+  (`upsert_condition expr(false)`, `return_skipped_upsert? true`) and the account is read
+  back marked `upsert_skipped`, where before it rewrote `privy_user_id` with the same
+  value. For links, the same X, GitHub or Farcaster account signing in again takes the
+  new `LinkedIdentity :refresh_verified` update (username, display name, `verified_at`,
+  metadata), which announces nothing and leaves `inserted_at` alone. An account new to
+  the person, a first link for that provider or one that replaces the earlier one, takes
+  `:upsert_verified`, which now also sets `inserted_at` to the moment of linking and
+  announces `:social_linked`; before, a replacement kept the first link's time and was
+  never offered. A replaced account earns only while the person has not earned that
+  rule on any site and the new account has not earned it for anyone else. What sign-in
+  accepts and the conflicts it reports are unchanged. No migration, and rows saved
+  before this release are not repaired: a link replaced earlier keeps the first link's
+  time.
+- `Keyfleet.Points.AccountActivated`, `LinkedSocial` and `PairedAgent` match the
+  template's current sources: the account is `source_app: "regents"` on every site; a
+  link and a pairing are `"keyfleet"`, keyed by `provider:subject` and by the pairing.
+  Their `existing/2` gives `RegentPoints.StartAwards` what an account already had before
+  the start. Keyfleet's page does not use `held/2`, so the sources have none. New
+  reads: `Accounts.accounts_created_before/2`, `accounts_by_privy_dids/2` and
+  `linked_identities_before/3`.
+- Oban on the site machine (the graph machine runs none) gains the `points: 2` and
+  `points_chain: 2` queues and `{"@hourly", RegentPoints.StartAwards}`; the tally stays
+  Regents' alone. No queue reserves connections: every job and page on the site machine
+  draws on its one pool of 5, and a Points job waits for a free one like any other. The
+  site machine's queues now run up to 30 jobs at once, 26 before. The compile-connected
+  limit in `platform/mix.exs` goes from 144 to 145 for the new domain and its listener.
+- The shared library moves from elixir-utils 3bd29b2e to the template's bef9ff27, all
+  thirteen of its packages together, so `make check-required-fixes` passes;
+  `platform/mix.lock` changes only in those entries. bef9ff27 is 3bd29b2e plus one Points
+  change: the award job asks the source again just before it writes an award, under
+  the account's lock. A source that refuses then, such as a link removed since the
+  check, gets no award and the offer ends refused; one that cannot answer is tried
+  again by Oban, up to ten attempts. Keyfleet's three sources answer that second ask as
+  the template's do: an agent unpaired after the offer still earns, a removed link does
+  not.
+- `/docs` Points and `/agents.md` say what earns here. The Points page and the agent's
+  Points answer are unchanged: once the five are approved they list them under Once,
+  each done when the account has earned it on any site.
+- Proof: `test/keyfleet/points/account_rules_test.exs`, 9 tests (a first sign-in
+  announced and a second not, a save rolled back, a link and a same-account sign-in that
+  announces and queues nothing, a second person, a replaced link, another site's award,
+  pairing, the second ask, a source that cannot answer at the check or at the second
+  ask, a rule off and no start), and `start_awards_test.exs`, 2 tests (what an account
+  had before the start earns once at the start, an account another site already
+  recorded is not offered again, a second run offers nothing; a link replaced after the
+  start is not listed as held before it and earns as it is linked). The Points page
+  test, 5 tests, now switches its rule on after making its accounts. After the review
+  fixes those 16 pass, and so do the sign-in, linked account, pairing and release tests
+  (seven files, 92 tests); the whole ExUnit suite ran once before the fixes, 1751 of
+  1753 passed, the two failures in untracked adversarial test files that are not part
+  of this change. Compile with warnings as errors, clean; format clean and
+  `mix credo --strict` no issues on the changed files; compile-connected 145 of 145;
+  `ash.codegen --check`, no changes; `make check-required-fixes`, passes. Commits
+  d12a25161, 87959c54b, fd4649d65 and 064e60802, then the review fixes, with this
+  entry.
+
 ## 2026-11-19 — Playwright 1.65.1 and Vitest 5.1.1, the refresh's third step
 
 - `platform/package.json`: `@playwright/test` 1.65.1 (from 1.64.1) and `vitest` 5.1.1 (from
