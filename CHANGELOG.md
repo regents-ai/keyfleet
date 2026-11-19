@@ -14621,3 +14621,24 @@ step's report).
   local sign-in and anvil lab guides, the still pictures record, the notebook
   hub guide and the red-team record say what is true now. The anvil lab guide
   says the lab runs on the real founding decks in `platform/priv/decks`.
+
+## 2026-11-19 — Points: the daily run offers again what has not earned
+
+- The shared Regent libraries move from elixir-utils 0e89c4fc to b9d530d4,
+  elixir-utils main, all thirteen together; `platform/mix.lock` changes only in their
+  thirteen lines. Between the two, the Points library changes, the libraries' own
+  tests are removed, and `RegentHttp` no longer reads a `:regent_http, :client`
+  setting, which Keyfleet never set.
+- The daily start run (`RegentPoints.StartAwards`) offers again what a person still
+  holds whose award has not earned, and only one account ever earns a thing. Once a
+  run succeeds no other runs that day; before the Points start each run stops. This
+  replaces what the entry "Points: what came after the start earns once, at its own
+  time" above says about what is offered again.
+- An offer never stops the save it comes with.
+- As ash-template does, the daily run's two reads select only what their callers use:
+  `HumanAccount` `:created_before` the account id, and `LinkedIdentity`
+  `:linked_before` the provider, subject and account id.
+- Keyfleet's calls need no change. No migration and no setting; no rule, rate or
+  start time changed.
+- Checks: `make check` passes every gate, the SIWA version check among them; the
+  compile-connected count stays 145.

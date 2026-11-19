@@ -352,9 +352,9 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}},
       {"*/10 * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}},
       # From the Points start, the one-time points for what accounts have that
-      # Points has not recorded; the run itself goes once a day, and again the
-      # next hour when it ended failed or cancelled. Regents alone runs
-      # RegentPoints.TallyPeriods.
+      # has not earned; before the start each run stops. Once a run succeeds no
+      # other runs that day; one that ends cancelled or discarded lets the next
+      # hour start another. Regents alone runs RegentPoints.TallyPeriods.
       {"@hourly", RegentPoints.StartAwards}
     ]
   ],
