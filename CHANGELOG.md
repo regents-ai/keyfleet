@@ -13748,11 +13748,10 @@ step's report).
   text counts as left out unless the input says what empty does; some tools keep it
   and send it on, among them events_missed's cursor, messages_leave's reply_to, the
   workspace board, graph and changes project, the graph's goal and the changes'
-  object. Both
-  now say only what holds for every tool: an optional input sent as null counts as
-  left out. No tool's behaviour changed, and `McpConnectorTest` still locks a pick
-  through the connector with its reason sent as null and as empty text, each with no
-  reason.
+  object. Both now say only what holds for every tool: an optional input sent as
+  null counts as left out. No tool's behaviour changed, and `McpConnectorTest` still
+  locks a pick through the connector with its reason sent as null and as empty text,
+  each with no reason.
 
 ## 2026-11-19 — Captain Seasons after its fourth review
 
@@ -13774,3 +13773,8 @@ step's report).
   says a close of 0 or less, or one that is not a number, is passed over, and the
   third review's line on a page with no next cursor says what the old code did with
   an empty cursor and with a missing one.
+- Claude's guide and the feature list said an optional connector input sent as null
+  counts as left out, which holds only at the top of a tool's input. Both now say so,
+  and that a null inside an input is sent as it is, so the tool's own rules decide:
+  fleets_sync with graph.project or run.blocker sent as null is refused, and taken
+  when they are left out. No tool's behaviour changed.
