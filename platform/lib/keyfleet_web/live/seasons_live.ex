@@ -7,25 +7,33 @@ defmodule KeyfleetWeb.SeasonsLive do
   result and how many Keys picked. Above them, "24h": what the holding came
   to over the last eight seasons settled, a day of them, or over as many as
   have settled (`Keyfleet.Seasons.Rules.compounded/1`). A season's row opens
-  to its picks, a hundred at a time.
+  to its picks, a hundred at a time (`KeyfleetWeb.Components.SeasonPicks`).
 
   The record is read as the page opens and as each "More" asks; a season
-  settled meanwhile shows when the page is opened again.
+  settled meanwhile shows when the page is opened again. Its rows are a
+  stream, two to a season (the season, then its picks, hidden until it is
+  opened), so the page keeps only the newest and oldest numbers it has read
+  and the season open; past a hundred seasons, the first ones leave the top
+  as More adds more.
   """
 
   use KeyfleetWeb, :html
 
+  import Phoenix.LiveView, only: [stream: 4, stream_insert: 4]
+
   alias Keyfleet.Fleets
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.Rules
+  alias Keyfleet.Seasons.Season
+  alias KeyfleetWeb.Components.SeasonPicks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.SeasonPanel
 
-  # Picks a season's row opens to, and each "More" under them adds.
-  @picks 100
-
   # How many settled seasons "24h" compounds: a day of three-hour seasons.
   @day 8
+
+  # The seasons a page keeps: the last hundred it was given, two rows each.
+  @kept_rows 2 * 100
 
   @doc "The address of the fleet's record of settled seasons."
   def seasons_path(fleet_id), do: "#{Fleets.path(fleet_id)}/seasons"
@@ -38,15 +46,19 @@ defmodule KeyfleetWeb.SeasonsLive do
     case PageRead.run("seasons", fn -> Seasons.settled_page(fleet_id, nil) end) do
       {:ok, {seasons, more?}} ->
         day = Enum.take(seasons, @day)
+        numbers = Enum.map(seasons, & &1.number)
 
-        assign(socket, :seasons, %{
+        socket
+        |> assign(:seasons, %{
           fleet_id: fleet_id,
           state: :read,
-          rows: Enum.map(seasons, &row/1),
+          newest: List.first(numbers),
+          oldest: List.last(numbers),
           more?: more?,
           day: %{result: Rules.compounded(day), count: length(day)},
           open: nil
         })
+        |> stream(:season_rows, rows(seasons), reset: true)
 
       {:error, _failure} ->
         assign(socket, :seasons, %{fleet_id: fleet_id, state: :unreadable})
@@ -56,51 +68,44 @@ defmodule KeyfleetWeb.SeasonsLive do
   def read(socket, _route_id, _params), do: assign(socket, :seasons, nil)
 
   @doc """
-  "More" adds the page of seasons settled before the oldest on show; a
-  season's row opens to its first picks, or closes when it is open; and
-  "More" under them adds the next picks.
+  "More" adds the page of seasons settled before the oldest read, and a
+  season's row opens to its picks, or closes when it is open.
   """
   def handle_event(
         "seasons_more",
         _params,
-        %{assigns: %{seasons: %{state: :read, more?: true, rows: rows} = record}} = socket
+        %{assigns: %{seasons: %{state: :read, more?: true} = record}} = socket
       ) do
-    {seasons, more?} = Seasons.settled_page(record.fleet_id, List.last(rows).number)
+    {seasons, more?} = Seasons.settled_page(record.fleet_id, record.oldest)
 
     {:noreply,
-     assign(socket, :seasons, %{record | rows: rows ++ Enum.map(seasons, &row/1), more?: more?})}
+     socket
+     |> assign(:seasons, %{record | oldest: List.last(seasons).number, more?: more?})
+     |> stream(:season_rows, rows(seasons), limit: -@kept_rows)}
   end
 
   def handle_event(
         "seasons_open",
         %{"number" => number},
         %{assigns: %{seasons: %{state: :read} = record}} = socket
-      ) do
-    open =
-      case Enum.find(record.rows, &(Integer.to_string(&1.number) == number)) do
-        nil ->
-          record.open
-
-        row ->
-          if open?(record, row), do: nil, else: read_picks(record.fleet_id, row.number, nil, [])
-      end
-
-    {:noreply, assign(socket, :seasons, %{record | open: open})}
-  end
-
-  def handle_event(
-        "seasons_picks_more",
-        _params,
-        %{assigns: %{seasons: %{open: %{more: place} = open} = record}} = socket
       )
-      when is_integer(place) do
-    open = read_picks(record.fleet_id, open.number, place, open.picks)
-    {:noreply, assign(socket, :seasons, %{record | open: open})}
+      when is_binary(number) do
+    cond do
+      record.open && Integer.to_string(record.open.number) == number ->
+        {:noreply, opened(socket, record, nil)}
+
+      row = shown(record, number) ->
+        {:noreply, opened(socket, record, row)}
+
+      true ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   attr :seasons, :map, required: true, doc: "the record as `read/3` reads it"
+  attr :rows, :any, required: true, doc: "the record's rows, as a stream"
 
   @doc "The record page."
   def page(assigns) do
@@ -117,13 +122,13 @@ defmodule KeyfleetWeb.SeasonsLive do
         />
 
         <Regent.Primitives.empty_state
-          :if={@seasons.state == :read and @seasons.rows == []}
+          :if={@seasons.state == :read and is_nil(@seasons.newest)}
           id="seasons-empty"
           class="kf-empty"
           title="No season has ended yet."
         />
 
-        <dl :if={@seasons.state == :read and @seasons.rows != []} class="seasons-day">
+        <dl :if={@seasons.state == :read and @seasons.newest} class="seasons-day">
           <div>
             <dt>24h</dt>
             <dd id="seasons-day">
@@ -134,7 +139,7 @@ defmodule KeyfleetWeb.SeasonsLive do
         </dl>
 
         <div
-          :if={@seasons.state == :read and @seasons.rows != []}
+          :if={@seasons.state == :read and @seasons.newest}
           class="seasons-table-frame"
           role="region"
           tabindex="0"
@@ -150,34 +155,24 @@ defmodule KeyfleetWeb.SeasonsLive do
                 <th scope="col" class="seasons-table__figure">Picks</th>
               </tr>
             </thead>
-            <tbody :for={row <- @seasons.rows} id={"seasons-#{row.number}"}>
-              <tr>
-                <th scope="row">
-                  <button
-                    type="button"
-                    class="seasons-table__open"
-                    phx-click="seasons_open"
-                    phx-value-number={row.number}
-                    aria-expanded={to_string(open?(@seasons, row))}
-                    aria-controls={"seasons-#{row.number}-picks"}
-                  >
-                    <span>Season {row.number}</span>
-                    <KeyfleetWeb.Time.local
-                      id={"seasons-#{row.number}-at"}
-                      at={row.starts_at}
-                      as={:stamp}
-                      class="seasons-minor"
-                    />
-                  </button>
-                </th>
-                <td>{row.holding}</td>
-                <td>{SeasonPanel.captain(row.captain_key)}</td>
-                <td class="seasons-table__figure">{SeasonPanel.percent(row.result)}</td>
-                <td class="seasons-table__figure">{row.pick_count}</td>
-              </tr>
-              <tr :if={open?(@seasons, row)} id={"seasons-#{row.number}-picks"}>
-                <td colspan="5">
-                  <.picks open={@seasons.open} />
+            <tbody id="seasons-rows" phx-update="stream">
+              <tr
+                :for={{dom_id, item} <- @rows}
+                id={dom_id}
+                hidden={item.kind == :picks and not item.open?}
+              >
+                <.season :if={item.kind == :season} row={item.row} open?={item.open?} />
+                <td :if={item.kind == :picks and item.open?} colspan="5">
+                  <p :if={item.row.pick_count == 0} class="fleet-detail">
+                    No Key picked this season.
+                  </p>
+                  <.live_component
+                    :if={item.row.pick_count > 0}
+                    module={SeasonPicks}
+                    id={"seasons-#{item.row.number}-pick-list"}
+                    fleet_id={@seasons.fleet_id}
+                    number={item.row.number}
+                  />
                 </td>
               </tr>
             </tbody>
@@ -201,40 +196,81 @@ defmodule KeyfleetWeb.SeasonsLive do
     """
   end
 
-  attr :open, :map, required: true
+  attr :row, :map, required: true
+  attr :open?, :boolean, required: true
 
-  # One settled season's picks, in the order they were locked.
-  defp picks(%{open: %{picks: []}} = assigns),
-    do: ~H|<p class="fleet-detail">No Key picked this season.</p>|
-
-  defp picks(assigns) do
+  # A settled season's cells; its number opens its picks in the row under it.
+  defp season(assigns) do
     ~H"""
-    <ol id="seasons-picks" class="seasons-picks">
-      <li :for={pick <- @open.picks} id={"seasons-pick-#{pick.key}"}>
-        <span class="seasons-minor">Key {pick.key}</span>
-        <span>{pick.product}</span>
-        <span class="seasons-table__figure">{SeasonPanel.percent(pick.result)}</span>
-        <q :if={pick.reason} class="seasons-picks__reason">{pick.reason}</q>
-      </li>
-    </ol>
-    <Regent.Primitives.button
-      :if={@open.more}
-      id="seasons-picks-more"
-      type="button"
-      variant="secondary"
-      arrow={false}
-      phx-click="seasons_picks_more"
-    >
-      More
-    </Regent.Primitives.button>
+    <th scope="row">
+      <button
+        type="button"
+        class="seasons-table__open"
+        phx-click="seasons_open"
+        phx-value-number={@row.number}
+        aria-expanded={to_string(@open?)}
+        aria-controls={"seasons-#{@row.number}-picks"}
+      >
+        <span>Season {@row.number}</span>
+        <KeyfleetWeb.Time.local
+          id={"seasons-#{@row.number}-at"}
+          at={@row.starts_at}
+          as={:stamp}
+          class="seasons-minor"
+        />
+      </button>
+    </th>
+    <td>{@row.holding}</td>
+    <td>{SeasonPanel.captain(@row.captain_key)}</td>
+    <td class="seasons-table__figure">{SeasonPanel.percent(@row.result)}</td>
+    <td class="seasons-table__figure">{@row.pick_count}</td>
     """
   end
 
-  defp open?(%{open: %{number: number}}, %{number: number}), do: true
-  defp open?(_record, _row), do: false
-
   defp seasons_counted(1), do: "1 season"
   defp seasons_counted(count), do: "#{count} seasons"
+
+  # Closes the season open, if any, and opens `row`, if given, each where it
+  # stands on the page; a season the page has let go of stays gone.
+  defp opened(socket, record, row) do
+    socket
+    |> update_rows(record.open, false)
+    |> update_rows(row, true)
+    |> assign(:seasons, %{record | open: row})
+  end
+
+  defp update_rows(socket, nil, _open?), do: socket
+
+  defp update_rows(socket, row, open?),
+    do:
+      Enum.reduce(
+        items(row, open?),
+        socket,
+        &stream_insert(&2, :season_rows, &1, update_only: true)
+      )
+
+  # The season numbered `number` among those the page has read, read again,
+  # since the page keeps none of them.
+  defp shown(%{newest: nil}, _number), do: nil
+
+  defp shown(record, number) do
+    with {number, ""} <- Integer.parse(number),
+         true <- number in record.oldest..record.newest//1,
+         %Season{} = season <- Seasons.settled_season(record.fleet_id, number) do
+      row(season)
+    else
+      _not_shown -> nil
+    end
+  end
+
+  defp rows(seasons), do: Enum.flat_map(seasons, &items(row(&1), false))
+
+  # A season's two rows: its own, and its picks' under it.
+  defp items(row, open?),
+    do: [
+      %{id: "seasons-#{row.number}", kind: :season, row: row, open?: open?},
+      %{id: "seasons-#{row.number}-picks", kind: :picks, row: row, open?: open?}
+    ]
 
   defp row(season),
     do: %{
@@ -245,18 +281,4 @@ defmodule KeyfleetWeb.SeasonsLive do
       result: season.holding_result,
       pick_count: season.keys_locked
     }
-
-  # The page of the season's picks after `place`, under those on show.
-  defp read_picks(fleet_id, number, place, shown) do
-    {picks, _more?} = page = Seasons.settled_picks_page(fleet_id, number, place, @picks)
-
-    %{
-      number: number,
-      picks: shown ++ Enum.map(picks, &pick/1),
-      more: Seasons.next_after(page)
-    }
-  end
-
-  defp pick(pick),
-    do: %{key: pick.token_id, product: pick.product, result: pick.result, reason: pick.reason}
 end

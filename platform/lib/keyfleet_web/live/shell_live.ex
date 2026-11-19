@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.ShellLive do
   @worldline_events ~w(worldline_older worldline_filter)
   @atlas_events ~w(atlas_older atlas_blocks_fleet atlas_blocks_things)
   @season_events ~w(season_pick season_lock season_more)
-  @seasons_events ~w(seasons_more seasons_open seasons_picks_more)
+  @seasons_events ~w(seasons_more seasons_open)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -103,6 +103,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:worldline, [])
      |> stream_configure(:atlas_things, dom_id: &AtlasLive.dom_id/1)
      |> stream(:atlas_things, [])
+     |> stream_configure(:season_rows, dom_id: & &1.id)
+     |> stream(:season_rows, [])
      |> assign(
        route_spec: nil,
        client_key: client_key,
@@ -954,7 +956,11 @@ defmodule KeyfleetWeb.ShellLive do
             things={@streams.atlas_things}
             signed_out?={is_nil(actor(@access_context))}
           />
-          <SeasonsLive.page :if={@route_spec.route_id == :seasons} seasons={@seasons} />
+          <SeasonsLive.page
+            :if={@route_spec.route_id == :seasons}
+            seasons={@seasons}
+            rows={@streams.season_rows}
+          />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
             page={@proposals}

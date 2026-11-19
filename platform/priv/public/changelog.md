@@ -8,7 +8,8 @@ Changes to Keyfleet, newest first.
   that anyone can read: every season that has ended, newest first, twenty at a time,
   with the coin the fleet held, its captain, how the holding did and how many Keys
   picked. Open a season to see every Key's pick, a hundred at a time, with its result
-  and reason. Above them, 24h shows how the holding did over the last eight seasons,
+  and reason. The page keeps the last hundred seasons and an open season's last two
+  hundred picks; as More adds more, the first ones leave the top. Above them, 24h shows how the holding did over the last eight seasons,
   a day of them, each season's move multiplied into the next; a season with no result
   counts as no move, and with none at all 24h shows a dash. Results are records, not
   forecasts.

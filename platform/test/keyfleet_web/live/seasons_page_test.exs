@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.Live.SeasonsPageTest do
   # A fleet's record of settled seasons, for anyone: twenty at a time, the
   # day's result over the newest eight, and a season's picks a hundred at a
-  # time under its row.
+  # time under its row; the page keeps the last hundred seasons and two
+  # hundred picks it was given.
   use KeyfleetWeb.ConnCase, async: false
 
   alias Keyfleet.Actors
@@ -118,13 +119,37 @@ defmodule KeyfleetWeb.Live.SeasonsPageTest do
     refute has_element?(view, "#seasons-more")
   end
 
-  # Season 1 played by its turns with a pick from each of 101 Keys.
-  test "a season's row opens to its picks, a hundred at a time", %{conn: conn} do
+  test "a page pressed past a hundred seasons keeps the last hundred, and one opens at a time",
+       %{conn: conn} do
+    for number <- 1..101, do: settled!(number, "100", "101", nil)
+
+    {:ok, view, _html} = live(conn, @path)
+    for _page <- 1..5, do: view |> element("#seasons-more") |> render_click()
+
+    refute has_element?(view, "#seasons-101")
+    assert shown_numbers(render(view)) == Enum.to_list(100..1//-1)
+    refute has_element?(view, "#seasons-more")
+    assert has_element?(view, "#seasons-day", "8 seasons")
+
+    view |> element("#seasons-1 button") |> render_click()
+    assert has_element?(view, "#seasons-1 button[aria-expanded=true]")
+    assert has_element?(view, "#seasons-1-picks", "No Key picked this season.")
+
+    view |> element("#seasons-2 button") |> render_click()
+    assert has_element?(view, "#seasons-2 button[aria-expanded=true]")
+    assert has_element?(view, "#seasons-1 button[aria-expanded=false]")
+    assert has_element?(view, "#seasons-1-picks[hidden]")
+    refute has_element?(view, "#seasons-2-picks[hidden]")
+  end
+
+  # Season 1 played by its turns with a pick from each of 201 Keys.
+  test "a season's row opens to its picks, a hundred at a time, keeping the last two hundred",
+       %{conn: conn} do
     [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
     SeasonHelpers.coinbase!(%{"SOL-USD" => [{b1, "100"}, {b2, "103"}]})
     SeasonHelpers.turn!(@fleet, b0)
 
-    for key <- 1..101 do
+    for key <- 1..201 do
       wallet = "0x" <> String.pad_leading(Integer.to_string(key), 40, "0")
       holds!(key, wallet)
       reason = if key == 1, do: "Fast chain"
@@ -136,42 +161,44 @@ defmodule KeyfleetWeb.Live.SeasonsPageTest do
     SeasonHelpers.turn!(@fleet, b2)
 
     {:ok, view, _html} = live(conn, @path)
-    assert has_element?(view, "#seasons-1 td", "101")
+    assert has_element?(view, "#seasons-1 td", "201")
     assert has_element?(view, "#seasons-1 button[aria-expanded=false]")
-    refute has_element?(view, "#seasons-1-picks")
+    assert has_element?(view, "#seasons-1-picks[hidden]")
 
     view |> element("#seasons-1 button") |> render_click()
 
     assert has_element?(view, "#seasons-1 button[aria-expanded=true]")
-    assert has_element?(view, "#seasons-pick-1", "SOL-USD")
-    assert has_element?(view, "#seasons-pick-1", "+3.00%")
-    assert has_element?(view, "#seasons-pick-1 q", "Fast chain")
-    assert count_picks(view) == 100
-    refute has_element?(view, "#seasons-pick-101")
+    refute has_element?(view, "#seasons-1-picks[hidden]")
+    assert has_element?(view, "#seasons-1-pick-1", "SOL-USD")
+    assert has_element?(view, "#seasons-1-pick-1", "+3.00%")
+    assert has_element?(view, "#seasons-1-pick-1 q", "Fast chain")
+    assert shown_picks(view) == Enum.to_list(1..100)
 
-    view |> element("#seasons-picks-more") |> render_click()
-    assert count_picks(view) == 101
-    assert has_element?(view, "#seasons-pick-101", "Key 101")
-    refute has_element?(view, "#seasons-picks-more")
+    view |> element("#seasons-1-picks-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(1..200)
+
+    view |> element("#seasons-1-picks-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(2..201)
+    assert has_element?(view, "#seasons-1-pick-201", "Key 201")
+    refute has_element?(view, "#seasons-1-picks-more")
 
     view |> element("#seasons-1 button") |> render_click()
-    refute has_element?(view, "#seasons-1-picks")
+    assert has_element?(view, "#seasons-1 button[aria-expanded=false]")
+    assert has_element?(view, "#seasons-1-picks[hidden]")
+    refute has_element?(view, "#seasons-1-pick-list")
   end
 
   defp shown_numbers(html) do
-    ~r/<tbody id="seasons-(\d+)"/
+    ~r/<tr id="seasons-(\d+)"/
     |> Regex.scan(html, capture: :all_but_first)
     |> Enum.map(fn [number] -> String.to_integer(number) end)
   end
 
-  defp count_picks(view),
-    do:
-      view
-      |> element("#seasons-picks")
-      |> render()
-      |> String.split("<li")
-      |> length()
-      |> Kernel.-(1)
+  defp shown_picks(view) do
+    ~r/<li id="seasons-1-pick-(\d+)"/
+    |> Regex.scan(view |> element("#seasons-1-pick-list") |> render(), capture: :all_but_first)
+    |> Enum.map(fn [key] -> String.to_integer(key) end)
+  end
 
   # A season opened, locked holding SOL-USD and settled with its holding's
   # prices and result, three hours after the one before.

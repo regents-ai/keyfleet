@@ -1860,7 +1860,10 @@ features:
       first, twenty at a time with More, each with its number and start time,
       holding, captain, the holding's result and how many Keys picked. A
       season's row opens to its picks, a hundred at a time with More: Key,
-      product, result and reason. Above the table, 24h is the holding's
+      product, result and reason. Both lists are streams: the page keeps the
+      last hundred seasons it was given and an open season its last two
+      hundred picks, the first ones leaving the top as More adds more, and
+      holds none of them itself. Above the table, 24h is the holding's
       compounded result over the last eight settled seasons, or as many as
       have settled, multiplied exactly from the holding's prices; a season
       whose holding has not both prices shows a dash for its result and
@@ -1870,6 +1873,7 @@ features:
     level: ordinary
     paths:
       - platform/lib/keyfleet_web/live/seasons_live.ex
+      - platform/lib/keyfleet_web/components/season_picks.ex
       - platform/lib/keyfleet_web/live/season_panel.ex
       - platform/lib/keyfleet_web/live/shell_live.ex
       - platform/lib/keyfleet_web/live/fleet_live.ex

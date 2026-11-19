@@ -13358,6 +13358,17 @@ step's report).
     answer called the ended season under way for that minute or more, and the clock said
     "Less than a minute left" to a time already past. `seasons_picks` still reads the
     ended season's picks for a member until it is settled.
+  - The record page's lists are streams with a limit, as a room's thread is: its rows
+    (`:season_rows` in `ShellLive`, two to a season, the second its picks, hidden until
+    opened) keep the last hundred seasons given, and an open season's picks
+    (`KeyfleetWeb.Components.SeasonPicks`, a live component with its own stream) the last
+    two hundred; the first leave the top as More adds more. The page keeps only the
+    newest and oldest numbers read and the season open, and reads a season again when
+    its row is opened, by a number within those it read. Pick ids carry their season
+    (`seasons-N-pick-KEY`) and the More under the picks is `seasons-N-picks-more`. Before,
+    each More added twenty seasons, or a hundred picks, to what the page held for as long
+    as it was open: seasons grow by eight a day, and a Fibonacci fleet's Keys have no
+    limit.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):
@@ -13495,8 +13506,9 @@ step's report).
   `verification/features.yml` (`seasons-record-page`).
 - Tests: `SeasonsPageTest` reads only settled seasons signed out with the day over the
   newest eight, opens the record from the hall's Record, shows the day over fewer and
-  the empty page, pages twenty seasons, and opens a season of 101 picks a hundred at a
-  time; `PublicPagesControllerTest` finds the record in the site map.
+  the empty page, pages twenty seasons, keeps the last hundred of 101 seasons with one
+  open at a time, and opens a season of 201 picks a hundred at a time, keeping the last
+  two hundred; `PublicPagesControllerTest` finds the record in the site map.
 - Not done: the page doesn't hear a turn; a season settled while it is open shows
   when it is opened again.
 
