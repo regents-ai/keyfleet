@@ -532,8 +532,9 @@ this computer's Docker architecture: `git archive` of HEAD's `platform/` folder
 and the graph host's sealed Python supply, checked against its checksums. It
 reuses no cached layers, so nothing uncommitted or outside the repository
 enters it, and tags it `keyfleet:<commit>`. The smoke check starts a throwaway
-PostgreSQL 17 on its own Docker network, answering to the staging database
-hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
+PostgreSQL at the version `.tool-versions` names, and stops unless the server
+reports exactly that version, on its own Docker network, answering to the
+staging database hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
 `bin/migrate` and `bin/pending-migrations` (which must print `none`), then the
 server with an empty `/data`, whose `/healthz`, home page, fingerprinted
 stylesheet, graph host Python and own database connection it checks. The

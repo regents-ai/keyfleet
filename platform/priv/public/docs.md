@@ -634,6 +634,8 @@ The answer is `{"profile": …}` with its id, display name, linked wallets and s
 
 Your person's Points, read with your paired identity. It only reads; amounts are decimal strings.
 
+Your person earns here for their account, for linking X, GitHub or Farcaster, and for their first paired agent: each once, whichever Regent site it was earned on. One already earned on another site shows as done in `to_do` and earns nothing more. What they already had when Points started counts from the start.
+
 The bonus: Animata I, Animata II and Regents Club count across your person's verified linked wallets. At the end of each 30-day period, the tier those wallets hold that day adds its bonus to the Points earned in that period, one-time awards included.
 
 - `GET /api/v1/account/points` (`account_points`, `account points`) answers the figures your person's Points page shows: `points`, `earned_today`, `earned_yesterday`, `rank` (their place, or null with no Points), `activity_being_verified`, `to_do` (each `label`, `repeats`, `points`, `done`, `left` and `today`), `daily_limits` (each `name`, `limit` and `remaining`), `leaderboard` (the ten highest totals, each `rank`, `name`, `wallet`, `ens_name`, `points` and `you`; `name` is null when the person shows by their wallet), `entries` (each `label`, `points`, `status`, `allowance_reduction`, `by`, `agent` and `earned_at`), `period_bonuses` and `more`. Points have at most two decimal places and a whole number has no ".00"; don't divide them by a million. A note says when earning is off. It answers 503 `account_unavailable` until the leaderboard has been read once; ask again shortly.

@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "caba486c5629be8a2381028c86d6c2dc78862480"
+  @elixir_utils_ref "b695c5a068f7c8a10c51369f1840f6ed8675bffa"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "69dbfface3fdc2ab728f8cc57cface25f9c7120c"
 
@@ -65,13 +65,14 @@ defmodule Keyfleet.MixProject do
       {:ash_phoenix, "~> 2.3.26"},
       # The Claude connector's MCP address (/mcp), as ash-template serves its own.
       {:ash_ai, "~> 1.5"},
-      # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
+      # ash_postgres 2.16.0, which includes ash-project/ash_postgres#910: upserts
       # use the repo's prefix, which picks each site's schema on the shared
-      # database. It stands in for the copy the shared Regent libraries pin,
-      # until a release carries #910.
+      # database. It stays a Git pin so the required-fixes check can find the
+      # patch in its history, and stands in for the copy the shared Regent
+      # libraries pin.
       {:ash_postgres,
        git: "https://github.com/ash-project/ash_postgres.git",
-       ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
+       ref: "e36aa20a9f000f3f3bd89b0816fa9460156cb13c",
        override: true},
       {:oban, "~> 2.24"},
       # Each paired agent's activity, kept a few minutes for the account menu.
@@ -297,8 +298,10 @@ defmodule Keyfleet.MixProject do
         # hands AshAi `KeyfleetWeb.ToolSchemas.definition/3` as it compiles.
         # Seasons add four: lib/keyfleet/seasons.ex to its two records, and each
         # record to Keyfleet.Access.Check. The season tools add two: the
-        # AgentTools Seasons record, with that Run.
-        "xref graph --label compile-connected --fail-above 144",
+        # AgentTools Seasons record, with that Run. Points adds one,
+        # lib/keyfleet/points.ex -> points/award.ex, the Award listener with its
+        # domain; its policy uses only built-in checks.
+        "xref graph --label compile-connected --fail-above 145",
         "ash.codegen --check",
         "usage_rules.sync --check",
         "keyfleet.route_handoff --check",

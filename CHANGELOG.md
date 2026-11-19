@@ -13954,6 +13954,188 @@ step's report).
   Commits f471998ec, 1fc869e5d, ebc5afaeb, cd5b253eb, 6b420bc2f, a9a4bd3ce and
   27b5c742d.
 
+## 2026-11-19 — Ash libraries move with the template's version refresh
+
+- The six packages of the six-site refresh, at the versions ash-template runs live as
+  v290 (f513e944): ash 3.37.3 to 3.37.7, ash_ai 1.5.4 to 1.5.6, ash_sql 0.8.7 to 0.8.9,
+  and ash_postgres from the Git commit 55db7d44 to e36aa20a, the 2.16.0 release, which
+  has 55db7d44 (ash-project/ash_postgres#910) in its history, so the required-fixes
+  check still finds it. spark 2.7.10 and websock_adapter 0.7.2 were already there.
+- Held where they were, as on the template: finch 0.24.0, nimble_pool 1.1.0 and
+  reactor 1.0.7, which the update would have pulled forward. Keyfleet has no llm_db or
+  req_llm. Every other package is unchanged, the shared Regent libraries included.
+- `platform/mix.exs` and `platform/mix.lock` only. No migration, no setting and no
+  page or answer changes.
+- From the libraries' changelogs, for anyone reading a later fault: a generic action's
+  argument default now applies only when the argument is left out (Ash 3.37.4); a bulk
+  update's notifications are dropped if its batch rolls back (3.37.7); policy fixes
+  for related field policies in filters and for "can read" checks with exists (3.37.4,
+  3.37.5); Ash AI update and destroy tools take a read action and write decimals out
+  in full (1.5.5).
+
+## 2026-11-19 — Node 26.13.1 and PostgreSQL 17.12, the refresh's second step
+
+- `platform/.tool-versions` names Node 26.13.1 (from 26.12.0) and PostgreSQL 17.12 (from
+  17.7), as ash-template runs live as v291 (54a58195). Erlang 29.1.2 and Elixir
+  1.20.4 stay where they are.
+- `platform/Dockerfile`: the Node stage is `node:26.13.1-bookworm-slim`, by digest
+  (sha256:5df79989…b0f1). The template's stage is the trixie build of the same Node;
+  Keyfleet's other stages are bookworm, so its Node stage stays bookworm too.
+- `scripts/release.sh`: the smoke's throwaway database starts at the PostgreSQL
+  version `.tool-versions` names, in place of the floating `postgres:17`, which on a
+  machine holding an older copy meant an older 17. It stops unless the server reports
+  exactly that version and prints the version in its summary. `platform/README.md`
+  says the same.
+- The live database server is not changed by this. No migration, no library, no
+  setting and no page or answer changes.
+- `platform/test/keyfleet/release_test.exs`: the release test's throwaway database and
+  its migrations folder take a name that is unique across test runs, not only within
+  one. The full check for this step failed once on `{:error, :already_up}`: the name
+  came from a counter that restarts with every run, so it met a database another run
+  had made. Test code only.
+- `scripts/release.sh`: the smoke gives both machines the two settings the site has
+  required since 5 November and the smoke never supplied, so its machines stopped at
+  start: `KEYFLEET_PRESENCE_TIMER_KEY`, a fresh random key that holds nothing and is
+  never used (the smoke has no chain node), and `FLY_IMAGE_REF`, the image just built.
+  With them the smoke runs to its end again: built on Node 26.13.1, both machines up,
+  every migration applied, on PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1).
+
+## 2026-11-19 — Points: the five account actions earn on Keyfleet
+
+- Keyfleet offers Regent Points the five account actions the template offers, each once
+  per account across every Regent site: a new account (`account.activated`), a linked X,
+  GitHub or Farcaster account (`social.x`, `social.github`, `social.farcaster`) and a
+  first paired agent (`agent.activated`). None of Keyfleet's own rules (`keyfleet.*`)
+  earns; they have no source, no adapter and no approval.
+- The switch is the release: `platform/config/prod.exs` sets the shared program start,
+  `~U[2026-11-16 17:00:00Z]`, the same moment on every Regent site and never moved, and
+  approves the five. `platform/config/config.exs` keeps `starts_at: nil` and
+  `approved_rules: []`, so development and tests earn nothing unless a test says so, and
+  names the five sources. No backfill, no resubmission, no Keyfleet-only start, no
+  migration.
+- Each action is offered inside the save that makes it, through Ash signals as the
+  template does: `Keyfleet.Accounts.Signals` (new) carries `:account_registered` and
+  `:social_linked`; `RegentAgents.Signals` already carries `:agent_paired`.
+  `Keyfleet.Points.Award` (new, in the new `Keyfleet.Points` domain) listens to the three
+  and calls `RegentPoints.record_event/2`, so the Points job commits or rolls back with
+  the action.
+- The sign-in's two saves now match the template's main (ash-template 560ee24b).
+  `HumanAccount :register_verified` announces `:account_registered` only when it inserted
+  the account: a sign-in to an account that already exists now writes nothing to it
+  (`upsert_condition expr(false)`, `return_skipped_upsert? true`) and the account is read
+  back marked `upsert_skipped`, where before it rewrote `privy_user_id` with the same
+  value. For links, the same X, GitHub or Farcaster account signing in again takes the
+  new `LinkedIdentity :refresh_verified` update (username, display name, `verified_at`,
+  metadata), which announces nothing and leaves `inserted_at` alone. An account new to
+  the person, a first link for that provider or one that replaces the earlier one, takes
+  `:upsert_verified`, which now also sets `inserted_at` to the moment of linking and
+  announces `:social_linked`; before, a replacement kept the first link's time and was
+  never offered. A replaced account earns only while the person has not earned that
+  rule on any site and the new account has not earned it for anyone else. What sign-in
+  accepts and the conflicts it reports are unchanged. No migration, and rows saved
+  before this release are not repaired: a link replaced earlier keeps the first link's
+  time.
+- `Keyfleet.Points.AccountActivated`, `LinkedSocial` and `PairedAgent` match the
+  template's current sources: the account is `source_app: "regents"` on every site; a
+  link and a pairing are `"keyfleet"`, keyed by `provider:subject` and by the pairing.
+  Their `existing/2` gives `RegentPoints.StartAwards` what an account already had before
+  the start. Keyfleet's page does not use `held/2`, so the sources have none. New
+  reads: `Accounts.accounts_created_before/2`, `accounts_by_privy_dids/2` and
+  `linked_identities_before/3`.
+- Oban on the site machine (the graph machine runs none) gains the `points: 2` and
+  `points_chain: 2` queues and `{"@hourly", RegentPoints.StartAwards}`; the tally stays
+  Regents' alone. No queue reserves connections: every job and page on the site machine
+  draws on its one pool of 5, and a Points job waits for a free one like any other. The
+  site machine's queues now run up to 30 jobs at once, 26 before. The compile-connected
+  limit in `platform/mix.exs` goes from 144 to 145 for the new domain and its listener.
+- The shared library moves from elixir-utils 3bd29b2e to the template's bef9ff27, all
+  thirteen of its packages together, so `make check-required-fixes` passes;
+  `platform/mix.lock` changes only in those entries. bef9ff27 is 3bd29b2e plus one Points
+  change: the award job asks the source again just before it writes an award, under
+  the account's lock. A source that refuses then, such as a link removed since the
+  check, gets no award and the offer ends refused; one that cannot answer is tried
+  again by Oban, up to ten attempts. Keyfleet's three sources answer that second ask as
+  the template's do: an agent unpaired after the offer still earns, a removed link does
+  not.
+- `/docs` Points and `/agents.md` say what earns here. The Points page and the agent's
+  Points answer are unchanged: once the five are approved they list them under Once,
+  each done when the account has earned it on any site.
+- Proof: `test/keyfleet/points/account_rules_test.exs`, 9 tests (a first sign-in
+  announced and a second not, a save rolled back, a link and a same-account sign-in that
+  announces and queues nothing, a second person, a replaced link, another site's award,
+  pairing, the second ask, a source that cannot answer at the check or at the second
+  ask, a rule off and no start), and `start_awards_test.exs`, 2 tests (what an account
+  had before the start earns once at the start, an account another site already
+  recorded is not offered again, a second run offers nothing; a link replaced after the
+  start is not listed as held before it and earns as it is linked). The Points page
+  test, 5 tests, now switches its rule on after making its accounts. After the review
+  fixes those 16 pass, and so do the sign-in, linked account, pairing and release tests
+  (seven files, 92 tests); the whole ExUnit suite ran once before the fixes, 1751 of
+  1753 passed, the two failures in untracked adversarial test files that are not part
+  of this change. Compile with warnings as errors, clean; format clean and
+  `mix credo --strict` no issues on the changed files; compile-connected 145 of 145;
+  `ash.codegen --check`, no changes; `make check-required-fixes`, passes. Commits
+  d12a25161, 87959c54b, fd4649d65 and 064e60802, then the review fixes, with this
+  entry.
+
+## 2026-11-19 — Playwright 1.65.1 and Vitest 5.1.1, the refresh's third step
+
+- `platform/package.json`: `@playwright/test` 1.65.1 (from 1.64.1) and `vitest` 5.1.1 (from
+  5.1.0), as the template's v292. The lock follows: Vite 8.3.8, Rolldown 1.2.19 and its
+  binaries, and the packages those name. Playwright's Chromium is build 1255. Test tools
+  only: all 34 lock entries that change are development packages, which the image leaves
+  out (`npm ci --omit=dev`), so the image installs the same packages as before.
+- Checked before and after on Node 26.13.1: 829 packages with verified registry
+  signatures both times; `npm audit` finds nothing both times. Every package the lock
+  shares with the template's at the same version has the same integrity; the six test
+  tool packages are at the template's versions. Three packages Keyfleet already pinned
+  ahead of or apart from the template stay where they were (`@noble/hashes`, `hono`,
+  `source-map-js`).
+- No timeout or test changed. No migration.
+
+## 2026-11-19 — Points offers name their signal
+
+- Each Points listener action refuses a direct call. `Keyfleet.Points.Award` has
+  one policy per action in place of its one open policy, each
+  `authorize_if signal_in(SignalsModule, :signal)`: `:account_registered` and
+  `:social_linked` from `Keyfleet.Accounts.Signals`, `:agent_paired` from
+  `RegentAgents.Signals`. This is the template's shape (ash-template v293, 6afa0ebe).
+  The same actions earn the same awards; no migration, no setting and no library change.
+- Proof: `test/keyfleet/points/account_rules_test.exs` gains one test: a direct call, a
+  paired agent's and the system's alike, is refused and queues no offer; with any one
+  policy set back to `always()` it fails. The Points
+  tests and the sign-in, linked account and pairing tests pass (ten files, 96 tests).
+  Compile with warnings as errors, clean; format clean and `mix credo --strict` no
+  issues on the changed files.
+
+## 2026-11-19 — Points: an award goes only to the account its offer named
+
+- The shared libraries move from elixir-utils bef9ff27 to 3315bab5, all thirteen
+  together; `platform/mix.lock` changes only in those entries. 3315bab5 is bef9ff27 plus
+  three Points commits:
+  - An award goes only to the account its offer named. When the source, asked again
+    just before the award, names another account, such as a social account linked to
+    someone else since the offer, neither account earns: the event ends `rejected` and
+    the refusal is recorded as `account_changed`. That social account then earns for
+    nobody, its present holder included; whether the holder may still earn it once is
+    the shared library's open question.
+  - A rule that is off never refuses the action it rides in: `record_event/2` answers
+    `disabled` before it looks at anything else.
+  - One documentation line.
+- Keyfleet's three sources already name the account in their answer, as the same integer
+  the offer was recorded with, so none changes. The two test stand-ins for another
+  site's source, in `account_rules_test.exs` and `start_awards_test.exs`, answered
+  `{:ok, %{}}`; each now names the account its event was recorded for.
+- No migration; no Points setting, rule or start time changed. The pairings read for
+  the start run is unchanged.
+- Proof: `test/keyfleet/points/account_rules_test.exs` gains two tests: an award goes
+  only to the account its offer named, and a rule that is off never refuses the sign-in
+  it rides in, whatever the length of the linked account's subject. Both fail on
+  bef9ff27's Points code. The Points tests and the sign-in, linked account and pairing
+  tests pass (ten files, 98 tests); compile with warnings as errors, clean; format clean
+  and `mix credo --strict` no issues on the changed files; `make check-required-fixes`
+  passes.
+
 ## 2026-11-19 — Keyfleet moves to the shared library that signs ChatGPT in
 
 - `@elixir_utils_ref` moves from `2ebfd300` to `0a9467f9`, elixir-utils main with the
@@ -14273,3 +14455,38 @@ step's report).
   topic the site names, such as `agents`, once the agent has a profile. features.yml's
   `chatgpt-connector` row says Keyfleet takes any app's published identity that passes
   its checks; the ChatGPT address it named is only the tests' stand-in.
+
+## 2026-11-19 — The library move takes in main's Points
+
+- The branch takes in `kf/points-listener-1119` at 845b58cc: main at 137edb36b (Node
+  26.13.1 and PostgreSQL 17.12, the Points switch-on, Playwright 1.65.1 and Vitest
+  5.1.1) and one policy for each Points listener action. Their entries are above.
+- All thirteen elixir-utils packages move to b695c5a0, elixir-utils main, so
+  `make check-required-fixes` finds one commit. b695c5a0 is caba486c, which this
+  branch had, plus the three Points changes 3315bab5 carried (the award job asks the
+  source again just before it writes an award; an award goes only to the account its
+  offer named; a rule that is off answers `disabled` first) and one more:
+  `RegentAgents.pairings_held_from_before/1` answers a lazy stream that reads 500
+  people at a time, in no transaction, in place of `{:ok, list}`. `platform/mix.lock`
+  differs from main's side only in those thirteen entries; from this branch's side it
+  also differs in ash, ash_ai, ash_postgres and ash_sql, as main moved them.
+- `Keyfleet.Points.PairedAgent.existing/2` walks that stream as the template's does
+  (ash-template v294, 6fabd5f4): 500 pairings at a time, each batch's accounts read in
+  one go. Its `source_app` stays `"keyfleet"`, the site's own name, as the template's
+  is its own.
+- The Points page test switches on its two rules, `account.activated` and
+  `keyfleet.first_message`, after it makes its accounts, as main's test does for its
+  one. features.yml's `claude-connector` row names the new pin.
+- Every setting the agents library requires at b695c5a0 was already set: `repo`,
+  `pubsub`, `notifications`, `account`, `person` and `allowed` in
+  `platform/config/config.exs`; the sign-in service's `url` and `audience` in
+  `platform/config/dev.exs`, `test.exs` and `runtime.exs`, and its `origin` from the
+  site's own address in `runtime.exs`. No setting changes. No migration; the
+  migration `20261119120000_oauth_long_values.exs` is as it was. The API contract stays
+  36.5.0.
+- Proof: compile with warnings as errors in dev and test, clean; format clean on the
+  tracked files; `mix credo --strict` no issues on the 17 files the merge changes;
+  `make check-required-fixes` passes. The Points, sign-in, linked account and pairing
+  tests pass (ten files, 99 tests), and so do the connector, library and connected-app
+  tests this branch touched (twelve files, 126 tests). `start_awards_test.exs` fails
+  both its tests on the `{:ok, pairings}` match the stream replaces.

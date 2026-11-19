@@ -828,6 +828,40 @@ features:
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
+  - id: points-account-awards
+    what: >-
+      A person earns Regent Points on Keyfleet for five account actions, each
+      once across every Regent site: their account, linking X, GitHub or
+      Farcaster, and their first paired agent. Each is offered to Points in the
+      save that makes it; what they already had when Points started earns at
+      the start, from an hourly run. Only production approves the five.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/points.ex
+      - platform/lib/keyfleet/points/award.ex
+      - platform/lib/keyfleet/points/account_activated.ex
+      - platform/lib/keyfleet/points/linked_social.ex
+      - platform/lib/keyfleet/points/paired_agent.ex
+      - platform/lib/keyfleet/accounts/signals.ex
+      - platform/lib/keyfleet/accounts/human_account.ex
+      - platform/lib/keyfleet/accounts/linked_identity.ex
+      - platform/lib/keyfleet/accounts/verified_session.ex
+      - platform/lib/keyfleet/accounts.ex
+      - platform/config/config.exs
+      - platform/config/prod.exs
+    entry:
+      - route: POST /auth/privy/session
+      - route: POST /api/agents/v1/pair
+    proofs:
+      - platform/test/keyfleet/points/account_rules_test.exs
+      - platform/test/keyfleet/points/start_awards_test.exs
+      - platform/test/keyfleet_web/points_page_test.exs
+    gaps:
+      - Something made, linked or paired here between the Points start and the release that approves the five is never offered and earns nothing unless it happens again.
+      - An X, GitHub or Farcaster account that replaced another one here before this release keeps the time the first one was linked, so if that was before the Points start it earns at the start.
+      - Points' own check of an account waits out the shared account table's rounding to the second; a source that cannot answer, and another site's award, are proven with stand-ins, not a real outage or a second site.
+
   - id: account-ens-name
     what: >-
       Account › Profile's Details list the ENS name Ethereum publishes for the
@@ -1520,7 +1554,7 @@ features:
       - Consent, Allow, the code exchange, refresh and a tool list run through Keyfleet's own endpoint for ChatGPT's and Claude's published identities and for an app registered here, and Cancel for ChatGPT's (oauth_consent_test), with the browser session set directly rather than through Privy's sign-in. The return page is checked as an answer; no browser here follows it to another host. Disconnecting, an /mcp call with a revoked token, the 405 for a GET and a 401 when the account can't be read are unchecked on Keyfleet.
       - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
       - Whether real Claude signs in here by its published identity or registers as an app is not known: the site offers both, and the consent tests run both.
-      - The connector's packages are pinned to elixir-utils `caba486c` (main). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
+      - The connector's packages are pinned to elixir-utils `b695c5a0` (main). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
       - siwa-server (main, released through v104) limits what a hosted signer may sign (e9a822d) and lets it pair a Keyfleet identity only as `claude` (lib/siwa_server/hosted_requests.ex).
       - The browser walk does not open the Claude guide with the connector on; WebKit is not run on the Mac.
   - id: hello-cards
