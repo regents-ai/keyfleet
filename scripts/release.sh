@@ -140,6 +140,11 @@ machine_env=(
   --env PICTURES_PUBLIC_URL=https://pictures.invalid
   --env KEY_ART_URL=http://key-art.invalid
   --env LIGHTHOUSE_API_KEY=smoke
+  # The presence timer's wallet key is required and never used here: with no
+  # chain node nothing is sent. A fresh random key that holds nothing.
+  --env KEYFLEET_PRESENCE_TIMER_KEY="0x$(openssl rand -hex 32)"
+  # Fly names the image each machine runs; here it is the one just built.
+  --env FLY_IMAGE_REF="$image"
 )
 
 # /data stands in for the Fly volume, empty and owned by the app user as

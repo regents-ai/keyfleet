@@ -13951,3 +13951,9 @@ step's report).
   one. The full check for this step failed once on `{:error, :already_up}`: the name
   came from a counter that restarts with every run, so it met a database another run
   had made. Test code only.
+- `scripts/release.sh`: the smoke gives both machines the two settings the site has
+  required since 5 November and the smoke never supplied, so its machines stopped at
+  start: `KEYFLEET_PRESENCE_TIMER_KEY`, a fresh random key that holds nothing and is
+  never used (the smoke has no chain node), and `FLY_IMAGE_REF`, the image just built.
+  With them the smoke runs to its end again: built on Node 26.13.1, both machines up,
+  every migration applied, on PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1).
