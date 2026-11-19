@@ -602,8 +602,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
   # One read for each record's Answer, once where it answers and once where it
   # refuses: the connector's answer is the signed request's body, and its
-  # refusal the signed request's code and words. An empty cursor and a null
-  # one reach the signed request's check as sent.
+  # refusal the signed request's code and words.
   test "each agent tool answers and refuses as its signed request does", c do
     subject = account!()
     pair!(subject, c.signer.address)
@@ -631,8 +630,6 @@ defmodule KeyfleetWeb.McpConnectorTest do
                "path" => "lib/app.ex"
              }},
             {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
-            {"notebooks_list", %{"fleet_id" => fleet, "project" => "main", "cursor" => ""}},
-            {"notebooks_list", %{"fleet_id" => fleet, "project" => "main", "cursor" => nil}},
             {"notebooks_page",
              %{"fleet_id" => fleet, "project" => "main", "notebook_id" => "nb-0123456789abcdef"}},
             {"workspace_packet",
@@ -721,9 +718,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # A season tool runs its signed request's code: through the connector and
   # over /mcp signed by the agent it answers what the request answers, and
   # refuses with its code and words. The agent acts as its person's Key 2;
-  # Key 1's pick for the season taking picks is never shown to it. A pick
-  # with its reason left out or empty has none at every door, and one with a
-  # null reason is refused at every door, so the reason "Mine" stays.
+  # Key 1's pick for the season taking picks is never shown to it.
   test "each season tool answers and refuses as its signed request does", c do
     subject = "did:privy:connector-" <> Ecto.UUID.generate()
     wallet = new_wallet()
@@ -738,10 +733,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     pick = %{"fleet_id" => @fleet, "product" => "SOL-USD", "reason" => "Mine"}
 
     for {name, input} <- [
-          {"seasons_pick", %{pick | "reason" => ""}},
-          {"seasons_pick", Map.delete(pick, "reason")},
           {"seasons_pick", pick},
-          {"seasons_pick", %{pick | "reason" => nil}},
           {"seasons_pick", %{pick | "product" => "DOGE-USD"}},
           {"seasons_pick", %{pick | "product" => "sol-usd"}},
           {"seasons_pick", %{pick | "reason" => "Line one\nline two"}},
@@ -833,6 +825,18 @@ defmodule KeyfleetWeb.McpConnectorTest do
              result(call(token, "seasons_pick", bare, c))
 
     assert http_twin(c, manifest["seasons_pick"], bare).status == 200
+
+    # Through the connector a reason sent as null, or as empty text, is one not
+    # given: each locks the pick with no reason, as leaving it out does.
+    for no_reason <- [nil, ""] do
+      assert %{"isError" => false} = result(call(token, "seasons_pick", pick, c))
+
+      assert %{"isError" => false, "structuredContent" => %{"pick" => %{"reason" => nil}}} =
+               result(call(token, "seasons_pick", %{pick | "reason" => no_reason}, c))
+
+      now = http_twin(c, manifest["seasons_show"], %{"fleet_id" => @fleet}).body
+      assert %{"key" => 2, "reason" => nil} = now["taking_picks"]["my_pick"]
+    end
   end
 
   # An agent whose person holds no Key of the fleet reads its settled seasons,

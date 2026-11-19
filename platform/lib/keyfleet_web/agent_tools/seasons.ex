@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
 
   @fleet [max_length: 63, trim?: false]
   @number [max_length: 19, trim?: false]
-  @cursor [max_length: 512, trim?: false, allow_empty?: true]
+  @cursor [max_length: 512, trim?: false]
 
   actions do
     action :show, :map do
@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
       description "Locks or changes the pick of the Key you act as, for the season taking picks."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :product, :string, allow_nil?: false, constraints: [max_length: 32, trim?: false]
-      argument :reason, :string, constraints: [trim?: false, allow_empty?: true]
+      argument :reason, :string, constraints: [trim?: false]
       run {Run, tool: "seasons_pick"}
     end
 

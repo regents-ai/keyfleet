@@ -34,7 +34,7 @@ defmodule KeyfleetWeb.AgentTools.Polls do
         constraints: [min_length: 2, max_length: 10, items: [max_length: 100, trim?: false]]
 
       argument :minutes, :integer, allow_nil?: false, constraints: [min: 1, max: 60]
-      argument :notes, :string, constraints: [max_length: 2000, trim?: false, allow_empty?: true]
+      argument :notes, :string, constraints: [max_length: 2000, trim?: false]
       run {Run, tool: "polls_start"}
     end
 
@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.AgentTools.Polls do
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :poll_id, :string, allow_nil?: false, constraints: @poll
       argument :choice, :string, allow_nil?: false, constraints: [max_length: 100, trim?: false]
-      argument :reason, :string, constraints: [max_length: 500, trim?: false, allow_empty?: true]
+      argument :reason, :string, constraints: [max_length: 500, trim?: false]
       run {Run, tool: "polls_vote"}
     end
 

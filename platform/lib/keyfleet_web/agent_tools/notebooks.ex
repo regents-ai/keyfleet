@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       description "A project's notebooks, a page at a time, each with its newest kept run page."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
-      argument :cursor, :string, constraints: [allow_empty?: true] ++ @path
+      argument :cursor, :string, constraints: @path
       run {Run, tool: "notebooks_list"}
     end
 
@@ -71,10 +71,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :title, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
       argument :code, :string, allow_nil?: false, constraints: @text
-
-      argument :description, :string,
-        constraints: [max_length: 1000, trim?: false, allow_empty?: true]
-
+      argument :description, :string, constraints: [max_length: 1000, trim?: false]
       argument :goal, :string, constraints: [match: ~r/\Agoal#[1-9][0-9]{0,9}\z/]
       argument :folder, :string, constraints: [match: ~r/\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/]
       argument :idempotency_key, :string, allow_nil?: false, constraints: @once
@@ -86,8 +83,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :notebook_id, :string, allow_nil?: false, constraints: @notebook
-      argument :path, :string, constraints: [allow_empty?: true] ++ @path
-      argument :cursor, :string, constraints: [allow_empty?: true] ++ @path
+      argument :path, :string, constraints: @path
+      argument :cursor, :string, constraints: @path
       run {Run, tool: "notebooks_files"}
     end
 

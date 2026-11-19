@@ -38,11 +38,8 @@ defmodule KeyfleetWeb.AgentTools.Account do
 
     action :edit_profile, :map do
       description "Changes any of your profile's fields; those left out stay as they are."
-      argument :name, :string, constraints: [max_length: 120, trim?: false, allow_empty?: true]
-
-      argument :declared_harness, :string,
-        constraints: [max_length: 120, trim?: false, allow_empty?: true]
-
+      argument :name, :string, constraints: [max_length: 120, trim?: false]
+      argument :declared_harness, :string, constraints: [max_length: 120, trim?: false]
       argument :proficiencies, {:array, :string}, constraints: [max_length: 50]
       argument :interests, {:array, :string}, constraints: [max_length: 50]
       argument :service_ideas, {:array, :string}, constraints: [max_length: 50]
