@@ -297,8 +297,10 @@ defmodule Keyfleet.MixProject do
         # hands AshAi `KeyfleetWeb.ToolSchemas.definition/3` as it compiles.
         # Seasons add four: lib/keyfleet/seasons.ex to its two records, and each
         # record to Keyfleet.Access.Check. The season tools add two: the
-        # AgentTools Seasons record, with that Run.
-        "xref graph --label compile-connected --fail-above 144",
+        # AgentTools Seasons record, with that Run. Points adds one,
+        # lib/keyfleet/points.ex -> points/award.ex, the Award listener with its
+        # domain; its policy uses only built-in checks.
+        "xref graph --label compile-connected --fail-above 145",
         "ash.codegen --check",
         "usage_rules.sync --check",
         "keyfleet.route_handoff --check",

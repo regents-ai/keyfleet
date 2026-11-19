@@ -88,7 +88,13 @@ config :regent_points,
   program_id: "regents-points-v1",
   starts_at: nil,
   approved_rules: [],
-  adapters: %{}
+  adapters: %{
+    "account.activated" => Keyfleet.Points.AccountActivated,
+    "agent.activated" => Keyfleet.Points.PairedAgent,
+    "social.farcaster" => Keyfleet.Points.LinkedSocial,
+    "social.github" => Keyfleet.Points.LinkedSocial,
+    "social.x" => Keyfleet.Points.LinkedSocial
+  }
 
 # Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
 # its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
@@ -203,6 +209,7 @@ config :keyfleet,
     Keyfleet.LeftMessages,
     Keyfleet.Usage,
     Keyfleet.Atlas,
+    Keyfleet.Points,
     KeyfleetWeb.AgentTools
   ],
   generators: [timestamp_type: :utc_datetime]
@@ -305,6 +312,10 @@ config :keyfleet, Oban,
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   # Each fleet's season turn waits on Coinbase for its prices, so the turns
   # have their own queue, one fleet at a time (`Keyfleet.Seasons.Turn`).
+  # Regent Points checks and awards what this site offers it: each job holds a
+  # connection while it runs, so `points` takes at most 2 of the site
+  # machine's 5 (Keyfleet.DatabaseConfig). `points_chain` takes the tally's
+  # Base reads, which only Regents queues.
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -314,7 +325,9 @@ config :keyfleet, Oban,
     key_art: 1,
     chain: 10,
     ens: 3,
-    seasons: 1
+    seasons: 1,
+    points: 2,
+    points_chain: 2
   ],
   cron: [
     crontab: [
@@ -341,7 +354,10 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "project_cards"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}},
-      {"*/10 * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}}
+      {"*/10 * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}},
+      # From the Points start, the one-time points for what accounts already
+      # had. Regents alone runs RegentPoints.TallyPeriods.
+      {"@hourly", RegentPoints.StartAwards}
     ]
   ],
   pruner: [max_age: {7, :days}],
