@@ -13683,3 +13683,8 @@ step's report).
   command guide, the command list, the docs and the public changelog say the rule in
   the same plain words; the full rule is in `Keyfleet.Seasons.Validations.Reason`'s
   module note.
+- A variation selector directly after a character Unicode has not yet assigned, a
+  noncharacter aside, is taken, so an emoji newer than the patterns know followed by
+  U+FE0F is taken alone and in a joined emoji (one alternative in `:plain`). `SeasonsTest`
+  takes both and refuses U+FE0F after a noncharacter; it fails without the alternative.
+  Crafted 500-unit reasons built on it take 65 to 71 µs.

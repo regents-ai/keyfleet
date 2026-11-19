@@ -214,6 +214,7 @@ defmodule Keyfleet.SeasonsTest do
           {"\u{034F}", :plain},
           {"\u{FE0F}", :plain},
           {"Unassigned \u{2065}", :plain},
+          {"Not a character \u{FFFF}\u{FE0F}", :plain},
           {<<0xED, 0xA0, 0xBD>>, :plain},
           {<<0xF0, 0x9F>>, :plain},
           {"\u{0301}", :blank},
@@ -253,8 +254,11 @@ defmodule Keyfleet.SeasonsTest do
           "Kanji \u{845B}\u{E0100}",
           "Mongolian \u{1820}\u{180B}",
           "Zero 0\u{FE00}",
-          # An emoji newer than the patterns know (Unicode 17).
-          "\u{1FAEA}"
+          # An emoji newer than the patterns know (Unicode 17), alone, styled
+          # as an emoji, and styled in a joined emoji.
+          "\u{1FAEA}",
+          "New \u{1FAEA}\u{FE0F}",
+          "Joined \u{1FAEA}\u{FE0F}\u{200D}\u{1F525}"
         ] do
       assert %{reason: ^reason} = pick!(human("a"), "SOL-USD", reason)
     end

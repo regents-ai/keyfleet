@@ -19,6 +19,9 @@ defmodule Keyfleet.Seasons.Validations.Reason do
           U+E01EF) after an ideograph, a Mongolian free variation selector
           after a Mongolian letter, and any other (U+FE00 to U+FE0D) after a
           letter, digit, punctuation mark or symbol;
+        - a variation selector directly after a character Unicode has not yet
+          assigned, a noncharacter aside, such as an emoji newer than the
+          patterns know;
         - the tags of the flags of England, Scotland and Wales;
     * `:too_long`: at most `longest/0` UTF-16 units, as a text box counts what
       is typed (`KeyfleetWeb.BoxLimit`): one for most letters, two for an
@@ -53,6 +56,7 @@ defmodule Keyfleet.Seasons.Validations.Reason do
       | (?<=\p{Ideographic}) [\x{E0100}-\x{E01EF}]
       | (?<=\p{Mongolian}) (?<=\p{L}) [\x{180B}-\x{180D}\x{180F}]
       | (?<=[\p{L}\p{N}\p{P}\p{S}]) [\x{FE00}-\x{FE0D}]
+      | (?<=\p{Cn}) (?<!\p{Noncharacter_Code_Point}) \p{Variation_Selector}
       | (?<=\x{1F3F4}) \x{E0067}\x{E0062}
         (?:\x{E0065}\x{E006E}\x{E0067} | \x{E0073}\x{E0063}\x{E0074} | \x{E0077}\x{E006C}\x{E0073})
         \x{E007F}
