@@ -143,12 +143,15 @@ for (const [profile, use] of [
       expect(errors).toEqual([])
     })
 
+    // A full first page: a room opens at its newest hundred posts, and each
+    // post that arrives moves all of them.
     test("a new post keeps a reader at the bottom there, and leaves one who scrolled up where they were", async ({page}) => {
+      test.setTimeout(120_000)
       const said = words()
-      const {owner} = speaker("people", said, 30)
+      const {owner} = speaker("people", said, 100)
       const errors = await signIn(page)
       await open(page, people)
-      await expectNewest(page, `${said} 30`, `${said} 1`)
+      await expectNewest(page, `${said} 100`, `${said} 1`)
 
       talk(fleet, owner, "people", `${said} late`, 1)
       await expectNewest(page, `${said} late 1`, `${said} 1`)
