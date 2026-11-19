@@ -4,8 +4,9 @@ defmodule KeyfleetWeb.SeasonPanel do
   season and its open price, its captain, the time the season has left, and
   how the season settled last went for the holding and whether its crown
   passed. A member also reads the season under way's picks, ten at a time,
-  and a Key holder locks or changes their Key's pick for the season taking
-  picks, through the same `Keyfleet.Seasons.pick/4` an agent's goes through.
+  the last hundred kept, through the page's `:season_picks` stream, and a Key
+  holder locks or changes their Key's pick for the season taking picks,
+  through the same `Keyfleet.Seasons.pick/4` an agent's goes through.
   Before its season starts a pick is its Key's own: the panel reads the
   reader's pick and how many Keys have locked one, never another Key's pick.
 
@@ -27,7 +28,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.Countdown
-  import Phoenix.LiveView, only: [connected?: 1]
+  import Phoenix.LiveView, only: [connected?: 1, stream: 4]
 
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.CoinList
@@ -38,8 +39,11 @@ defmodule KeyfleetWeb.SeasonPanel do
   alias KeyfleetWeb.ShellLive
   alias Phoenix.Socket.Broadcast
 
-  # Picks of the season under way a page shows at first, and each "More" adds.
+  # Picks of the season under way a page shows at first, and each "More" adds;
+  # and the most it keeps, the earliest let go, as many as a page of the
+  # record holds.
   @picks 10
+  @kept_picks 100
 
   @coinbase "https://docs.cdp.coinbase.com/ai-agents/coinbase-for-agents/coinbase-mcp"
 
@@ -108,6 +112,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   def leave(socket), do: socket |> listen([]) |> assign(:season, nil)
 
   attr :season, :map, required: true, doc: "the panel as `show/4` gives it"
+  attr :picks, :any, required: true, doc: "the page's `:season_picks` stream"
 
   @doc "The panel, while there is a season to show."
   def panel(assigns) do
@@ -163,7 +168,7 @@ defmodule KeyfleetWeb.SeasonPanel do
       </dl>
 
       <.pick :if={@season.member? and @season.taking} season={@season} />
-      <.picks :if={@season.member? and @season.face} season={@season} />
+      <.picks :if={@season.member? and @season.face} season={@season} picks={@picks} />
 
       <.terms />
       <.link id="fleet-season-record" patch={SeasonsLive.seasons_path(@season.fleet_id)}>
@@ -253,6 +258,7 @@ defmodule KeyfleetWeb.SeasonPanel do
   end
 
   attr :season, :map, required: true
+  attr :picks, :any, required: true
 
   # The season under way's picks, in the order they were locked, a page at a
   # time.
@@ -260,9 +266,14 @@ defmodule KeyfleetWeb.SeasonPanel do
     ~H"""
     <div id="fleet-season-picks" class="fleet-season__picks">
       <h3>Picks</h3>
-      <p :if={@season.picks == []} class="fleet-detail">No picks this season.</p>
-      <ol :if={@season.picks != []} id="fleet-season-pick-list" class="fleet-season__list">
-        <li :for={pick <- @season.picks} id={"fleet-season-pick-#{pick.key}"}>
+      <p :if={@season.no_picks?} class="fleet-detail">No picks this season.</p>
+      <ol
+        :if={not @season.no_picks?}
+        id="fleet-season-pick-list"
+        class="fleet-season__list"
+        phx-update="stream"
+      >
+        <li :for={{dom_id, pick} <- @picks} id={dom_id}>
           <span class="fleet-season__key">Key {pick.key}</span>
           <span>{pick.product}</span>
           <span class="fleet-season__figure">{price(pick.open_price)}</span>
@@ -328,11 +339,9 @@ defmodule KeyfleetWeb.SeasonPanel do
       )
 
     {:noreply,
-     assign(socket, :season, %{
-       season
-       | picks: season.picks ++ Enum.map(picks, &shown_pick/1),
-         more: Seasons.next_after(page)
-     })}
+     socket
+     |> assign(:season, %{season | more: Seasons.next_after(page)})
+     |> show_picks(picks, [])}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
@@ -407,7 +416,7 @@ defmodule KeyfleetWeb.SeasonPanel do
 
         %{number: number} ->
           {:ok, {picks, _more?} = page} = Seasons.picks_page(fleet_id, number, nil, @picks, opts)
-          {Enum.map(picks, &shown_pick/1), Seasons.next_after(page)}
+          {picks, Seasons.next_after(page)}
       end
 
     taking = taking(fleet_id, opts)
@@ -418,15 +427,27 @@ defmodule KeyfleetWeb.SeasonPanel do
       member?: true,
       now: now(),
       face: face,
-      picks: picks,
+      no_picks?: picks == [],
       more: more,
       taking: taking,
       coins: coins(),
       form: pick_form(taking && taking.mine),
       note: nil
     })
+    |> show_picks(picks, reset: true)
     |> listen(topics(fleet_id, taking))
   end
+
+  # The season under way's picks to the page's stream, after those it shows
+  # (or in their place, with `reset: true`), the last hundred kept.
+  defp show_picks(socket, picks, opts),
+    do:
+      stream(
+        socket,
+        :season_picks,
+        Enum.map(picks, &shown_pick/1),
+        [limit: -@kept_picks] ++ opts
+      )
 
   defp reread_taking(%{assigns: %{season: %{fleet_id: fleet_id} = season}} = socket) do
     taking = taking(fleet_id, ShellLive.reads_as(socket, fleet_id))

@@ -16,7 +16,8 @@ Changes to Keyfleet, newest first.
 - **Season panel.** A fleet's page now shows its season under way to everyone: the
   coin the fleet holds and its price at the start, the captain, the time left, and how
   the last season ended, as a percentage, with whether the crown passed. A Key holder
-  also sees the season's picks, ten at a time, and picks for the next season right there:
+  also sees the season's picks, ten at a time; the panel keeps the last hundred, and as
+  More adds more, the first ones leave the top. They pick for the next season right there:
   a coin from those open to picks and a reason if they like, changed as often as they
   want until the season starts, though changing a pick gives up its place. Until then
   the panel shows only how many Keys have picked. Once a season's time is up, its clock

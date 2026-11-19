@@ -74,11 +74,10 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
     running = season!(2, DateTime.add(boundary, 3, :hour))
     pick!(@other, 2, "SOL-USD", @running_reason)
 
-    pickers = Enum.take(~w(3 4 5 6 7 8 9 a b c d), Map.get(context, :pickers, 0))
-
-    for {character, key} <- Enum.zip(pickers, 3..13) do
-      ProposalHelpers.keys_sold!(@fleet, [key], ProposalHelpers.wallet(character))
-      pick!(ProposalHelpers.wallet(character), 2, "ETH-USD", nil)
+    for key <- Enum.take(3..102//1, Map.get(context, :pickers, 0)) do
+      wallet = "0x" <> String.pad_leading(Integer.to_string(key), 40, "0")
+      ProposalHelpers.keys_sold!(@fleet, [key], wallet)
+      pick!(wallet, 2, "ETH-USD", nil)
     end
 
     running = lock!(running, "SOL-USD", "143.27", 2)
@@ -290,7 +289,27 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
     refute has_element?(view, "#fleet-season-more")
   end
 
+  # 101 picks: Key 2's, then Keys 3 to 102's.
+  @tag pickers: 100
+  test "pressed past a hundred, the season's picks keep the last hundred", %{conn: conn} do
+    {:ok, view, _html} = live(signed_in_as(conn, @holder), @path)
+
+    for _press <- 1..9, do: view |> element("#fleet-season-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(2..101)
+
+    view |> element("#fleet-season-more") |> render_click()
+    assert shown_picks(view) == Enum.to_list(3..102)
+    assert has_element?(view, "#fleet-season-pick-102", "ETH-USD")
+    refute has_element?(view, "#fleet-season-more")
+  end
+
   defp count_rows(html), do: html |> String.split("<li") |> length() |> Kernel.-(1)
+
+  defp shown_picks(view) do
+    ~r/<li id="fleet-season-pick-(\d+)"/
+    |> Regex.scan(view |> element("#fleet-season-pick-list") |> render(), capture: :all_but_first)
+    |> Enum.map(fn [key] -> String.to_integer(key) end)
+  end
 
   # Whether the season's clock writes its words for a time run out.
   defp run_out?(view) do

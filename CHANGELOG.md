@@ -13369,6 +13369,13 @@ step's report).
     each More added twenty seasons, or a hundred picks, to what the page held for as long
     as it was open: seasons grow by eight a day, and a Fibonacci fleet's Keys have no
     limit.
+  - The Season panel's picks are a stream with a limit too (`:season_picks` in
+    `ShellLive`, passed down through `FleetLive.page` and the hall): ten as the panel is
+    read, and in their place when it is read again, ten more with each More, keeping the
+    last hundred, as many as a page of the record holds; the first leave the top. The
+    panel keeps only whether the season has any pick and where More reads from. Its look,
+    ids and More are as they were. Before, each More added ten picks to what the page
+    held for as long as it was open.
   - Documents made true. docs.md: a pick is void when its product isn't open to picks
     as the turn that starts its season runs, normally a minute after the start and later
     after downtime or while Coinbase can't be read (it said "when its season starts");
@@ -13492,7 +13499,7 @@ step's report).
   sent after its season started, shows visitors and people without a Key the season
   but no form and no pick, proves another Key's pick of the season taking picks is in
   neither the page nor the page's process, updates open pages on a lock and on a turn,
-  and pages the picks ten at a time.
+  and pages the picks ten at a time, keeping the last hundred of 101.
 
 ## 2026-11-18 — A fleet's record of settled seasons is a page
 

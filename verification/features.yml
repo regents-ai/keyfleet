@@ -1830,7 +1830,8 @@ features:
       the season's end until its turn reaches the page, and the last settled
       season's result as a signed percentage with whether the crown passed.
       A person signed in with a Key of the fleet also reads the season under
-      way's picks in lock order, ten at a time with More, and
+      way's picks in lock order, ten at a time with More, the page keeping
+      the last hundred as a stream, the first ones leaving the top, and
       locks or changes the Key's pick for the season taking picks: a product
       from those open to picks and an optional reason, through the same rule
       as seasons_pick, refused in plain words beside the button, a reason with

@@ -259,6 +259,10 @@ defmodule KeyfleetWeb.FleetLive do
     default: nil,
     doc: "the hall's \"Season\" panel, as `KeyfleetWeb.SeasonPanel.show/4` gives it, or nil"
 
+  attr :season_picks, :any,
+    required: true,
+    doc: "the Season panel's picks of the season under way"
+
   slot :inner_block, doc: "the Treasury, Workspace, search or Worldline page, for those places"
 
   attr :now, :map,
@@ -462,6 +466,7 @@ defmodule KeyfleetWeb.FleetLive do
             posts={@posts}
             room_notice={@room_notice}
             season={@season}
+            season_picks={@season_picks}
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
@@ -707,6 +712,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :posts, :any, required: true
   attr :room_notice, :map, required: true
   attr :season, :map, required: true
+  attr :season_picks, :any, required: true
 
   # The hall: channels down the left, everything happening in the fleet in one
   # feed in the middle, kept current while the page is open, or the room
@@ -786,7 +792,7 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <aside class="fleet-rail" aria-label="The fleet now">
-        <SeasonPanel.panel :if={@season} season={@season} />
+        <SeasonPanel.panel :if={@season} season={@season} picks={@season_picks} />
         <.recent_work work={@now.recent_work} fleet_id={@fleet.fleet_id} />
         <CheckIns.who_is_here
           agents={@who}

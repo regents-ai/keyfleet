@@ -105,6 +105,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:atlas_things, [])
      |> stream_configure(:season_rows, dom_id: & &1.id)
      |> stream(:season_rows, [])
+     |> stream_configure(:season_picks, dom_id: &"fleet-season-pick-#{&1.key}")
+     |> stream(:season_picks, [])
      |> assign(
        route_spec: nil,
        client_key: client_key,
@@ -903,6 +905,7 @@ defmodule KeyfleetWeb.ShellLive do
           posts={@streams.posts}
           room_notice={@room_notice}
           season={@season}
+          season_picks={@streams.season_picks}
         >
           <WorkspaceLive.board
             :if={@route_spec.route_id == :workspace}
