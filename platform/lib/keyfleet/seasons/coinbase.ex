@@ -49,13 +49,20 @@ defmodule Keyfleet.Seasons.Coinbase do
          do: {:ok, [@usdc | eligible_ids(products)]}
   end
 
-  @doc "Which of `product_ids` may be picked now."
+  @doc """
+  Which of `product_ids` may be picked now, kept from the whole list
+  (`eligible/0`), which is not read when they name nothing but `USDC`.
+  """
   @spec eligible_among([String.t()]) :: {:ok, MapSet.t(String.t())} | {:error, term()}
   def eligible_among(product_ids) do
-    {usdc, listed} = Enum.split_with(product_ids, &(&1 == @usdc))
+    asked = MapSet.new(product_ids)
 
-    with {:ok, products} <- listed(listed),
-         do: {:ok, MapSet.new(usdc ++ eligible_ids(products))}
+    if Enum.all?(asked, &(&1 == @usdc)) do
+      {:ok, asked}
+    else
+      with {:ok, listed} <- eligible(),
+           do: {:ok, MapSet.intersection(asked, MapSet.new(listed))}
+    end
   end
 
   @doc "`product_id`'s price at `boundary`, or nil for none."
@@ -114,9 +121,6 @@ defmodule Keyfleet.Seasons.Coinbase do
 
   defp eligible_ids(products),
     do: for(%{"product_id" => id} = product <- products, eligible?(product), do: id)
-
-  defp listed([]), do: {:ok, []}
-  defp listed(product_ids), do: products(Enum.map(product_ids, &{:product_ids, &1}))
 
   # Every page of the list, following its cursor, up to `@max_pages`.
   defp products(params), do: products(params, @max_pages)

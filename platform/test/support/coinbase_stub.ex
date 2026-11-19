@@ -116,35 +116,20 @@ defmodule Keyfleet.CoinbaseStub do
     })
   end
 
-  # The whole list of spot products on one page, or, asked for some ids, those
-  # of them it knows.
+  # The whole list of spot products on one page.
   defp listed(conn, products) do
-    query = conn.query_string |> URI.query_decoder() |> Enum.to_list()
+    %{"product_type" => "SPOT"} = conn.query_string |> URI.query_decoder() |> Map.new()
 
-    case for {"product_ids", id} <- query, do: id do
-      [] ->
-        {"product_type", "SPOT"} = List.keyfind(query, "product_type", 0)
-
-        Req.Test.json(conn, %{
-          "products" => products,
-          "num_products" => length(products),
-          "pagination" => %{
-            "prev_cursor" => "",
-            "next_cursor" => "",
-            "has_next" => false,
-            "has_prev" => false
-          }
-        })
-
-      ids ->
-        known = Enum.filter(products, &(&1["product_id"] in ids))
-
-        Req.Test.json(conn, %{
-          "products" => known,
-          "num_products" => length(known),
-          "pagination" => nil
-        })
-    end
+    Req.Test.json(conn, %{
+      "products" => products,
+      "num_products" => length(products),
+      "pagination" => %{
+        "prev_cursor" => "",
+        "next_cursor" => "",
+        "has_next" => false,
+        "has_prev" => false
+      }
+    })
   end
 
   # Every candle from `start` to `end`, both included, newest first. Coinbase

@@ -47,8 +47,6 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
 
     assert Coinbase.eligible_among(["ETH-USD", "BTC-USD", "NOPE-USD", "USDC"]) ==
              {:ok, MapSet.new(["BTC-USD", "USDC"])}
-
-    assert Coinbase.eligible_among(["USDC"]) == {:ok, MapSet.new(["USDC"])}
   end
 
   test "a list on many pages is read to its end, and one past twenty pages is not read" do
@@ -59,6 +57,7 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     ])
 
     assert Coinbase.eligible() == {:ok, ["USDC", "SOL-USD", "BTC-USD"]}
+    assert Coinbase.eligible_among(["BTC-USD", "ETH-USD"]) == {:ok, MapSet.new(["BTC-USD"])}
 
     twenty = for n <- 1..20, do: [CoinbaseStub.product("C#{n}-USD")]
     CoinbaseStub.pages(twenty)
@@ -95,10 +94,12 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     assert Coinbase.price("NOPE-USD", @boundary) == {:ok, nil}
   end
 
-  test "USDC is 1 without asking, and Coinbase not answering is an error" do
+  test "USDC is 1 and open to picks without asking, and Coinbase not answering is an error" do
     CoinbaseStub.down()
 
     assert Coinbase.price("USDC", @boundary) == {:ok, Decimal.new(1)}
+    assert Coinbase.eligible_among(["USDC"]) == {:ok, MapSet.new(["USDC"])}
+    assert Coinbase.eligible_among([]) == {:ok, MapSet.new()}
     assert {:error, {:coinbase, 503}} = Coinbase.price("SOL-USD", @boundary)
     assert {:error, {:coinbase, 503}} = Coinbase.eligible()
     assert {:error, {:coinbase, 503}} = Coinbase.eligible_among(["SOL-USD"])

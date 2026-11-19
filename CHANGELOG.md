@@ -13688,3 +13688,12 @@ step's report).
   U+FE0F is taken alone and in a joined emoji (one alternative in `:plain`). `SeasonsTest`
   takes both and refuses U+FE0F after a noncharacter; it fails without the alternative.
   Crafted 500-unit reasons built on it take 65 to 71 µs.
+- A turn reads Coinbase's whole spot list and keeps the products its picks name
+  (`Keyfleet.Seasons.Coinbase.eligible_among/1` over `eligible/0`), so its request no
+  longer grows with every product asked; it still reads nothing when the picks name
+  only USDC. Measured on 19 November 2026 the list was one page of 923 products, 50
+  of them open to picks: 1.2 MB of JSON, about 70 KB sent compressed, some 65 ms to
+  fetch and 17 ms to decode, the same read the site makes every ten minutes for picks.
+  The feature list's Coinbase gap says the new worst case. `CoinbaseTest` keeps the
+  asked products from a list on many pages, and asks nothing for USDC alone while
+  Coinbase is down.
