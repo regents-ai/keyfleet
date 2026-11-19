@@ -103,11 +103,12 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
   # One budget per client address, shared by the health check, the browser's
-  # visit reports, every /api path, the share pictures under /share, each of
-  # which may be drawn for the request, and a Claude connector request without
-  # a token, answered or not; a connector request with a token has a ceiling of
-  # its own. Every answer, including a signed agent request refused before the
-  # router, says what is left of it; past it the answer is 429 with Retry-After.
+  # visit reports, every /api path, every sign-in address under /oauth, the
+  # share pictures under /share, each of which may be drawn for the request,
+  # and a Claude connector request without a token, answered or not; a
+  # connector request with a token has a ceiling of its own. Every answer,
+  # including a signed agent request refused before the router, says what is
+  # left of it; past it the answer is 429 with Retry-After.
   plug :limit_rate
 
   plug KeyfleetWeb.Plugs.SignedAgent
@@ -140,6 +141,9 @@ defmodule KeyfleetWeb.Endpoint do
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
   defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
+    do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+
+  defp limit_rate(%Plug.Conn{path_info: ["oauth" | _]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
   defp limit_rate(%Plug.Conn{path_info: ["share" | _]} = conn, _opts),

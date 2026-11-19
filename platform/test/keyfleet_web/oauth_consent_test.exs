@@ -11,7 +11,9 @@ defmodule KeyfleetWeb.OAuthConsentTest do
   #   still fits the session cookie;
   # - Allow and Cancel answer a page that sends the browser on to the app's
   #   callback on the app's own host, and the site's form-action stays 'self';
-  # - Claude's published identity and an app registered here connect as before.
+  # - Claude's published identity and an app registered here connect as before;
+  # - an address that has spent its request budget is refused at every sign-in
+  #   address before anything is read or written.
   # Published identities and key sets are served without a network, and the
   # hosted signer is a stand-in; the rest is the site's.
   use KeyfleetWeb.ConnCase, async: false
@@ -269,6 +271,66 @@ defmodule KeyfleetWeb.OAuthConsentTest do
 
     assert "register_identity" in tool_names(access, c.from)
   end
+
+  # Every address under /oauth spends the per-address request budget, here at
+  # its release size, over an hour's window so a run that crosses a minute
+  # mark keeps its count.
+  test "an address that has spent its request budget is refused at every sign-in address before anything is read or written",
+       c do
+    put_env(:keyfleet, :api_rate_limit, limit: 120, window_seconds: 3600)
+    rows = sign_in_rows()
+    anonymous = Map.put(build_conn(), :remote_ip, c.from)
+
+    spent = for _n <- 1..120, do: get(anonymous, "/healthz").status
+    refute 429 in spent
+
+    form = "application/x-www-form-urlencoded"
+    grant = %{"grant_type" => "authorization_code", "client_id" => @chatgpt, "code" => "code"}
+
+    refused = [
+      consent(c.browser, query(@chatgpt, @chatgpt_callback, "state")),
+      c.browser |> put_req_header("content-type", form) |> post("/oauth/authorize", ""),
+      c.browser |> put_req_header("accept", "text/html") |> get("/oauth/connections"),
+      c.browser |> put_req_header("content-type", form) |> post("/oauth/connections/revoke", ""),
+      anonymous
+      |> put_req_header("content-type", "application/json")
+      |> post(
+        "/oauth/register",
+        Jason.encode!(%{
+          "client_name" => "Agent",
+          "redirect_uris" => ["https://agent.example/cb"]
+        })
+      ),
+      anonymous
+      |> put_req_header("content-type", form)
+      |> post(
+        "/oauth/token",
+        URI.encode_query(Map.merge(grant, assertion(c.key, RegentOAuth.issuer())))
+      ),
+      anonymous
+      |> put_req_header("content-type", form)
+      |> post("/oauth/revoke", URI.encode_query(%{"client_id" => @chatgpt, "token" => "token"}))
+    ]
+
+    assert Enum.map(refused, & &1.status) == List.duplicate(429, 7)
+    refute_received {:read, _}
+    assert sign_in_rows() == rows
+
+    # The same consent from an address with budget left reads the identity.
+    assert consent(signed_in({10, 0, 0, 1}), query(@chatgpt, @chatgpt_callback, "state")).status ==
+             200
+
+    assert_received {:read, @chatgpt}
+  end
+
+  # The rows sign-in keeps: apps, published identities' documents, and codes,
+  # tokens and spent assertions.
+  defp sign_in_rows,
+    do:
+      for(
+        schema <- [Boruta.Ecto.Client, RegentOAuth.ClientDocuments.Document, Boruta.Ecto.Token],
+        do: Keyfleet.Repo.aggregate(schema, :count)
+      )
 
   # A person signed in on Keyfleet with their wallet: the browser that opens
   # consent, from `from`.

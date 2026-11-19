@@ -13503,3 +13503,23 @@ step's report).
   --check` and Sobelow, clean. Credo over the whole tree finds issues only in the
   untracked adversarial test files. No page script changed, so vitest and tsc were not
   run.
+
+## 2026-11-19 — Sign-in addresses spend the per-address request budget
+
+- Every address under `/oauth` (registration, token, revocation, the consent page with
+  its Allow and Cancel, Connected apps and Disconnect) spends the per-address budget
+  `/api` spends (`KeyfleetWeb.Endpoint.api_rate_limit/0`, 120 a minute), counted in the
+  endpoint before the router. Past it the answer is the same 429 `too_many_requests`
+  with `Retry-After`, in JSON, on the consent page and Connected apps too.
+- `KeyfleetWeb.OAuthController` keeps only registration's own 30 a minute for each
+  address. Its 120 a minute for each of token, revocation, consent and Allow is gone:
+  the shared budget counts every one of those requests, so it always ran out first.
+- Tests: `OAuthConsentTest` (6) puts the release budget back and spends it from one
+  address; then all seven sign-in addresses answer 429, no published identity is read
+  and no app, document, code or token row is written, while the same consent from
+  another address reads ChatGPT's identity. It fails on the endpoint before this change.
+- Docs: docs.md's Rate limits names the sign-in addresses. features.yml's
+  claude-connector row, the README's two sign-in rows and the endpoint's, router's and
+  controller's notes say the rule, and the router and README say that a refusal there
+  logs its endpoint and reason, though no request is logged. No version changes: the
+  API contract and `/skill.md` are untouched.

@@ -4,7 +4,10 @@ defmodule KeyfleetWeb.OAuthController do
 
   alias Keyfleet.Accounts.RequestRateLimiter
 
-  plug :rate_limit when action in [:register, :token, :revoke, :authorize, :approve]
+  # Every address under /oauth spends the per-address request budget
+  # (`KeyfleetWeb.Endpoint`). Registering an app, which writes its row, also
+  # has 30 a minute of its own for each address.
+  plug :rate_limit when action == :register
 
   for action <- [:resource_metadata, :server_metadata, :register, :token, :revoke] do
     def unquote(action)(conn, _params), do: RegentOAuth.Protocol.call(conn, unquote(action))
@@ -22,10 +25,8 @@ defmodule KeyfleetWeb.OAuthController do
 
   defp rate_limit(conn, _opts) do
     {address, _source} = KeyfleetWeb.ClientAddress.key(conn)
-    action = action_name(conn)
-    limit = if action == :register, do: 30, else: 120
 
-    case RequestRateLimiter.admit({:oauth, action, address}, limit, 60) do
+    case RequestRateLimiter.admit({:oauth, :register, address}, 30, 60) do
       {:ok, _} ->
         conn
 

@@ -650,7 +650,7 @@ An unknown address under `/api` answers JSON 404 whatever the `Accept` header sa
 
 ## Rate limits
 
-Each client address has 120 requests per 60 seconds, shared by `/healthz` and every address under `/api`, signed agent requests included. Every answer there says where you stand, except that while Keyfleet is closed `/api` answers 503 `not_open_yet` with `Retry-After` and without these headers:
+Each client address has 120 requests per 60 seconds, shared by `/healthz`, every address under `/api`, signed agent requests included, and every sign-in address under `/oauth`. Every answer there says where you stand, except that while Keyfleet is closed `/api` answers 503 `not_open_yet` with `Retry-After` and without these headers:
 
 ```http
 RateLimit-Policy: "default";q=120;w=60

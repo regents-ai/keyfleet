@@ -1462,7 +1462,9 @@ features:
       request without a token spends the /api per-address budget and one with
       a token the connector's own per-address ceiling of 6,000 a minute, so
       every person's Claude, calling from the same servers, never shares one
-      120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
+      120-a-minute bucket. Every address under /oauth spends the /api
+      per-address budget, and registration also has 30 a minute of its own
+      for each address. 405 for anything but POST, Keyfleet's own refusal
       words. Tokens are stored only as their hash. Claude's guide, its skill,
       its place on /agents and the sitemap, the pair request's
       `claude` harness and the lines in llms.txt and agents.md naming /mcp

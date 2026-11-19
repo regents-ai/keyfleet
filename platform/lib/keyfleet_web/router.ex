@@ -356,7 +356,11 @@ defmodule KeyfleetWeb.Router do
 
   # Connected apps, such as a Claude connector. Discovery, client registration
   # and tokens never use cookies; consent uses the verified Privy session and
-  # CSRF. Nothing here is logged: it carries codes, tokens and verifiers.
+  # CSRF. Every address under /oauth spends the per-address request budget
+  # (`KeyfleetWeb.Endpoint`), and registration has a tighter one of its own
+  # (`KeyfleetWeb.OAuthController`). No request under /oauth is logged, since
+  # one may carry codes, tokens or verifiers; a refusal logs only its endpoint
+  # and reason.
   scope "/", KeyfleetWeb do
     pipe_through :api
     get "/.well-known/oauth-protected-resource", OAuthController, :resource_metadata
