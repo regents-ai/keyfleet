@@ -14461,7 +14461,7 @@ step's report).
 - The branch takes in `kf/points-listener-1119` at 845b58cc: main at 137edb36b (Node
   26.13.1 and PostgreSQL 17.12, the Points switch-on, Playwright 1.65.1 and Vitest
   5.1.1) and one policy for each Points listener action. Their entries are above.
-- All thirteen elixir-utils packages move to b695c5a0, elixir-utils main, so
+- All thirteen elixir-utils packages move to b695c5a0, a commit on elixir-utils main, so
   `make check-required-fixes` finds one commit. b695c5a0 is caba486c, which this
   branch had, plus the three Points changes 3315bab5 carried (the award job asks the
   source again just before it writes an award; an award goes only to the account its
@@ -14488,5 +14488,9 @@ step's report).
   tracked files; `mix credo --strict` no issues on the 17 files the merge changes;
   `make check-required-fixes` passes. The Points, sign-in, linked account and pairing
   tests pass (ten files, 99 tests), and so do the connector, library and connected-app
-  tests this branch touched (twelve files, 126 tests). `start_awards_test.exs` fails
-  both its tests on the `{:ok, pairings}` match the stream replaces.
+  tests this branch touched (twelve files, 126 tests). `start_awards_test.exs` passes
+  on the merge; with the pairing source left as it was before the merge, both its
+  tests fail on the `{:ok, pairings}` match the stream replaces.
+- siwa-server v107 (cf107d1) lets a hosted signer pair a Keyfleet identity as `claude`
+  or `chatgpt`; features.yml's `claude-connector` row says so in place of "only as
+  `claude`".
