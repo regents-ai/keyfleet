@@ -328,8 +328,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @poll_end, [], %{}},
     {"GET", @seasons, [], nil},
     {"POST", @season_pick, [], %{"product" => "SOL-USD", "reason" => "r"}},
-    {"POST", @seasons_list, [], %{"before" => "5"}},
-    {"POST", @season_picks, [], %{"after" => "5"}},
+    {"POST", @seasons_list, [], %{"before" => "QTEyOEdDTQ.c2Vhc29ucw"}},
+    {"POST", @season_picks, [], %{"after" => "QTEyOEdDTQ.cGlja3M"}},
     {"POST", @notebook_create, [],
      %{
        "title" => "Log",
@@ -1991,11 +1991,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              "has_more" => false
            } = answer(c, stranger, "POST", @seasons_list, @address, %{}, 200).body
 
-    assert answer(c, stranger, "POST", @seasons_list, @address, %{"before" => "1"}, 200).body[
-             "seasons"
-           ] == []
-
-    for before <- ["0", "01", "x", "9223372036854775808"] do
+    for before <- ["x", ""] do
       assert answer(c, c.signer, "POST", @seasons_list, @address, %{"before" => before}, 400).body ==
                refused("invalid_season_cursor")
     end
@@ -2015,7 +2011,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              "has_more" => false
            } = answer(c, stranger, "POST", @season_picks, @address, %{}, 200).body
 
-    for place <- ["0", "01", "x", "9223372036854775808"] do
+    for place <- ["x", ""] do
       assert answer(c, c.signer, "POST", @season_picks, @address, %{"after" => place}, 400).body ==
                refused("invalid_season_cursor")
     end

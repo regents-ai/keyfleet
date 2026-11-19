@@ -1955,7 +1955,7 @@
           "type": "string",
           "in": "body",
           "field": "before",
-          "description": "Pass next_before unchanged to read older seasons; omit for the newest."
+          "description": "Pass next_before from the last page of this fleet's seasons unchanged to read older ones; omit for the newest."
         }
       ],
       "pagination": {
@@ -1995,7 +1995,7 @@
           "type": "string",
           "in": "body",
           "field": "after",
-          "description": "Pass next_after unchanged to read the picks that follow; omit for the first."
+          "description": "Pass next_after from the last page of this season's picks unchanged to read the ones that follow; omit for the first."
         }
       ],
       "pagination": {

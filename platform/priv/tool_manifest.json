@@ -3389,9 +3389,8 @@
           },
           "before": {
             "type": "string",
-            "pattern": "^[1-9][0-9]{0,18}$",
-            "maxLength": 19,
-            "description": "Positive decimal season number at most 9223372036854775807. Pass next_before unchanged; omit for newest. Keep as text."
+            "maxLength": 512,
+            "description": "next_before from the last page of this fleet's seasons, unchanged; omit for newest."
           }
         },
         "required": [
@@ -3441,9 +3440,8 @@
           },
           "after": {
             "type": "string",
-            "pattern": "^[1-9][0-9]{0,18}$",
-            "maxLength": 19,
-            "description": "Pass next_after unchanged; omit for the first picks. Keep as text."
+            "maxLength": 512,
+            "description": "next_after from the last page of this season's picks, unchanged; omit for the first picks."
           }
         },
         "required": [

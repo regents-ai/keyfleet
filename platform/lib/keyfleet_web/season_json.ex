@@ -5,10 +5,18 @@ defmodule KeyfleetWeb.SeasonJSON do
   by wallet, and prices and results are decimal strings, as Coinbase sent
   the prices. No answer carries more than a page of picks: a season's picks
   are read on their own (`picks/3`).
+
+  A page's cursor is one string an agent hands back unchanged: the place it
+  names is sealed with the site's secret (`Phoenix.Token`), with the fleet
+  and the list it continues, so it can't be forged and tells nothing of
+  where a pick stands among other fleets' writes (`opened/3`). It never
+  expires: the record it pages never changes.
   """
 
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.{Coinbase, Rules}
+
+  @salt "season cursor"
 
   @doc """
   The fleet's seasons as a member reads them now: the season under way with
@@ -35,10 +43,27 @@ defmodule KeyfleetWeb.SeasonJSON do
     %{
       fleet_id: fleet_id,
       seasons: Enum.map(seasons, &settled/1),
-      next_before: if(more?, do: Integer.to_string(List.last(seasons).number)),
+      next_before: if(more?, do: sealed(fleet_id, :seasons, List.last(seasons).number)),
       has_more: more?
     }
   end
+
+  @doc """
+  The place a cursor names in the fleet's `list`, `:seasons` for its settled
+  seasons or `{:picks, number}` for one season's picks: `{:ok, nil}` for no
+  cursor, `{:ok, place}`, or `:error` for any string this site didn't seal
+  for that list.
+  """
+  def opened(_fleet_id, _list, nil), do: {:ok, nil}
+
+  def opened(fleet_id, list, cursor) when is_binary(cursor) do
+    case Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, cursor, max_age: :infinity) do
+      {:ok, {^fleet_id, ^list, place}} -> {:ok, place}
+      _other -> :error
+    end
+  end
+
+  def opened(_fleet_id, _list, _cursor), do: :error
 
   @doc """
   A page of one season's picks, in the order they were locked: a season
@@ -56,7 +81,7 @@ defmodule KeyfleetWeb.SeasonJSON do
             result: decimal(&1.result)
           })
         ),
-      next_after: next_after(page),
+      next_after: next_after(fleet_id, number, page),
       has_more: more?
     }
   end
@@ -82,7 +107,7 @@ defmodule KeyfleetWeb.SeasonJSON do
       holding_open_price: decimal(season.holding_open_price),
       pick_count: season.keys_locked,
       picks: Enum.map(picks, &running_pick/1),
-      next_after: next_after(page)
+      next_after: next_after(season.fleet_id, season.number, page)
     }
   end
 
@@ -137,12 +162,15 @@ defmodule KeyfleetWeb.SeasonJSON do
   defp best_pick(pick),
     do: %{key: pick.token_id, product: pick.product, result: decimal(pick.result)}
 
-  defp next_after(page) do
+  defp next_after(fleet_id, number, page) do
     case Seasons.next_after(page) do
       nil -> nil
-      after_order -> Integer.to_string(after_order)
+      place -> sealed(fleet_id, {:picks, number}, place)
     end
   end
+
+  defp sealed(fleet_id, list, place),
+    do: Phoenix.Token.encrypt(KeyfleetWeb.Endpoint, @salt, {fleet_id, list, place})
 
   defp decimal(nil), do: nil
   defp decimal(%Decimal{} = value), do: Decimal.to_string(value, :normal)

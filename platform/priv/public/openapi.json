@@ -1095,9 +1095,8 @@
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^[1-9][0-9]{0,18}$",
-              "maxLength": 19,
-              "description": "Positive decimal season number at most 9223372036854775807. Pass next_before unchanged; omit for newest. Keep as text."
+              "maxLength": 512,
+              "description": "A page's next_before, sealed by Keyfleet for this fleet's settled seasons. Pass it unchanged; omit for the newest."
             }
           }
         ],
@@ -1130,8 +1129,7 @@
                         "string",
                         "null"
                       ],
-                      "pattern": "^[1-9][0-9]{0,18}$",
-                      "maxLength": 19
+                      "maxLength": 512
                     },
                     "has_more": {
                       "type": "boolean",
@@ -1143,7 +1141,7 @@
             }
           },
           "400": {
-            "description": "invalid_season_cursor: only an optional positive decimal before cursor at most 9223372036854775807 is accepted."
+            "description": "invalid_season_cursor: only an optional before is accepted, exactly as a page of this fleet's seasons gave it."
           },
           "404": {
             "description": "Unknown or unopened fleet."
@@ -1185,9 +1183,8 @@
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^[1-9][0-9]{0,18}$",
-              "maxLength": 19,
-              "description": "A place in the season's picks. Pass next_after unchanged; omit for the first page. Keep as text."
+              "maxLength": 512,
+              "description": "A page's next_after, sealed by Keyfleet for this season's picks. Pass it unchanged; omit for the first page."
             }
           }
         ],
@@ -1225,8 +1222,7 @@
                         "string",
                         "null"
                       ],
-                      "pattern": "^[1-9][0-9]{0,18}$",
-                      "maxLength": 19
+                      "maxLength": 512
                     },
                     "has_more": {
                       "type": "boolean",
@@ -1238,7 +1234,7 @@
             }
           },
           "400": {
-            "description": "invalid_season_cursor: only an optional positive decimal after cursor at most 9223372036854775807 is accepted."
+            "description": "invalid_season_cursor: only an optional after is accepted, exactly as a page of this season's picks gave it."
           },
           "404": {
             "description": "fleet_unknown: unknown or unopened fleet. season_unknown: the fleet has no settled season with this number."

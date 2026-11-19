@@ -13320,6 +13320,19 @@ step's report).
     result of 0 and was held again with no open price until a pick beat 0 by more than
     the margin. `Rules.compounded/1` is nil when no season it counts has a result, so the
     record's 24h shows a dash rather than 0%.
+  - A season cursor is sealed with its fleet and the list it continues, the settled
+    seasons or one season's picks (`Phoenix.Token.encrypt` on the endpoint, its own salt,
+    no age limit; `SeasonJSON.opened/3`): `next_before` and `next_after`, the public
+    record's `?before=` and `?after=`, and `seasons_list`'s and `seasons_picks`'s `before`
+    and `after` are opaque strings of up to 512 characters, and anything else, a cursor
+    given for another fleet, season or list included, answers 400
+    `invalid_season_cursor`. Before, `next_after` was a pick's place in a sequence every
+    fleet shares: some 60 reads found a pick's exact place, and the gaps counted writes in
+    other fleets' seasons still private. The contract (`SeasonNumberCursor` is now
+    `SeasonRecordCursor`), the public OpenAPI file, the tool manifest, the CLI command
+    documents and docs.md say so. Contract 36.4.0, the public OpenAPI file 16.1.0 and the
+    guide 3.36.0 stay, as none is released yet (main has 36.3.0, 16.0.0 and 3.35.0), the
+    same as the seasons' first hard cutover below.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):

@@ -142,11 +142,16 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
     assert ContractSchema.response_errors(first, "GET", @season, 200) == []
     assert Enum.map(first["picks"], & &1["key"]) == Enum.to_list(1..100)
     assert %{"next_after" => place, "has_more" => true} = first
+    refute place =~ ~r/\A[0-9]+\z/
 
     rest = conn |> get("/api/v1/fleets/#{@fleet}/seasons/1?after=#{place}") |> json_response(200)
     assert ContractSchema.response_errors(rest, "GET", @season, 200) == []
     assert Enum.map(rest["picks"], & &1["key"]) == [101]
     assert %{"next_after" => nil, "has_more" => false} = rest
+
+    # One season's picks cursor doesn't page the record.
+    assert conn |> get("/api/v1/fleets/#{@fleet}/seasons?before=#{place}") |> json_response(400) ==
+             refused("invalid_season_cursor")
 
     assert %{"seasons" => [%{"pick_count" => 101, "best_pick" => %{"key" => 1}}]} =
              conn |> get("/api/v1/fleets/#{@fleet}/seasons") |> json_response(200)
@@ -163,24 +168,52 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
     first = conn |> get("/api/v1/fleets/#{@fleet}/seasons") |> json_response(200)
     assert ContractSchema.response_errors(first, "GET", @path, 200) == []
     assert Enum.map(first["seasons"], & &1["number"]) == Enum.to_list(21..2//-1)
-    assert %{"next_before" => "2", "has_more" => true} = first
+    assert %{"next_before" => before, "has_more" => true} = first
 
     older =
-      conn |> get("/api/v1/fleets/#{@fleet}/seasons?before=2") |> json_response(200)
+      conn |> get("/api/v1/fleets/#{@fleet}/seasons?before=#{before}") |> json_response(200)
 
     assert ContractSchema.response_errors(older, "GET", @path, 200) == []
     assert Enum.map(older["seasons"], & &1["number"]) == [1]
     assert %{"next_before" => nil, "has_more" => false} = older
-
-    none = conn |> get("/api/v1/fleets/#{@fleet}/seasons?before=1") |> json_response(200)
-    assert %{"seasons" => [], "next_before" => nil, "has_more" => false} = none
   end
 
-  test "a cursor that names no season, another query or an unknown fleet is refused",
+  # A cursor is sealed by the site: it shows no place to order or count by, is
+  # new in each answer, and continues only the list it was given for.
+  test "a cursor shows no place and continues only the list it was given for", %{conn: conn} do
+    boundaries = SeasonHelpers.boundaries(22)
+    SeasonHelpers.coinbase!(%{"SOL-USD" => []})
+    SeasonHelpers.turn!(@fleet, hd(boundaries))
+    SeasonHelpers.turn!(@fleet, List.last(boundaries))
+
+    reads =
+      for _read <- 1..2 do
+        %{"next_before" => before} =
+          conn |> get("/api/v1/fleets/#{@fleet}/seasons") |> json_response(200)
+
+        refute before =~ ~r/\A[0-9]+\z/
+        before
+      end
+
+    assert [first, second] = reads
+    assert first != second
+
+    for before <- reads do
+      assert %{"seasons" => [%{"number" => 1}]} =
+               conn
+               |> get("/api/v1/fleets/#{@fleet}/seasons?before=#{before}")
+               |> json_response(200)
+    end
+
+    for path <- ["/seasons?before=#{changed(first)}", "/seasons/1?after=#{first}"] do
+      body = conn |> get("/api/v1/fleets/#{@fleet}#{path}") |> json_response(400)
+      assert body == refused("invalid_season_cursor"), path
+    end
+  end
+
+  test "a cursor this site didn't give, another query or an unknown fleet is refused",
        %{conn: conn} do
-    for query <-
-          ["before=0", "before=01", "before=x", "before=9223372036854775808"] ++
-            ["after=2", "before=2&after=1"] do
+    for query <- ["before=x", "before=", "after=x", "before=x&after=y"] do
       body = conn |> get("/api/v1/fleets/#{@fleet}/seasons?#{query}") |> json_response(400)
       assert body == refused("invalid_season_cursor"), query
       assert ContractSchema.response_errors(body, "GET", @path, 400) == []
@@ -196,9 +229,7 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
     [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
     Enum.each([b0, b1, b2], &SeasonHelpers.turn!(@fleet, &1))
 
-    for query <-
-          ["after=0", "after=01", "after=x", "after=9223372036854775808"] ++
-            ["before=2", "after=2&before=1"] do
+    for query <- ["after=x", "after=", "before=x", "after=x&before=y"] do
       body = conn |> get("/api/v1/fleets/#{@fleet}/seasons/1?#{query}") |> json_response(400)
       assert body == refused("invalid_season_cursor"), query
       assert ContractSchema.response_errors(body, "GET", @season, 400) == []
@@ -213,6 +244,13 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
     body = conn |> get("/api/v1/fleets/no_such_fleet/seasons/1") |> json_response(404)
     assert body == refused("fleet_unknown")
     assert ContractSchema.response_errors(body, "GET", @season, 404) == []
+  end
+
+  # The cursor with one character of its sealed text changed.
+  defp changed(cursor) do
+    sealed = cursor |> String.split(".") |> Enum.max_by(&byte_size/1)
+    <<head::binary-size(4), character, tail::binary>> = sealed
+    String.replace(cursor, sealed, head <> if(character == ?A, do: "B", else: "A") <> tail)
   end
 
   defp human(@first), do: human(1, @first)

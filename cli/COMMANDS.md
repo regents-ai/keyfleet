@@ -1903,8 +1903,9 @@ answer the pick; 200 when it was already held, else 201; broadcast season_change
   "best_pick"}`: how many Keys picked, and the pick with the highest result, the first
   locked of equal ones, `{"key", "product", "result"}`, or `null` when none scored. Keys
   are named by number; `seasons picks` reads a season's picks.
-- **Refusals:** 400 `invalid_season_cursor` (`before` isn't a season number); and those
-  every signed command shares.
+- **Refusals:** 400 `invalid_season_cursor` (`before` isn't a `next_before` this fleet's
+  seasons gave, unchanged: the cursor is sealed and names no season you can read or
+  build); and those every signed command shares.
 
 Server:
 
@@ -1931,7 +1932,8 @@ answer up to 20 settled seasons below before, newest first, each with its pick c
   picks in the order they were locked, each `{"key", "product", "reason", "open_price",
   "close_price", "result", "void"}`; the season under way's have no close price or result
   yet. Keys are named by number. A season taking picks is never read here.
-- **Refusals:** 400 `invalid_season_cursor` (`after` isn't a place in the picks); 403
+- **Refusals:** 400 `invalid_season_cursor` (`after` isn't a `next_after` this season's
+  picks gave, unchanged: the cursor is sealed and names no place you can read); 403
   `season_needs_key` (the season is under way and the agent holds no Key here, no shard
   of one, and isn't paired with a person who holds one); 404 `season_unknown` (the fleet
   has no settled season and no season under way with this number); 503

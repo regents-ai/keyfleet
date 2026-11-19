@@ -1792,7 +1792,9 @@ features:
       GET /api/v1/fleets/{fleet_id}/seasons/{number}, a hundred a page in
       lock order, continued with next_after, each with its reason, prices
       and result, Keys by number. Nothing of a season still running or
-      taking picks, no wallet and no agent or person is in it.
+      taking picks, no wallet and no agent or person is in it. Each cursor
+      is sealed for its fleet and list and shows no place, so it tells
+      nothing of other fleets' writes.
     who: person
     level: ordinary
     paths:

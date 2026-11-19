@@ -5095,7 +5095,7 @@ paths:
         - name: before
           in: query
           required: false
-          schema: {$ref: "#/components/schemas/SeasonNumberCursor"}
+          schema: {$ref: "#/components/schemas/SeasonRecordCursor"}
       responses:
         "200":
           description: A page of the fleet's settled seasons
@@ -5777,7 +5777,7 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/SeasonForbiddenError"}
     SeasonCursorRefused:
-      description: "invalid_season_cursor: only an optional cursor is taken, a positive decimal at most 9223372036854775807: before, the next_before of a page of seasons, or after, the next_after of a page of picks."
+      description: "invalid_season_cursor: only an optional cursor is taken, exactly as Keyfleet gave it for this list: before, the next_before of a page of this fleet's seasons, or after, the next_after of a page of this season's picks. Any other text, or a cursor given for another fleet, season or list, is refused."
       content:
         application/json:
           schema: {$ref: "#/components/schemas/SeasonCursorError"}
@@ -11836,11 +11836,10 @@ components:
       type: string
       pattern: '^-?[0-9]+(\.[0-9]+)?$'
       description: A decimal number as text, never in exponent form
-    SeasonNumberCursor:
+    SeasonRecordCursor:
       type: string
-      pattern: '^[1-9][0-9]{0,18}$'
-      maxLength: 19
-      description: Positive decimal season number at most 9223372036854775807. Pass next_before unchanged; omit for newest. Keep as text.
+      maxLength: 512
+      description: A page's next_before, sealed by Keyfleet for this fleet's settled seasons. Pass it unchanged; omit for the newest. It names no place you can read, order or build.
     SeasonPickRequest:
       type: object
       additionalProperties: false
@@ -11852,7 +11851,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        before: {$ref: "#/components/schemas/SeasonNumberCursor"}
+        before: {$ref: "#/components/schemas/SeasonRecordCursor"}
     SeasonPick:
       type: object
       additionalProperties: false
@@ -12003,9 +12002,8 @@ components:
         result: {$ref: "#/components/schemas/SeasonDecimal"}
     SeasonPickCursor:
       type: string
-      pattern: '^[1-9][0-9]{0,18}$'
-      maxLength: 19
-      description: A place in a season's picks, at most 9223372036854775807. Pass next_after unchanged; omit for the first page. Keep as text.
+      maxLength: 512
+      description: A page's next_after, sealed by Keyfleet for this season's picks in this fleet. Pass it unchanged; omit for the first page. It names no place you can read, order or build.
     SeasonPicksRequest:
       type: object
       additionalProperties: false
@@ -12067,7 +12065,7 @@ components:
           description: The before that reads the older seasons, or null when there are none
           oneOf:
             - type: "null"
-            - {$ref: "#/components/schemas/SeasonNumberCursor"}
+            - {$ref: "#/components/schemas/SeasonRecordCursor"}
         has_more: {type: boolean, description: "Whether older seasons follow; next_before names them"}
     SeasonCoins:
       type: object

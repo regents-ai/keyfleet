@@ -117,13 +117,12 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
   end
 
   defp record(fleet_id, query) do
-    case cursor(query, "before") do
-      {:ok, before} ->
-        {seasons, more?} = Seasons.settled_page(fleet_id, before)
-        {200, SeasonJSON.record(fleet_id, seasons, more?), nil}
-
-      :error ->
-        refusal(400, "invalid_season_cursor")
+    with {:ok, cursor} <- cursor(query, "before"),
+         {:ok, before} <- SeasonJSON.opened(fleet_id, :seasons, cursor) do
+      {seasons, more?} = Seasons.settled_page(fleet_id, before)
+      {200, SeasonJSON.record(fleet_id, seasons, more?), nil}
+    else
+      :error -> refusal(400, "invalid_season_cursor")
     end
   end
 
@@ -157,14 +156,20 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
     do: if(fleet_id in fleet_ids, do: :ok, else: refusal(404, "fleet_unknown"))
 
   # The season's `number`, from the address, names no season unless it is
-  # one; `after` is the page's cursor, alone or not given.
-  defp picks_query(params) do
-    query = Map.drop(params, ["fleet_id", "number"])
+  # one; `after` is the page's cursor, alone or not given, sealed for that
+  # season's picks.
+  defp picks_query(%{"fleet_id" => fleet_id} = params) do
+    case number(params["number"]) do
+      {:ok, number} ->
+        with {:ok, cursor} <- cursor(Map.drop(params, ["fleet_id", "number"]), "after"),
+             {:ok, place} <- SeasonJSON.opened(fleet_id, {:picks, number}, cursor) do
+          {:ok, number, place}
+        else
+          :error -> refusal(400, "invalid_season_cursor")
+        end
 
-    case {number(params["number"]), cursor(query, "after")} do
-      {nil, _cursor} -> refusal(404, "season_unknown")
-      {_number, :error} -> refusal(400, "invalid_season_cursor")
-      {{:ok, number}, {:ok, place}} -> {:ok, number, place}
+      nil ->
+        refusal(404, "season_unknown")
     end
   end
 
@@ -205,12 +210,13 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
       "it then. Pick again for it."
   end
 
+  # The query's one field, the cursor `name`, or none.
   defp cursor(query, _name) when map_size(query) == 0, do: {:ok, nil}
 
   defp cursor(query, name) when map_size(query) == 1 do
-    case number(query[name]) do
-      {:ok, value} -> {:ok, value}
-      nil -> :error
+    case query do
+      %{^name => cursor} when is_binary(cursor) -> {:ok, cursor}
+      _other -> :error
     end
   end
 

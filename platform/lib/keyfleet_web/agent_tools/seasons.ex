@@ -18,6 +18,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
 
   @fleet [max_length: 63, trim?: false]
   @number [max_length: 19, trim?: false]
+  @cursor [max_length: 512, trim?: false]
 
   actions do
     action :show, :map do
@@ -35,17 +36,17 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
     end
 
     action :list, :map do
-      description "Up to 20 of a fleet's settled seasons, newest first, before a number."
+      description "Up to 20 of a fleet's settled seasons, newest first, after a page's cursor."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
-      argument :before, :string, constraints: @number
+      argument :before, :string, constraints: @cursor
       run {Run, tool: "seasons_list"}
     end
 
     action :picks, :map do
-      description "Up to 100 picks of one season of a fleet, in the order they were locked, after a place."
+      description "Up to 100 picks of one season of a fleet, in the order they were locked, after a page's cursor."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :number, :string, allow_nil?: false, constraints: @number
-      argument :after, :string, constraints: @number
+      argument :after, :string, constraints: @cursor
       run {Run, tool: "seasons_picks"}
     end
 
