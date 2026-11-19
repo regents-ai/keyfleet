@@ -38,6 +38,7 @@ import {FleetPreview} from "./hooks/fleet_preview"
 import {HarbourSea} from "./hooks/harbour_sea"
 import {PlacesChart} from "./hooks/places_chart"
 import {PublicName} from "./hooks/public_name"
+import {RoomPosts} from "./hooks/room_posts"
 import {RoomThread} from "./hooks/room_thread"
 import {ScrollRow} from "./hooks/scroll_row"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
@@ -337,6 +338,7 @@ const hooks = {
   OnchainSteps,
   PlacesChart,
   PublicName,
+  RoomPosts,
   RoomThread,
   ScheduleCard,
   ScrollRow,

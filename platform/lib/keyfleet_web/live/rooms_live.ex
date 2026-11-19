@@ -49,7 +49,6 @@ defmodule KeyfleetWeb.RoomsLive do
   alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
-  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
   alias Phoenix.Socket.Broadcast
@@ -184,16 +183,12 @@ defmodule KeyfleetWeb.RoomsLive do
           id="rooms-thread-list"
           class="rooms-thread-list"
           phx-update="stream"
-          phx-hook="MotionList"
-          data-variant={Motion.standard("list")}
-          data-layout-id="rooms-thread-list"
-          data-children="[data-post]"
+          phx-hook="RoomPosts"
         >
           <li
             :for={{dom_id, message} <- @posts}
             id={dom_id}
             data-post
-            data-layout-id={dom_id}
             class={message.kind == :room_named && "rooms-naming"}
           >
             <p :if={message.kind == :room_named} class="rooms-detail">
