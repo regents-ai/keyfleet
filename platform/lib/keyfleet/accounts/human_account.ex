@@ -132,15 +132,22 @@ defmodule Keyfleet.Accounts.HumanAccount do
       accept [:privy_user_id, :wallet_address, :wallet_addresses]
       upsert? true
       upsert_identity :unique_privy_user_id
-      upsert_fields []
+      # A sign-in to an existing account writes nothing to it, and the account
+      # comes back marked as skipped.
+      upsert_condition expr(false)
+      return_skipped_upsert? true
 
       emit Keyfleet.Accounts.Signals, :account_registered,
         dynamic?: true,
         description: "Only when the sign-in inserted the account."
 
-      # The upsert marks the account it returns with whether it inserted it.
+      # A sign-in to an account that already exists skips the upsert, and Ash marks
+      # the account it returns with `upsert_skipped`.
       change after_action(fn
-               changeset, %{__metadata__: %{upsert_action: :insert}} = account, _context ->
+               _changeset, %{__metadata__: %{upsert_skipped: true}} = account, _context ->
+                 {:ok, account}
+
+               changeset, account, _context ->
                  with :ok <-
                         Ash.Signals.emit(
                           changeset,
@@ -149,9 +156,6 @@ defmodule Keyfleet.Accounts.HumanAccount do
                           %{account_id: account.id}
                         ),
                       do: {:ok, account}
-
-               _changeset, account, _context ->
-                 {:ok, account}
              end)
 
       change load([:display_name])

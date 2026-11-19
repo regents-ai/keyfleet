@@ -7,8 +7,9 @@ defmodule Keyfleet.Accounts.Signals do
 
     * `:account_registered`: a sign-in created the person's shared Regent
       account. A later sign-in to the same account emits nothing.
-    * `:social_linked`: a sign-in linked a social account for a provider the
-      account had no link for. A sign-in that refreshes a link emits nothing.
+    * `:social_linked`: a sign-in linked a social account to the person's
+      account, or replaced the one linked for that provider. A sign-in that
+      only refreshes the same link emits nothing.
   """
 
   use Ash.Signals

@@ -33,6 +33,7 @@ defmodule Keyfleet.Accounts do
 
     resource Keyfleet.Accounts.LinkedIdentity do
       define :upsert_linked_identity, action: :upsert_verified
+      define :refresh_linked_identity, action: :refresh_verified
 
       define :list_my_linked_identities, action: :read_mine
       define :list_linked_identities_for_account, action: :for_account, args: [:human_account_id]

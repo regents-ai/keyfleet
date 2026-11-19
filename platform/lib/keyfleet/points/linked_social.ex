@@ -42,7 +42,7 @@ defmodule Keyfleet.Points.LinkedSocial do
       account_id: identity.human_account_id,
       actor_kind: "human",
       actor_id: to_string(identity.human_account_id),
-      # When this provider was first linked to the account; a later sign-in never moves it.
+      # When this subject was linked to the account; a later sign-in never moves it.
       source_action_at: identity.inserted_at,
       qualified_at: identity.inserted_at,
       evidence_ref: "linked_identity:" <> identity.id,
