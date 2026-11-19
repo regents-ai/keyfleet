@@ -13911,3 +13911,57 @@ step's report).
   an agent wrote as itself, and the box to write in is unchanged on a short wide screen.
   Commits f471998ec, 1fc869e5d, ebc5afaeb, cd5b253eb, 6b420bc2f, a9a4bd3ce and
   27b5c742d.
+
+## 2026-11-19 — Points: the five account actions earn on Keyfleet
+
+- Keyfleet offers Regent Points the five account actions the template offers, each once
+  per account across every Regent site: a new account (`account.activated`), a linked X,
+  GitHub or Farcaster account (`social.x`, `social.github`, `social.farcaster`) and a
+  first paired agent (`agent.activated`). None of Keyfleet's own rules (`keyfleet.*`)
+  earns; they have no source, no adapter and no approval.
+- The switch is the release: `platform/config/prod.exs` sets the shared program start,
+  `~U[2026-11-16 17:00:00Z]`, the same moment on every Regent site and never moved, and
+  approves the five. `platform/config/config.exs` keeps `starts_at: nil` and
+  `approved_rules: []`, so development and tests earn nothing unless a test says so, and
+  names the five sources. No backfill, no resubmission, no Keyfleet-only start, no
+  migration.
+- Each action is offered inside the save that makes it, through Ash signals as the
+  template does: `Keyfleet.Accounts.Signals` (new) carries `:account_registered`, emitted
+  by `HumanAccount :register_verified` only when the upsert inserted the account, and
+  `:social_linked`, emitted by `LinkedIdentity :upsert_verified` only when it inserted the
+  link; `RegentAgents.Signals` already carries `:agent_paired`. `Keyfleet.Points.Award`
+  (new, in the new `Keyfleet.Points` domain) listens to the three and calls
+  `RegentPoints.record_event/2`, so the Points job commits or rolls back with the
+  action. The sign-in itself is unchanged: both upserts write what they wrote before,
+  and the inserted-or-updated mark comes from the database's own answer to the upsert.
+- `Keyfleet.Points.AccountActivated`, `LinkedSocial` and `PairedAgent` match the
+  template's current sources: the account is `source_app: "regents"` on every site; a
+  link and a pairing are `"keyfleet"`, keyed by `provider:subject` and by the pairing.
+  Their `existing/2` gives `RegentPoints.StartAwards` what an account already had before
+  the start. Keyfleet's page does not use `held/2`, so the sources have none. New
+  reads: `Accounts.accounts_created_before/2`, `accounts_by_privy_dids/2` and
+  `linked_identities_before/3`.
+- Oban on the site machine (the graph machine runs none) gains the `points: 2` and
+  `points_chain: 2` queues and `{"@hourly", RegentPoints.StartAwards}`; the tally stays
+  Regents' alone. `points` holds at most 2 of the site machine's 5 connections. The
+  compile-connected limit in `platform/mix.exs` goes from 144 to 145 for the new domain
+  and its listener.
+- The shared library stays at elixir-utils 3bd29b2e. Moving only `regent_points` to the
+  template's caba486c resolved cleanly, but `make check-required-fixes` refused a
+  library "pinned at more than one commit", so the pin went back. On this library Points
+  asks a source once, when it checks the offer, not again just before the award.
+- `/docs` Points and `/agents.md` say what earns here. The Points page and the agent's
+  Points answer are unchanged: once the five are approved they list them under Once,
+  each done when the account has earned it on any site.
+- Proof: `test/keyfleet/points/account_rules_test.exs`, 7 tests (sign-in, link, pairing,
+  a save rolled back, a second person, another site's award, the single check, a source
+  that cannot answer, a rule off and no start), and `start_awards_test.exs`, 1 test
+  (what an account had before the start earns once at the start; an account another
+  site already recorded is not offered again; a second run offers nothing). The Points
+  page test, 5 tests, now switches its rule on after making its accounts. The whole
+  ExUnit suite, run once: 1751 of 1753 passed (25 properties, 1726 of 1728 tests), 19
+  excluded; the two failures are in untracked adversarial test files that are not part
+  of this change. Compile with warnings as errors, clean; format clean on the changed
+  files; `mix credo` flags only those untracked adversarial files; compile-connected
+  145 of 145; `ash.codegen --check`, no changes. Commits d12a25161, 87959c54b,
+  fd4649d65 and 064e60802, with this entry.
