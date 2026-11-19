@@ -2,7 +2,6 @@ import {randomBytes} from "node:crypto"
 import {expect, test, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {prepareFleet, sellKey, talk} from "./support/fleet_chain"
-import {newAgent, pairAgent} from "./support/agent_tools"
 
 // A room opens at its newest post with the box to write in under it, however
 // it is reached, and stays there as posts arrive, unless the reader scrolled
@@ -25,7 +24,6 @@ const words = () => randomBytes(4).toString("hex")
 test.beforeAll(() => {
   prepareFleet(fleet)
   sellKey(fleet, me)
-  pairAgent(newAgent(), me)
 })
 
 const phone = {viewport: {width: 360, height: 780}, isMobile: true, hasTouch: true}
@@ -170,42 +168,9 @@ for (const [profile, use] of [
       await expectNewest(page, `${said} mine`, `${said} 1`)
 
       // With motion reduced, a post that arrives still keeps the reader there.
-      const probe = () =>
-        page.evaluate(() => {
-          const r = document.querySelector(".rooms-thread")!
-          const s = document.getElementById("app-shell-scroller")!
-          const b = r.getBoundingClientRect()
-          let far: Element | null = null
-          let farBottom = -Infinity
-          const styled: string[] = []
-          for (const el of r.querySelectorAll("*")) {
-            const bottom = el.getBoundingClientRect().bottom
-            if (bottom > farBottom) [far, farBottom] = [el, bottom]
-            const style = (el as HTMLElement).getAttribute("style")
-            if (style) styled.push(`${el.tagName}#${el.id}.${el.className}: ${style}`.slice(0, 160))
-          }
-          const farthest = far as Element | null
-          return JSON.stringify({sh: r.scrollHeight, st: r.scrollTop, ch: r.clientHeight, bottom: b.bottom, ih: innerHeight, sst: s.scrollTop, smax: s.scrollHeight - s.clientHeight, sbottom: s.getBoundingClientRect().bottom, far: farthest && `${farthest.tagName}#${farthest.id}.${farthest.className}`, farBottom, styled: styled.slice(0, 12), nstyled: styled.length})
-        })
-      console.log("PROBE after mine", await probe())
-      await page.evaluate(() => {
-        const log: unknown[] = []
-        ;(window as unknown as {__log: unknown[]}).__log = log
-        const t0 = performance.now()
-        document.addEventListener("scroll", e => {
-          const t = (e.target instanceof Element ? e.target : document.scrollingElement)!
-          log.push(["scroll", Math.round(performance.now() - t0), t.id || t.className, Math.round(t.scrollTop)])
-        }, {capture: true, passive: true})
-        const room = document.querySelector(".rooms-thread")!
-        new ResizeObserver(entries => log.push(["resize", Math.round(performance.now() - t0), entries.map(e => (e.target as Element).id || (e.target as Element).className).join("+"), room.scrollHeight, Math.round(room.scrollTop)])).observe(document.querySelector("#rooms-thread-list")!)
-      })
       await page.emulateMedia({reducedMotion: "reduce"})
-      console.log("PROBE after media", await probe())
       talk(fleet, owner, "people", `${said} still`, 1)
       await expect(post(page, `${said} still 1`)).toBeAttached()
-      await page.waitForTimeout(1500)
-      console.log("PROBE after still", await probe())
-      console.log("LOG", JSON.stringify(await page.evaluate(() => (window as unknown as {__log: unknown[]}).__log)))
       await expectNewest(page, `${said} still 1`, `${said} 1`)
 
       expect(errors).toEqual([])
