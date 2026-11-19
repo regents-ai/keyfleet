@@ -41,11 +41,6 @@ defmodule KeyfleetWeb.SeasonPanel do
   # Picks of the season under way a page shows at first, and each "More" adds.
   @picks 10
 
-  # The longest reason the rule takes, in the UTF-16 units a box counts
-  # (`KeyfleetWeb.BoxLimit`), as the rule counts it. More, as typed, is refused
-  # before the rule is asked; the rule may refuse more.
-  @longest_reason Reason.longest()
-
   @coinbase "https://docs.cdp.coinbase.com/ai-agents/coinbase-for-agents/coinbase-mcp"
 
   @notes %{
@@ -300,7 +295,7 @@ defmodule KeyfleetWeb.SeasonPanel do
       when is_map(params) do
     typed = Map.take(params, ["product", "reason"])
 
-    if BoxLimit.too_long?(to_string(typed["reason"]), @longest_reason) do
+    if BoxLimit.too_long?(to_string(typed["reason"]), longest_reason()) do
       note = Errors.ReasonError.exception(rule: :too_long)
       {:noreply, assign(socket, :season, %{season | form: pick_form(typed), note: note})}
     else
@@ -392,7 +387,11 @@ defmodule KeyfleetWeb.SeasonPanel do
 
   defp coinbase, do: @coinbase
 
-  defp longest_reason, do: @longest_reason
+  # The longest reason the rule takes, in the UTF-16 units a box counts
+  # (`KeyfleetWeb.BoxLimit`), as the rule counts it. More, as typed, is refused
+  # before the rule is asked; the rule may refuse more. Asked as the page
+  # runs, so the panel doesn't compile with the rule.
+  defp longest_reason, do: Reason.longest()
 
   # A member's panel: what anyone reads, the season under way's first picks,
   # and the season taking picks with how many Keys locked one and the
