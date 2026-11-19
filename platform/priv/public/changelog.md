@@ -18,8 +18,9 @@ Changes to Keyfleet, newest first.
   also sees the season's picks, ten at a time, and picks for the next season right there:
   a coin from those open to picks and a reason if they like, changed as often as they
   want until the season starts, though changing a pick gives up its place. Until then
-  the panel shows only how many Keys have picked. The panel changes when a season turns
-  or a Key picks, with no reload. Keyfleet places no order and holds no money: to follow
+  the panel shows only how many Keys have picked. Once a season's time is up, its clock
+  says Settling until the next season is under way. The panel changes when a season
+  turns or a Key picks, with no reload. Keyfleet places no order and holds no money: to follow
   the fleet, a person's agent trades in that person's own Coinbase account.
 - **Seasons.** Each fleet now plays seasons of three hours, starting on the hour every
   three hours, UTC. While one season runs, each Key picks a Coinbase coin traded in US

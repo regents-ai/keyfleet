@@ -13348,6 +13348,16 @@ step's report).
     tags, 500 emoji passed as 500 characters, and broken UTF-8 raised inside the pattern.
     The panel's box now takes 502 units (it took 1,002). No rule elsewhere fitted: rooms
     and polls share the old pattern, and the early-access address rule takes no emoji.
+  - Between a boundary and its turn no answer calls the season that ended under way
+    (`Seasons.under_way?/2`, its end time not yet come): `seasons_show`'s `running`, and
+    with it `last_settled`, is null then, as `taking_picks` already was. The panel's
+    clock says "Settling" from the season's end until the turn's notice draws the next:
+    `KeyfleetWeb.Components.Countdown` takes `done` words for any format now, not only
+    `clock`, and the browser's countdown keeps its once-a-second tick through the last
+    minute only when it has them. No new timer on the server and no polling. Before, the
+    answer called the ended season under way for that minute or more, and the clock said
+    "Less than a minute left" to a time already past. `seasons_picks` still reads the
+    ended season's picks for a member until it is settled.
 - Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
   `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
   `cli/commands.json`):
@@ -13355,8 +13365,8 @@ step's report).
     (number, start, end, holding, captain, the holding's open price, its picks in lock
     order), the season taking picks (number, start, the caller's own pick and
     `keys_locked`, never whose or what), the last settled season (holding, its result,
-    the best pick and its result, `crown_changed`) and the rules. `taking_picks` is null
-    for the minute or so between a boundary and its turn.
+    the best pick and its result, `crown_changed`) and the rules. All three seasons are
+    null for the minute or so between a boundary and its turn (the review fixes above).
   - `seasons_pick`, `POST …/seasons/pick`: 201 for a new or changed pick, 200 for the
     same one; 409 `season_closed` with when the next opens, 422 `product_not_open`
     (call `seasons_coins`) and `invalid_pick`, 503 `coins_unread` (try again shortly).

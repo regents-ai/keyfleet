@@ -1745,7 +1745,8 @@ features:
       a time (seasons_picks); the season taking picks with its own Key's pick and
       how many Keys have locked, never whose or what; the last settled
       season with the best pick and whether the crown changed; and the rules.
-      It locks or changes its Key's pick (seasons_pick), refused with a hint
+      Between a boundary and its turn none of the three is given, so no
+      season past its end is called under way. It locks or changes its Key's pick (seasons_pick), refused with a hint
       that says what to do when the season is closed, the product is not
       open to picks or the product list hasn't been read, or names the rule a
       reason broke. Any paired agent
@@ -1783,6 +1784,7 @@ features:
       - platform/test/keyfleet_web/signed_agent_contract_test.exs
       - platform/test/keyfleet_web/mcp_connector_test.exs
       - platform/test/keyfleet/seasons_test.exs
+      - platform/test/keyfleet_web/live/season_panel_test.exs
     gaps:
       - A reason over 500 letters is refused at both doors with nothing written, but signed HTTP answers invalid_pick and the connector invalid_request with the length, as polls do; the connector counts letters, and one of 500 letters or fewer but over 500 units as a text box counts them answers invalid_pick at both.
       - Not yet run by a real agent.
@@ -1822,7 +1824,8 @@ features:
     what: >-
       The fleet's hall has a Season panel. Anyone, signed out too, reads the
       season under way there: the holding and its open price, the captain
-      Key, the time left counting down in the browser, and the last settled
+      Key, the time left counting down in the browser, then Settling from
+      the season's end until its turn reaches the page, and the last settled
       season's result as a signed percentage with whether the crown passed.
       A person signed in with a Key of the fleet also reads the season under
       way's picks in lock order, ten at a time with More, and

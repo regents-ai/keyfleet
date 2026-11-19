@@ -84,9 +84,11 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
   # A member reads the season under way with its first page of picks, the
   # one taking picks with its own Key's pick alone, and the one settled as
   # the one under way started: a turn settling that one meanwhile changes
-  # neither.
+  # neither. A season past its end time is no longer under way, though its
+  # turn hasn't settled it yet.
   defp run(:show, %{"fleet_id" => fleet_id}, actor) do
-    with {:ok, running} <- Seasons.running_season(fleet_id, actor: actor, authorize_with: :error),
+    with {:ok, locked} <- Seasons.running_season(fleet_id, actor: actor, authorize_with: :error),
+         running = if(locked && Seasons.under_way?(locked), do: locked),
          {:ok, upcoming} <-
            Seasons.upcoming_season(fleet_id, actor: actor, authorize_with: :error),
          {:ok, picks} <- picks(running, actor),

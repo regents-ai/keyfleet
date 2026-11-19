@@ -81,6 +81,15 @@ defmodule Keyfleet.Seasons do
   def taking_picks?(%Season{}, _now), do: false
 
   @doc """
+  Whether the season its turn locked (`running_season/2`) is still under way
+  at `now`: its end time hasn't come. From then until its turn settles it,
+  normally a minute later, it has ended and isn't settled yet.
+  """
+  @spec under_way?(Season.t(), DateTime.t()) :: boolean()
+  def under_way?(%Season{ends_at: ends_at}, now \\ DateTime.utc_now()),
+    do: DateTime.after?(ends_at, now)
+
+  @doc """
   A page of the fleet's settled seasons, newest first, each with how many
   Keys picked and its best pick: the newest, or those numbered below
   `before`. Answers `{seasons, more?}`, `more?` saying older ones follow.

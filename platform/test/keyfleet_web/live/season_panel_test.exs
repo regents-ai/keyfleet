@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.Live.SeasonPanelTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import Ecto.Query, only: [from: 2]
+
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Actors.Human
@@ -9,11 +11,13 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
   alias Keyfleet.CoinbaseStub
   alias Keyfleet.Fleets
   alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Repo
   alias Keyfleet.Seasons
   alias Keyfleet.Seasons.CoinList
   alias Keyfleet.Seasons.Errors.ReasonError
   alias Keyfleet.Seasons.Season
   alias Keyfleet.SharedReading
+  alias KeyfleetWeb.AgentTools.Seasons.Answer
   alias KeyfleetWeb.FleetNow
 
   @fleet "fibonacci_syndicate"
@@ -239,6 +243,43 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
     assert has_element?(visitor, "#fleet-season-last", "Crown kept")
   end
 
+  # The clock past season 2's end with its turn not yet run, as after a
+  # boundary: neither the agent's answer nor the panel calls it under way,
+  # and the panel's clock gives a word, not a count to a time gone, until the
+  # turn's notice arrives.
+  test "between a season's end and its turn, nothing counts it as under way", %{
+    conn: conn,
+    running: running,
+    taking: taking
+  } do
+    boundary = Seasons.boundary(DateTime.utc_now())
+    hours_ago!(6)
+    FleetNow.read(@fleet)
+
+    assert {200, %{running: nil, taking_picks: nil, last_settled: nil}, nil} =
+             Answer.answer(:show, %{"fleet_id" => @fleet}, human(@holder), nil)
+
+    {:ok, member, _html} = live(signed_in_as(conn, @holder), @path)
+    {:ok, visitor, _html} = live(build_conn(), @path)
+
+    for view <- [member, visitor] do
+      assert has_element?(view, "#fleet-season-holding", "SOL-USD")
+      assert run_out?(view)
+    end
+
+    # The turn: season 2 settles, season 3 is under way and season 4 opens.
+    settle!(running, "150", "0.047")
+    lock!(taking, "SOL-USD", "150", 2)
+    season!(4, DateTime.add(boundary, 3, :hour))
+
+    assert {200, %{running: %{number: 3}, taking_picks: %{number: 4}}, nil} =
+             Answer.answer(:show, %{"fleet_id" => @fleet}, human(@holder), nil)
+
+    refute run_out?(member)
+    FleetNow.read(@fleet)
+    refute run_out?(visitor)
+  end
+
   @tag pickers: 11
   test "the season under way's picks show ten at a time", %{conn: conn} do
     {:ok, view, _html} = live(signed_in_as(conn, @holder), @path)
@@ -250,6 +291,30 @@ defmodule KeyfleetWeb.Live.SeasonPanelTest do
   end
 
   defp count_rows(html), do: html |> String.split("<li") |> length() |> Kernel.-(1)
+
+  # Whether the season's clock writes its words for a time run out.
+  defp run_out?(view) do
+    clock = view |> element("#fleet-season-clock") |> render() |> LazyHTML.from_fragment()
+    LazyHTML.attribute(clock, "data-done") == [LazyHTML.text(clock)]
+  end
+
+  # The fleet's seasons, every one, `hours` earlier, as if the clock had run
+  # that far past them.
+  defp hours_ago!(hours) do
+    Repo.update_all(
+      from(season in "seasons",
+        where: season.fleet_id == ^@fleet,
+        update: [
+          set: [
+            starts_at: fragment("? - make_interval(hours => ?)", season.starts_at, ^hours),
+            ends_at: fragment("? - make_interval(hours => ?)", season.ends_at, ^hours)
+          ]
+        ]
+      ),
+      [],
+      prefix: "keyfleet_app"
+    )
+  end
 
   defp season!(number, starts_at) do
     Season

@@ -16,8 +16,9 @@ defmodule KeyfleetWeb.SeasonPanel do
   fleet's turns on `Keyfleet.Seasons.topic/1`, which read the panel again,
   and the picks locked for the season taking picks on `season_topic/1`, which
   read only that season's count and the reader's own pick. The clock counts
-  down in the browser (`KeyfleetWeb.Components.Countdown`); nothing here
-  keeps time.
+  down in the browser (`KeyfleetWeb.Components.Countdown`), and from the
+  season's end says "Settling" until the turn's notice draws the next; nothing
+  here keeps time.
 
   The fleet's record of settled seasons is its own page
   (`KeyfleetWeb.SeasonsLive`).
@@ -147,6 +148,7 @@ defmodule KeyfleetWeb.SeasonPanel do
               closes_at={@season.face.ends_at}
               now={@season.now}
               format="hours"
+              done="Settling"
             />
             <span :if={is_nil(@season.face)}>—</span>
           </dd>
