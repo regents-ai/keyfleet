@@ -316,7 +316,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     with {:ok, %{} = message} <-
            Rooms.get_post_under_send_key(fleet_id, Rooms.sender_wallets(actor), key,
              actor: actor,
-             load: [:room, :agent_profile, :via_agent_profile]
+             load: [:room, :agent_profile, :via_agent_profile, :reply_to_seq]
            ),
          {:ok, %{id: profile_id}} <- Agents.get_my_profile(actor: actor),
          true <- profile_id in [message.agent_profile_id, message.via_agent_profile_id] do

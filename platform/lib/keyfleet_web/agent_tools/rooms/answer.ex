@@ -25,6 +25,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   alias Keyfleet.Rooms.Errors.QuoteUnknownError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
+  alias Keyfleet.Rooms.Errors.RoomMovedOnError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias KeyfleetWeb.AgentTools.Dms.Answer, as: DmAnswer
@@ -48,6 +49,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
     ReplyOutsideRoomError,
     QuoteUnknownError,
     QuoteDiffersError,
+    RoomMovedOnError,
     PostLimitError
   ]
 
@@ -140,7 +142,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   def answer(:post, %{"fleet_id" => fleet_id, "slug" => slug} = params, actor, _waiter) do
     input =
       params
-      |> Map.take(["body", "idempotency_key", "reply_to_id", "quote_request_id"])
+      |> Map.take(["body", "idempotency_key", "reply_to_id", "quote_request_id", "after_seq"])
       |> Map.merge(%{"fleet_id" => fleet_id, "slug" => slug})
 
     sent(fleet_id, Rooms.send_message(input, actor: actor), actor)
@@ -193,7 +195,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   def answer(:wall_post, %{"fleet_id" => fleet_id, "token_id" => token_id} = params, actor, _w) do
     input =
       params
-      |> Map.take(["body", "idempotency_key", "reply_to_id"])
+      |> Map.take(["body", "idempotency_key", "reply_to_id", "after_seq"])
       |> Map.merge(%{"fleet_id" => fleet_id, "token_id" => token_id})
 
     sent(fleet_id, Rooms.send_to_key(input, actor: actor), actor)
@@ -227,11 +229,12 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
     # The body's checks have already opened the mentions' cursor.
     {:ok, mentions_after} = MentionJSON.opened(get_in(params, ["mentions", "after"]))
+    wake = wake(params["wake"], mentions_after)
 
     # Only a few syncs from one waiter are held open at once; past that a sync
     # answers straight away with what it has.
     with {:ok, synced} <-
-           AgentWaits.hold(waiter, &Rooms.sync(fleet_id, cursors, places, actor, &1)),
+           AgentWaits.hold(waiter, &Rooms.sync(fleet_id, cursors, places, wake, actor, &1)),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, yours} <- yours(fleet_id, actor, %{project: places.project}, mentions_after) do
       muted = Rooms.muted_keys!(fleet_id, actor)
@@ -249,6 +252,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         |> sync_json(check_in, Map.merge(yours, upkeep), muted, refused)
         |> put_dms(synced.dms)
         |> put_quotes(synced.quotes)
+        |> put_woke(synced[:woke])
 
       sent = %{
         graph: places.graph,
@@ -415,6 +419,17 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
     }
   end
 
+  # A sync waits for anything new unless `wake` narrows it to a reply to one
+  # post, a post naming the Key after the mentions' cursor, or either.
+  defp wake(nil, _mentions_after), do: nil
+
+  defp wake(wake, mentions_after),
+    do: %{
+      reply_to_id: wake["reply_to_id"],
+      mentions: Map.get(wake, "mentions", false),
+      mentions_after: mentions_after
+    }
+
   # Direct messages are followed only when asked for.
   defp dm_cursors(nil), do: nil
   defp dm_cursors(dms), do: DmAnswer.key_cursors(dms)
@@ -433,6 +448,10 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         next_cursor: page.next_cursor,
         has_more: page.has_more
       })
+
+  # What ended a narrowed wait answers only when the sync was narrowed.
+  defp put_woke(answer, nil), do: answer
+  defp put_woke(answer, woke), do: Map.put(answer, :woke, woke)
 
   # A room the agent may not read repeats only the slug it sent, with what
   # keeps it out, as a refusal of that room alone would say.
@@ -596,6 +615,15 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   defp refuse_named(%ReplyOutsideRoomError{}, _error), do: refusal(422, "reply_not_here")
   defp refuse_named(%QuoteUnknownError{}, _error), do: refusal(422, "quote_unknown")
   defp refuse_named(%QuoteDiffersError{}, _error), do: refusal(422, "quote_differs")
+
+  # Nothing was written: the sender reads what landed after its `after_seq`.
+  defp refuse_named(%RoomMovedOnError{head_seq: head_seq, after_seq: after_seq}, _error),
+    do:
+      {409,
+       put_in(Refusal.body("room_moved_on"), [:error, :details], %{
+         head_seq: head_seq,
+         posts_since: max(head_seq - after_seq, 0)
+       }), nil}
 
   defp refuse_named(%PostLimitError{retry_after: seconds}, _error),
     do: {429, Refusal.body("post_limit_reached"), seconds}

@@ -300,13 +300,31 @@ defmodule Keyfleet.Rooms do
   straight away. The announcements only say when to read again: everything
   the caller gets is read as the caller. Nothing is marked as read, and asking
   again is always safe.
+
+  `wake`, when it is not nil, narrows what the caller is answered for, as
+  `%{reply_to_id: id | nil, mentions: boolean, mentions_after: place | nil}`:
+  a post answering the post `reply_to_id` among the posts answered, or, with
+  `mentions`, a post naming the caller's Key after `mentions_after`, as
+  `mention_changes/4` reads them. Nothing else ends the wait, and the answer
+  carries `woke`: `:match` when it shows what was waited for, the first read
+  included, `:time` after `:agent_wait_ms` without it, and `:not_held` when
+  `wait?` is false and the first read had none.
   """
-  def sync(fleet_id, cursors, places, actor, wait?) do
+  def sync(fleet_id, cursors, places, nil, actor, wait?) do
     read = fn -> read_sync(fleet_id, cursors, places, actor) end
 
     if wait?,
       do: wait_for_news(fleet_id, news_topics(fleet_id, places, actor), read),
       else: read.()
+  end
+
+  def sync(fleet_id, cursors, places, wake, actor, wait?) do
+    read = fn -> read_sync(fleet_id, cursors, places, actor) end
+    wake = Map.put(wake, :as_key, as_key(actor, fleet_id))
+
+    if wait?,
+      do: wait_for_match(fleet_id, wake, actor, read),
+      else: read_once(fleet_id, wake, actor, read)
   end
 
   # What a waiting caller hears: the rooms and the workspace as its class
@@ -555,6 +573,119 @@ defmodule Keyfleet.Rooms do
       0 -> :ok
     end
   end
+
+  # The Key the caller acts as, whose mentions it may wait for; none for a
+  # caller with no Key here.
+  defp as_key(actor, fleet_id) do
+    case Keyfleet.Keys.identity(actor, fleet_id) do
+      %{token_id: token_id} -> token_id
+      nil -> nil
+    end
+  end
+
+  # A sync that may not wait answers what its one read shows.
+  defp read_once(fleet_id, wake, actor, read) do
+    with {:ok, synced} <- read.() do
+      woke(synced, if(matched?(fleet_id, wake, synced, actor), do: :match, else: :not_held))
+    end
+  end
+
+  # Subscribed before the first read, as `wait_for_news/3` is, but only to the
+  # rooms as the caller's class hears them: a reply or a mention is a post,
+  # and the topic of anyone outside the fleet carries no post of a room they
+  # can't read. Keys changing hands don't end this wait; the caller's next
+  # sync hears as its class is then.
+  defp wait_for_match(fleet_id, wake, actor, read) do
+    topic = topic(fleet_id, Access.class(actor, fleet_id))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+
+    try do
+      with {:ok, synced} <- read.() do
+        if matched?(fleet_id, wake, synced, actor),
+          do: woke(synced, :match),
+          else:
+            await_match(
+              fleet_id,
+              wake,
+              actor,
+              read,
+              synced,
+              System.monotonic_time(:millisecond) + wait_ms()
+            )
+      end
+    after
+      Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, topic)
+      flush_news(fleet_id)
+    end
+  end
+
+  # Only a line that may be what the caller waits for is read again, and the
+  # wait ends only when that read shows it. The time left is read before every
+  # wait, as `await_news/4` does.
+  defp await_match(fleet_id, wake, actor, read, synced, until) do
+    case until - System.monotonic_time(:millisecond) do
+      left when left <= 0 ->
+        woke(synced, :time)
+
+      left ->
+        receive do
+          %Phoenix.Socket.Broadcast{event: "room_head", payload: head} ->
+            if may_match?(wake, head),
+              do: match_again(fleet_id, wake, actor, read, until),
+              else: await_match(fleet_id, wake, actor, read, synced, until)
+
+          %Phoenix.Socket.Broadcast{} ->
+            await_match(fleet_id, wake, actor, read, synced, until)
+        after
+          left -> woke(synced, :time)
+        end
+    end
+  end
+
+  defp match_again(fleet_id, wake, actor, read, until) do
+    with {:ok, again} <- read.() do
+      if matched?(fleet_id, wake, again, actor),
+        do: woke(again, :match),
+        else: await_match(fleet_id, wake, actor, read, again, until)
+    end
+  end
+
+  # A line answering the caller's post, or naming its Key and written as
+  # another Key. Whether the caller is shown it is the read's to say.
+  defp may_match?(wake, head),
+    do:
+      (wake.reply_to_id != nil and head.reply_to_id == wake.reply_to_id) or
+        (wake.mentions and wake.as_key != nil and wake.as_key in head.mentions and
+           head.as_key not in [nil, wake.as_key])
+
+  # Whether the answer shows what the caller waits for: a post answering its
+  # post among the rooms' and walls' posts answered, written as no Key it
+  # muted, or a post naming its Key among the mentions it is answered.
+  defp matched?(fleet_id, wake, synced, actor),
+    do: replied?(fleet_id, wake.reply_to_id, synced, actor) or mentioned?(fleet_id, wake, actor)
+
+  defp replied?(_fleet_id, nil, _synced, _actor), do: false
+
+  defp replied?(fleet_id, post_id, synced, actor) do
+    synced.rooms
+    |> Enum.reject(&match?(%{refused: true}, &1))
+    |> Enum.concat(synced.keys)
+    |> Enum.flat_map(& &1.messages)
+    |> unmuted(muted_keys!(fleet_id, actor))
+    |> Enum.any?(&(&1.reply_to_id == post_id))
+  end
+
+  defp mentioned?(fleet_id, %{mentions: true, as_key: token_id} = wake, actor)
+       when token_id != nil,
+       do:
+         match?(
+           {:ok, %{posts: [_ | _]}},
+           mention_changes(fleet_id, token_id, wake.mentions_after, actor)
+         )
+
+  defp mentioned?(_fleet_id, _wake, _actor), do: false
+
+  defp woke(synced, woke), do: {:ok, Map.put(synced, :woke, woke)}
 
   defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
 

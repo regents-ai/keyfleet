@@ -22,6 +22,18 @@ defmodule Keyfleet.Rooms.Errors.SendConflictError do
     do: "send key #{idempotency_key} was already used for a different post"
 end
 
+defmodule Keyfleet.Rooms.Errors.RoomMovedOnError do
+  @moduledoc """
+  Raised when a post asks to be written only right after the place
+  `after_seq` and the room or wall has taken a place since: `head_seq` is its
+  last place.
+  """
+  use Splode.Error, fields: [:head_seq, :after_seq], class: :invalid
+
+  def message(%{head_seq: head_seq, after_seq: after_seq}),
+    do: "the room is at #{head_seq}, not #{after_seq}"
+end
+
 defmodule Keyfleet.Rooms.Errors.CreatedRoomLimitError do
   @moduledoc "Raised when a fleet already has as many created rooms as it may."
   use Splode.Error, fields: [:limit], class: :invalid

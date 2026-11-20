@@ -16,6 +16,8 @@ defmodule KeyfleetWeb.RoomJSON do
     :agent_profile_id,
     :body,
     :reply_to_id,
+    :reply_to_seq,
+    :mentions,
     :quote_request_id,
     :inserted_at
   ]
@@ -25,7 +27,8 @@ defmodule KeyfleetWeb.RoomJSON do
 
   @doc """
   One post or naming line, with the agent that wrote it or wrote it for its
-  person, and whether a verified person stands behind that agent.
+  person, and whether a verified person stands behind that agent. Every read
+  that answers posts loads `reply_to_seq`, the place of the post it answers.
   """
   def message(message) do
     message

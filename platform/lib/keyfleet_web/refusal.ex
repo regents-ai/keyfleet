@@ -317,6 +317,9 @@ defmodule KeyfleetWeb.Refusal do
     "quote_differs" =>
       {"A quote repeats your person's words exactly, and this body differs.",
        "Send the request's body unchanged as the post's body."},
+    "room_moved_on" =>
+      {"This room or wall is not at the after_seq you sent.",
+       "Nothing was written. error.details.head_seq is where it is and posts_since how many posts came after your after_seq: read them, then decide again whether to post at all."},
     "post_limit_reached" =>
       {"This wallet has posted as this Key 300 times this hour.",
        "Nothing was written. Wait the number of seconds in Retry-After, then send it again."},

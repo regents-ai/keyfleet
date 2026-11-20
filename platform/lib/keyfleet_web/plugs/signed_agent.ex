@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # ones it must name, then the ones it may add.
   @body_fields [
     {@message_path, {~w(body operation_id), ~w(reply_to)}},
-    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes mentions max_bytes)}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes mentions wake max_bytes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@project_start_path, {~w(as_key name title), []}},
     {@project_archive_path, {~w(as_key), []}},
@@ -181,8 +181,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_read_path, {[], ~w(after_seq limit max_bytes)}},
     {@get_path, {[], ~w(seq id context)}},
     {@key_get_path, {[], ~w(seq id context)}},
-    {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
-    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id after_seq)}},
+    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id after_seq)}},
     {@key_remove_path, {~w(message_id), []}},
     {@keys_held_path, {~w(wallet), []}},
     {@activity_path, {[], ~w(cursor)}},
@@ -1050,10 +1050,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_room_body(:get, params), do: check_place_body(params)
 
   defp check_room_body(:send, params),
-    do: admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id quote_request_id)))
+    do: check_send_body(params, ~w(body idempotency_key reply_to_id quote_request_id after_seq))
 
   defp check_room_body(:key_send, params),
-    do: admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id)))
+    do: check_send_body(params, ~w(body idempotency_key reply_to_id after_seq))
 
   defp check_room_body(nil, _params), do: :invalid
 
@@ -1519,6 +1519,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_place_body(_params), do: :invalid
 
+  # A post may name the last place its sender read, as `after_seq`.
+  defp check_send_body(params, fields) do
+    if valid_send_body?(params, fields),
+      do: check_after_seq(Map.get(params, "after_seq", 0)),
+      else: :invalid
+  end
+
+  defp check_after_seq(after_seq) when is_integer(after_seq),
+    do: in_range(after_seq in 0..@max_seq)
+
+  defp check_after_seq(_after_seq), do: :invalid
+
   defp valid_send_body?(%{"body" => body, "idempotency_key" => key} = params, fields) do
     is_binary(body) and is_binary(key) and
       Enum.all?(Map.keys(params), &(&1 in fields)) and
@@ -1587,14 +1599,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # only when `dms` names a place in each Key's, and the person's requests to
   # quote them only when `quotes` does. The Key's mentions are read on from
   # `mentions`' cursor when it names one, and over the last week otherwise.
-  # A body that doesn't fit is refused as that before one with a place out of
-  # range.
+  # `wake` narrows what ends the wait. A body that doesn't fit is refused as
+  # that before one with a place out of range.
   defp check_sync_body(params) do
     checks = [
       check_sync_rooms(params),
       check_key_cursors(Map.get(params, "keys", []), @max_sync_walls),
       check_sync_dms(params),
-      check_sync_mentions(params)
+      check_sync_mentions(params),
+      check_sync_wake(params)
     ]
 
     cond do
@@ -1630,9 +1643,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_sync_rooms(_params), do: :invalid
 
   # The sync body names its rooms, graph, proposals and run, and may name keys,
-  # direct messages, quotes and mentions; each part is shaped as its cursor is.
+  # direct messages, quotes, mentions and what wakes it; each part is shaped
+  # as its cursor is.
   defp sync_shape?(params, rooms, graph, others, run) do
-    map_size(Map.drop(params, ["keys", "dms", "quotes", "mentions"])) == 4 and
+    map_size(Map.drop(params, ["keys", "dms", "quotes", "mentions", "wake"])) == 4 and
       Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
       Enum.all?(others, &log_cursor?/1) and run?(run)
   end
@@ -1651,6 +1665,21 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_sync_mentions(%{"mentions" => _mentions}), do: :invalid
   defp check_sync_mentions(_params), do: :ok
+
+  # A sync that waits only for a reply to one post, named by its id as the API
+  # gives it, for a post naming the caller's Key, or for either.
+  defp check_sync_wake(%{"wake" => wake}) when is_map(wake) do
+    reply_to_id = Map.get(wake, "reply_to_id")
+    mentions = Map.get(wake, "mentions", false)
+
+    admit(
+      Map.keys(wake) -- ~w(reply_to_id mentions) == [] and id_or_none?(reply_to_id) and
+        is_boolean(mentions) and (reply_to_id != nil or mentions)
+    )
+  end
+
+  defp check_sync_wake(%{"wake" => _wake}), do: :invalid
+  defp check_sync_wake(_params), do: :ok
 
   # A proposal is named by its number, and its votes are read on from a place.
   defp check_proposal_read_body(%{"number" => number, "votes_after_seq" => after_seq} = params)

@@ -83,6 +83,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
 
       argument :reply_to_id, :string, constraints: @post_id
       argument :quote_request_id, :string, constraints: @post_id
+      argument :after_seq, :integer, constraints: @place
       run {Run, tool: "rooms_post"}
     end
 
@@ -129,6 +130,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
         constraints: [max_length: 128, trim?: false]
 
       argument :reply_to_id, :string, constraints: @post_id
+      argument :after_seq, :integer, constraints: @place
       run {Run, tool: "walls_post"}
     end
 
@@ -220,6 +222,15 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
       # answered, or null for the last week.
       argument :mentions, :map,
         constraints: [fields: [after: [type: :string, constraints: [max_length: 128]]]]
+
+      # Waits only for a reply to one post, or a post naming the Key, or both.
+      argument :wake, :map,
+        constraints: [
+          fields: [
+            reply_to_id: [type: :string, constraints: @post_id],
+            mentions: [type: :boolean]
+          ]
+        ]
 
       argument :max_bytes, :integer, constraints: [min: 16_384, max: 67_108_864]
       run {Run, tool: "fleets_sync"}

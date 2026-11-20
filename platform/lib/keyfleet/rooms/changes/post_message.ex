@@ -26,6 +26,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   alias Keyfleet.Rooms.Errors.NoAgentProfileError
   alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
+  alias Keyfleet.Rooms.Errors.RoomMovedOnError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias Keyfleet.Rooms.Mentions
@@ -106,23 +107,29 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
         Ash.Changeset.add_error(changeset, NoAgentProfileError.exception([]))
 
       {author, profiles} ->
-        changeset
-        |> Ash.Changeset.put_context(:author_profiles, profiles)
-        |> Ash.Changeset.force_change_attributes(
-          Map.merge(author, %{
-            kind: kind,
-            in_key_thread: room.kind == :key,
-            fleet_id: room.fleet_id,
-            room_id: room.id,
-            seq: seq(room, earlier),
-            body: body,
-            body_digest: digest(body),
-            mentions: mentions(kind, body),
-            idempotency_key: idempotency_key,
-            reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id),
-            quote_request_id: Ash.Changeset.get_argument(changeset, :quote_request_id)
-          })
-        )
+        case seq(room, earlier, Ash.Changeset.get_argument(changeset, :after_seq)) do
+          {:error, error} ->
+            Ash.Changeset.add_error(changeset, error)
+
+          {:ok, seq} ->
+            changeset
+            |> Ash.Changeset.put_context(:author_profiles, profiles)
+            |> Ash.Changeset.force_change_attributes(
+              Map.merge(author, %{
+                kind: kind,
+                in_key_thread: room.kind == :key,
+                fleet_id: room.fleet_id,
+                room_id: room.id,
+                seq: seq,
+                body: body,
+                body_digest: digest(body),
+                mentions: mentions(kind, body),
+                idempotency_key: idempotency_key,
+                reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id),
+                quote_request_id: Ash.Changeset.get_argument(changeset, :quote_request_id)
+              })
+            )
+        end
     end
   end
 
@@ -141,9 +148,22 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   defp author_wallet(earlier, _wallet), do: earlier.author_wallet
 
   # A repeat keeps the place its post already holds, so the room's order stays
-  # unbroken whether or not the first attempt ever reached the sender.
-  defp seq(room, nil), do: Sequence.next!(room.id)
-  defp seq(_room, earlier), do: earlier.seq
+  # unbroken whether or not the first attempt ever reached the sender. A post
+  # sent with `after_seq` takes only the place right after it: any other place
+  # refuses it, and the refusal rolls the place back with the rest of the post.
+  defp seq(room, nil, nil), do: {:ok, Sequence.next!(room.id)}
+
+  defp seq(room, nil, after_seq) do
+    case Sequence.next!(room.id) do
+      seq when seq == after_seq + 1 ->
+        {:ok, seq}
+
+      seq ->
+        {:error, RoomMovedOnError.exception(head_seq: seq - 1, after_seq: after_seq)}
+    end
+  end
+
+  defp seq(_room, earlier, _after_seq), do: {:ok, earlier.seq}
 
   # An agent writes from its own wallet with its profile; a person from the
   # wallet holding the key they write as, and an agent writing for its person

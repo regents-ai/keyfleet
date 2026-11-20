@@ -170,6 +170,10 @@ defmodule Keyfleet.Rooms.Message do
       # The request of the agent's person this post quotes, in their words.
       argument :quote_request_id, :uuid
 
+      # The room's last place the sender read: the post is written only at the
+      # place right after it (`Keyfleet.Rooms.Changes.PostMessage`).
+      argument :after_seq, :integer, constraints: [min: 0, max: @bigint]
+
       # The sender's own key settles a repeat: the database hands back the post
       # that key already made rather than taking a second place in the room.
       upsert? true
@@ -183,6 +187,7 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+      change load(:reply_to_seq)
     end
 
     # A post written to one of the fleet's keys, in that key's thread, which
@@ -205,6 +210,7 @@ defmodule Keyfleet.Rooms.Message do
         constraints: [min_length: 1, max_length: 128, trim?: false]
 
       argument :reply_to_id, :uuid
+      argument :after_seq, :integer, constraints: [min: 0, max: @bigint]
 
       upsert? true
       upsert_identity :unique_send_key
@@ -217,6 +223,7 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+      change load(:reply_to_seq)
     end
 
     # The line an open room takes when a member names it, written inside the
@@ -258,7 +265,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(seq > ^arg(:after_seq))
 
-      prepare build(load: [:agent_profile, :via_agent_profile])
+      prepare build(load: [:agent_profile, :via_agent_profile, :reply_to_seq])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :room}
       metadata :more_after, :boolean, allow_nil?: false
     end
@@ -297,7 +304,10 @@ defmodule Keyfleet.Rooms.Message do
                )
              )
 
-      prepare build(load: [:agent_profile, :via_agent_profile], sort: [seq: :asc])
+      prepare build(
+                load: [:agent_profile, :via_agent_profile, :reply_to_seq],
+                sort: [seq: :asc]
+              )
     end
 
     # The posts after each of several keys' threads' cursors, oldest first in
@@ -348,7 +358,7 @@ defmodule Keyfleet.Rooms.Message do
              )
 
       prepare build(
-                load: [:agent_profile, :via_agent_profile, :removed_from_wall],
+                load: [:agent_profile, :via_agent_profile, :removed_from_wall, :reply_to_seq],
                 sort: [seq: :asc]
               )
     end
@@ -365,7 +375,7 @@ defmodule Keyfleet.Rooms.Message do
       # A post its Key's holder took off the wall is left out for everyone.
       filter expr(seq > ^arg(:after_seq) and not exists(wall_removal, true))
 
-      prepare build(load: [:agent_profile, :via_agent_profile])
+      prepare build(load: [:agent_profile, :via_agent_profile, :reply_to_seq])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :key}
       metadata :more_after, :boolean, allow_nil?: false
     end
@@ -624,7 +634,9 @@ defmodule Keyfleet.Rooms.Message do
   # publication goes in the same change, since the policy does not guard it.
   #
   # Then, on the two topics of `Keyfleet.Rooms.topic/2`: "room_head" with
-  # `%{room_id, seq}` for every new line, and "key_activity" with
+  # `%{room_id, seq, as_key, reply_to_id, mentions}` for every new line, the
+  # facts a sync waiting for a reply or a mention needs to know when to read
+  # again (`Keyfleet.Rooms.sync/6`), and "key_activity" with
   # `%{fleet_id, token_ids}` for a new post, naming the key it was written as
   # and the key whose thread it went to. The members' topic takes every line.
   # The other takes a line of a room anyone reads or of a key's thread, and
@@ -752,7 +764,14 @@ defmodule Keyfleet.Rooms.Message do
   defp via_agent(_none), do: nil
 
   @doc false
-  def head(%{data: message}), do: %{room_id: message.room_id, seq: message.seq}
+  def head(%{data: message}),
+    do: %{
+      room_id: message.room_id,
+      seq: message.seq,
+      as_key: message.as_key,
+      reply_to_id: message.reply_to_id,
+      mentions: message.mentions
+    }
 
   # A post written to one of the rooms anyone reads.
   @doc false
