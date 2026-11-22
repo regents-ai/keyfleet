@@ -291,13 +291,16 @@ config :keyfleet, :graph,
 
 # Background work, in this site's own schema of the shared database. AshOban
 # adds the jobs of each resource's triggers (`AshOban.config/2` at start).
-# Queues hear about new jobs through the database (LISTEN/NOTIFY on a
-# connection of Oban's own, on channels named by the schema), so the two site
-# machines a release runs for a minute hear each other with no cluster.
+# New jobs, pauses and the queues' other signals are announced inside one
+# machine. The machines share no cluster, so in the minute a release runs two
+# site machines they do not hear each other: a pause reaches only the machine
+# it is sent on, and a job queued on one is picked up by the other at its next
+# poll, which comes every second. Which machine queues the timed entries below
+# is still settled in the database.
 config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
-  notifier: Oban.Notifiers.Postgres,
+  notifier: Oban.Notifiers.PG,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
