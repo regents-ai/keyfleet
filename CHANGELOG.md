@@ -14757,3 +14757,29 @@ step's report).
   leaving every row as it was, its lock wait ending at 5 seconds, its `down` working
   before any sharing and refused after, and the sign-in save and Points' check
   behaving as above.
+
+## 2026-11-22 — Phoenix 1.8.17 and LiveView 1.2.14
+
+- Moved phoenix from 1.8.16 to 1.8.17, which closes EEF-CVE-2026-128361 and
+  EEF-CVE-2026-129344, and phoenix_live_view from 1.2.13 to 1.2.14, which closes
+  EEF-CVE-2026-126334. Lockfile-only change, released on its own; finch,
+  nimble_pool and rewrite stay where they were.
+
+## 2026-11-22 — Jobs are announced inside one machine
+
+- The job queue announces new jobs, pauses and its queues' other signals inside
+  one machine (`Oban.Notifiers.PG` in place of `Oban.Notifiers.Postgres`) and
+  holds no database connection of its own. Which machine queues the timed
+  entries is still settled in the database.
+- In ordinary running the site is one machine and nothing changes but this: a
+  job queued as part of a larger save starts at the queue's next poll, up to a
+  second later, where it started at once.
+- In the minute a release runs two site machines, they share no cluster and do
+  not hear each other. A pause reaches only the machine it is sent on, and a job
+  queued on one machine is picked up by the other at its next poll.
+- `platform/README.md` and `docs/recurring-jobs.md` say the same.
+- No migration and no table change. Rolling back is the release before this
+  one, with nothing to undo.
+- Checks: the release smoke and every gate of `make check` pass. A hand run on a
+  throwaway database showed each job running once, the timed entries queued once
+  a minute, and a pause reaching the machine it was sent on.
