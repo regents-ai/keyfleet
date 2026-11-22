@@ -165,9 +165,9 @@ fly ssh console -C "/app/bin/keyfleet rpc 'Oban.resume_queue(queue: :chain)'"
 `notebook_hubs` stops the notebook hub updates the same way, and `key_art`
 the Key pictures. The `default`
 queue holds the watch, the cron jobs above and other work, so pausing it
-stops all of them. A pause reaches every site machine running through the
-database (`Oban.Notifiers.Postgres`), and from the release after 19 November
-2026 the two of a release's overlap too.
+stops all of them. A pause reaches only the machine the command runs on
+(`Oban.Notifiers.PG`): the one site machine in ordinary running, and in the
+minute a release runs two, each on its own.
 A pause lasts until it is resumed or the app restarts; a restart or a release
 starts every queue again. To stop one cron job for good,
 remove its line from the crontab in `platform/config/config.exs` and release.

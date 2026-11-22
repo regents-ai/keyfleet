@@ -302,9 +302,9 @@ are read on each member's page.
 does (`Keyfleet.Health`), so a pool that stays full fails the machine's health
 check. On the database every Regent site shares, the site machine serves from
 five connections, with two more for the Claude connector's sign-in while it is
-on, one that listens for shared changes and the graph machine's notices, and
-one that carries the job queue's notices between site machines
-(`Oban.Notifiers.Postgres`); the graph machine serves from three
+on, and one that listens for shared changes and the graph machine's notices;
+the job queue announces its work inside the machine and holds no connection of
+its own (`Oban.Notifiers.PG`). The graph machine serves from three
 (`Keyfleet.DatabaseConfig`). After a deploy, open pages reconnect
 spread over a moment rather than all at once (`assets/js/app.ts`).
 
