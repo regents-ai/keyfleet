@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       conn
       |> put_resp_header(
         "location",
-        KeyfleetWeb.Endpoint.url() <> Code.files_path(fleet_id, repository, "")
+        site_url() <> Code.files_path(fleet_id, repository, "")
       )
       |> send_resp(302, "")
     else
@@ -569,4 +569,10 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   defp capture(kept, data),
     do: kept <> binary_part(data, 0, min(byte_size(data), @captured - byte_size(kept)))
+
+  defp site_url do
+    if Application.get_env(:keyfleet, :redirect_to_regents, false),
+      do: "https://regents.sh/keyfleet",
+      else: KeyfleetWeb.Endpoint.url()
+  end
 end

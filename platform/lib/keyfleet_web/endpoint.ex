@@ -53,6 +53,10 @@ defmodule KeyfleetWeb.Endpoint do
   # code store.
   plug KeyfleetWeb.Plugs.CodeGateway
 
+  # After folding into regents.sh, redirect web/API traffic on keyfleet.ai to
+  # https://regents.sh while keeping /healthz and /.well-known/hub-jwks.json local.
+  plug KeyfleetWeb.Plugs.RegentsRedirect
+
   plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 

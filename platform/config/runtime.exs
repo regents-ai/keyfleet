@@ -259,6 +259,25 @@ if config_env() == :prod do
       ],
       secret_key_base: secret_key_base
 
+    # Gateway + redirect mode after folding Keyfleet into regents.sh: stops all
+    # Oban crons/triggers (keeping only :code_store and :notebook_hubs for the
+    # gateways), redirects keyfleet.ai web/API traffic to https://regents.sh while
+    # keeping /healthz, /.well-known/hub-jwks.json, code.keyfleet.ai and
+    # *.notebooks.keyfleet.ai live, and accepts regents.sh sessions/git passwords.
+    config :keyfleet, :gateway_only, System.get_env("KEYFLEET_OBAN_ENABLED") == "false"
+
+    config :keyfleet,
+           :redirect_to_regents,
+           System.get_env("KEYFLEET_REDIRECT_TO_REGENTS") == "true"
+
+    case System.get_env("REGENTS_SECRET_KEY_BASE") do
+      regents_secret when is_binary(regents_secret) and byte_size(regents_secret) >= 64 ->
+        config :keyfleet, :regents_secret_key_base, regents_secret
+
+      _unset ->
+        :ok
+    end
+
     # The commit the image was built from, and the Fly image this machine runs.
     config :keyfleet, :build, %{
       commit: System.fetch_env!("SOURCE_COMMIT"),

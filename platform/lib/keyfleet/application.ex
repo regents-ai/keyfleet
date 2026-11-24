@@ -94,10 +94,21 @@ defmodule Keyfleet.Application do
   end
 
   # Background work lives in the database, so it starts with it. AshOban adds a
-  # queue and a sweep for every trigger in the site's domains.
+  # queue and a sweep for every trigger in the site's domains. In gateway-only
+  # mode (after regents.sh takes over all crons and web traffic), Oban keeps
+  # only the two queues triggered by code/notebook gateway traffic with no crons.
   defp oban_child do
-    domains = Application.fetch_env!(:keyfleet, :ash_domains)
-    {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
+    if gateway_only?() do
+      config =
+        Application.fetch_env!(:keyfleet, Oban)
+        |> Keyword.drop([:cron, :plugins])
+        |> Keyword.put(:queues, code_store: 2, notebook_hubs: 1)
+
+      {Oban, config}
+    else
+      domains = Application.fetch_env!(:keyfleet, :ash_domains)
+      {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
+    end
   end
 
   # Metrics are served beside the site, never by a process that only runs a task.
@@ -108,34 +119,36 @@ defmodule Keyfleet.Application do
   # The agents here are read only where pages are served, so a task
   # never reads them on its own.
   defp here_child do
-    if serving?(), do: Keyfleet.Agents.Here
+    if serving_pages?(), do: Keyfleet.Agents.Here
   end
 
   # What each fleet is doing is read only where pages are served, as the
   # agents here are.
   defp fleet_now_child do
-    if serving?(), do: KeyfleetWeb.FleetNow
+    if serving_pages?(), do: KeyfleetWeb.FleetNow
   end
 
   # The fleets' proposals and treasuries are read only where pages are
   # served, as each fleet's activity is.
   defp fleet_proposals_child do
-    if serving?(), do: KeyfleetWeb.FleetProposals
+    if serving_pages?(), do: KeyfleetWeb.FleetProposals
   end
 
   # The Points board is read only where pages are served, so a task
   # never reads the database before it asks to.
   defp points_board_child do
-    if serving?(), do: Keyfleet.Points.Board
+    if serving_pages?(), do: Keyfleet.Points.Board
   end
 
   # The products a season's pick may name are read only where pages are
   # served, so a task never asks Coinbase on its own.
   defp season_coins_child do
-    if serving?(), do: Keyfleet.Seasons.CoinList
+    if serving_pages?(), do: Keyfleet.Seasons.CoinList
   end
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)
+  defp gateway_only?, do: Application.get_env(:keyfleet, :gateway_only, false)
+  defp serving_pages?, do: serving?() and not gateway_only?()
 
   # The site runs the writers itself only where the graph is enabled, which is
   # development; in production they run on the graph machine, and the site

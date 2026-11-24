@@ -247,17 +247,61 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   """
   @spec signed_in(String.t(), integer()) ::
           {Ash.Resource.record(), String.t(), DateTime.t()} | nil
-  def signed_in(id, account_id) do
-    row = Ash.get!(__MODULE__, id, actor: @actor, not_found_error?: false)
-
-    with true <- current?(row, account_id),
+  def signed_in(id, account_id) when is_binary(id) and is_integer(account_id) do
+    with {:ok, {lineage_digest, ends_at}} <- signed_in_row(id, account_id),
          %{} = account <- verified(account_id) do
-      {account, digest_topic(row.lineage_digest),
-       DateTime.add(row.updated_at, @sign_in_lifetime_seconds)}
+      {account, digest_topic(lineage_digest), ends_at}
     else
       _signed_out -> nil
     end
   end
+
+  def signed_in(_id, _account_id), do: nil
+
+  defp signed_in_row(id, account_id) do
+    if Application.get_env(:keyfleet, :redirect_to_regents, false) do
+      regents_signed_in_row(id, account_id) || keyfleet_signed_in_row(id, account_id)
+    else
+      keyfleet_signed_in_row(id, account_id)
+    end
+  end
+
+  defp keyfleet_signed_in_row(id, account_id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        row = Ash.get!(__MODULE__, uuid, actor: @actor, not_found_error?: false)
+
+        if current?(row, account_id) do
+          {:ok, {row.lineage_digest, DateTime.add(row.updated_at, @sign_in_lifetime_seconds)}}
+        end
+
+      :error ->
+        nil
+    end
+  end
+
+  # After folding into regents.sh, browsers sign in on regents.sh so their
+  # session authority row lives in `regents_app.session_authorities`.
+  defp regents_signed_in_row(id, account_id) do
+    with {:ok, uuid_bytes} <- Ecto.UUID.dump(id),
+         {:ok, %{rows: [[lineage_digest, ^account_id, nil, signed_in_at, updated_at]]}} <-
+           Repo.query(
+             "SELECT lineage_digest, human_account_id, revoked_at, signed_in_at, updated_at " <>
+               "FROM regents_app.session_authorities WHERE id = $1",
+             [uuid_bytes],
+             prefix: nil
+           ),
+         %DateTime{} = base_at <- to_utc_datetime(signed_in_at || updated_at),
+         false <- DateTime.diff(DateTime.utc_now(), base_at) >= @sign_in_lifetime_seconds do
+      {:ok, {lineage_digest, DateTime.add(base_at, @sign_in_lifetime_seconds)}}
+    else
+      _other -> nil
+    end
+  end
+
+  defp to_utc_datetime(%DateTime{} = dt), do: dt
+  defp to_utc_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
+  defp to_utc_datetime(_other), do: nil
 
   @doc "The deterministic, lineage-stable topic every socket for a lineage mounts on."
   @spec topic(String.t()) :: String.t()

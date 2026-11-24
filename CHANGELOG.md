@@ -14783,3 +14783,23 @@ step's report).
 - Checks: the release smoke and every gate of `make check` pass. A hand run on a
   throwaway database showed each job running once, the timed entries queued once
   a minute, and a pause reaching the machine it was sent on.
+
+## 2026-11-24 — Gateway + Regents redirect mode for Phase 2 cutover
+
+- Added runtime flags `KEYFLEET_OBAN_ENABLED=false` (`:gateway_only`),
+  `KEYFLEET_REDIRECT_TO_REGENTS=true` (`:redirect_to_regents`), and
+  `REGENTS_SECRET_KEY_BASE` so the `keyfleet` Fly app can serve solely as the
+  `code.keyfleet.ai`, `*.notebooks.keyfleet.ai`, `/.well-known/hub-jwks.json`,
+  and `graph` backend while `regents.sh` owns all web traffic and crons.
+- In gateway-only mode, Oban runs with no crons and no AshOban triggers, keeping
+  only the `:code_store` and `:notebook_hubs` queues needed by gateway traffic,
+  and web-page pollers (`Here`, `FleetNow`, `FleetProposals`, `Points.Board`,
+  `Seasons.CoinList`) are skipped.
+- Added `KeyfleetWeb.Plugs.RegentsRedirect` after `CodeGateway` to issue 301/308
+  redirects from `keyfleet.ai` / `www.keyfleet.ai` to `https://regents.sh` while
+  passing `/healthz` and `/.well-known/hub-jwks.json` through locally.
+- Updated `SessionAuthority.signed_in/2`, `KeyfleetWeb.CodePassword.read/2`,
+  `NotebookGateway`, and `CodeGateway` to validate sessions created on
+  `regents.sh` (`regents_app.session_authorities`), decrypt git passwords sealed
+  with `REGENTS_SECRET_KEY_BASE`, allow `Origin: https://regents.sh` on notebook
+  handoffs, and send unauthenticated notebook/code visitors to `regents.sh/keyfleet`.

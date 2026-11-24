@@ -238,7 +238,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       not Notebooks.destination?(to) ->
         Refusal.json(conn, 400, "invalid_request")
 
-      get_req_header(conn, "origin") != [KeyfleetWeb.Endpoint.url()] ->
+      not enter_origin_allowed?(conn) ->
         to_keyfleet(conn, fleet_id, to)
 
       true ->
@@ -437,10 +437,26 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   waits there for a press, so nothing this host sends back is sent here again
   by itself.
   """
-  def open_url(fleet_id, to),
-    do:
-      KeyfleetWeb.Endpoint.url() <>
-        "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+  def open_url(fleet_id, to) do
+    base =
+      if Application.get_env(:keyfleet, :redirect_to_regents, false),
+        do: "https://regents.sh/keyfleet",
+        else: KeyfleetWeb.Endpoint.url()
+
+    base <> "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+  end
+
+  defp enter_origin_allowed?(conn) do
+    allowed =
+      if Application.get_env(:keyfleet, :redirect_to_regents, false),
+        do: [KeyfleetWeb.Endpoint.url(), "https://regents.sh"],
+        else: [KeyfleetWeb.Endpoint.url()]
+
+    case get_req_header(conn, "origin") do
+      [origin] -> origin in allowed
+      _other -> false
+    end
+  end
 
   # The shared plug has already refused a repeated signed header and a body it
   # did not capture whole; nothing else is checked before the sign-in server.

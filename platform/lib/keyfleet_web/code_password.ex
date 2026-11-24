@@ -39,9 +39,24 @@ defmodule KeyfleetWeb.CodePassword do
   its person's sign-in has ended.
   """
   def read(password, fleet_id) do
-    case Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, password, max_age: ttl()) do
+    case decrypt(password) do
       {:ok, %{"fleet_id" => ^fleet_id} = sealed} -> actor(sealed)
       _other -> :error
+    end
+  end
+
+  # Passwords minted on regents.sh are sealed with Regents' secret_key_base;
+  # try it first when configured, then fall back to Keyfleet's own endpoint.
+  defp decrypt(password) do
+    case Application.get_env(:keyfleet, :regents_secret_key_base) do
+      secret when is_binary(secret) ->
+        case Phoenix.Token.decrypt(secret, @salt, password, max_age: ttl()) do
+          {:ok, _sealed} = ok -> ok
+          _other -> Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, password, max_age: ttl())
+        end
+
+      _unset ->
+        Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, password, max_age: ttl())
     end
   end
 
