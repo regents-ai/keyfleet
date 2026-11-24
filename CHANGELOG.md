@@ -14803,3 +14803,10 @@ step's report).
   `regents.sh` (`regents_app.session_authorities`), decrypt git passwords sealed
   with `REGENTS_SECRET_KEY_BASE`, allow `Origin: https://regents.sh` on notebook
   handoffs, and send unauthenticated notebook/code visitors to `regents.sh/keyfleet`.
+
+## 2026-11-24 — Downsize site VM for gateway + redirect mode
+
+- Downsized the `site` process group in `platform/fly.toml` from
+  `performance-2x` / 4096 MB to `shared-cpu-2x` / 1024 MB now that `site`
+  runs strictly in gateway + redirect mode (~274 MB BEAM RSS). `graph`
+  remains `shared-cpu-2x` / 2048 MB.

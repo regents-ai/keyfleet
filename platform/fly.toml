@@ -70,11 +70,14 @@ kill_timeout = "60s"
 # October 2026). Measured on 14 October 2026 on the live code, before the
 # open-pages change: each open page, its connection included, adds about 0.9 MB
 # to the machine.
+# Gateway + redirect mode (Phase 3 cutover): `site` only proxies code.keyfleet.ai,
+# *.notebooks.keyfleet.ai, /.well-known/hub-jwks.json, and regents.sh redirects
+# (~275 MB BEAM RSS), so shared-cpu-2x / 1 GB gives ~3.5x headroom.
 [[vm]]
   processes = ["site"]
-  cpu_kind = "performance"
+  cpu_kind = "shared"
   cpus = 2
-  memory_mb = 4096
+  memory_mb = 1024
 
 # The graph machine runs one Python host per fleet and serves no pages, so it
 # starts smaller (Sean, 21 October 2026) and is sized from Sentinel's readings.
